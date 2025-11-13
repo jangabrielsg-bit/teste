@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gerador de Ficha de Custos Pro</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- jsPDF (para gerar PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- CORREÇÃO: Alias para o plugin autoTable -->
+    <!-- O plugin autoTable (v3.x) espera window.jsPDF (maiúsculo), mas o jspdf (v2.x) UMD se registra como window.jspdf (minúsculo) -->
+    <script>
+        if (window.jspdf && window.jspdf.jsPDF) {
+            window.jsPDF = window.jspdf.jsPDF;
+        }
+    </script>
+    
+    <!-- jsPDF AutoTable plugin (para tabelas fáceis no PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.umd.min.js"></script>
+    
+    <!-- Font Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Ícones (Lucide) -->
+    <script src="https://unpkg.com/lucide-react@0.395.0/dist/lucide-react.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        /* Estilos para o modal */
+        .modal {
+            transition: opacity 0.25s ease;
+        }
+        .modal-content {
+            transition: transform 0.25s ease;
+        }
+        /* Oculta seções por padrão */
+        .view-section {
+            display: none;
+        }
+        .view-section.active {
+            display: block;
+        }
+        /* Estilo para preview da foto */
+        .foto-preview {
+            width: 100%;
+            height: 200px;
+            background-color: #e5e7eb;
+            border-radius: 8px;
+            background-size: cover;
+            background-position: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #9ca3af;
+            border: 2px dashed #d1d5db;
+        }
+    </style>
+</head>
+
+<body class="antialiased text-gray-800">
+
+    <div class="flex h-screen bg-gray-100">
+
+        <!-- Menu Lateral -->
+        <nav class="w-64 bg-white shadow-lg">
+            <div class="p-6">
+                <h2 class="text-2xl font-bold text-blue-600">Ficha de Custos</h2>
+                <div id="auth-status" class="mt-1 text-xs text-gray-500">Conectando...</div>
+            </div>
+            <ul class="mt-6">
+                <li>
+                    <a href="#" data-view="receitas" class="nav-link active-link flex items-center px-6 py-4 text-gray-700 bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
+                        <span class="ml-3">Receitas</span>
+                    </a>
+                </li>
+                <li>
+                    <a href="#" data-view="insumos" class="nav-link flex items-center px-6 py-4 text-gray-700 hover:bg-gray-100">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M5.5 21a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2z"></path><path d="M15.5 21V16a2 2 0 0 0-2-2h-3a2 2 0 0 0-2 2v5"></path><path d="M15.5 3V9"></path><path d="M8.5 3V9"></path><path d="M12 21v-5"></path><path d="M12 9H8.5"></path><path d="M12 9h3.5"></path></svg>
+                        <span class="ml-3">Insumos (Ingredientes)</span>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+
+        <!-- Conteúdo Principal -->
+        <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100">
+            <div class="container mx-auto p-6 md:p-10">
+
+                <!-- Loading -->
+                <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center">
+                    <div class="flex flex-col items-center">
+                        <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none"
+                            viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
+                        </svg>
+                        <span class="text-lg text-gray-700 mt-3 font-medium">Carregando dados...</span>
+                    </div>
+                </div>
+
+                <!-- TELA: Gerenciamento de Receitas -->
+                <section id="tela-receitas" class="view-section active">
+                    <h1 class="text-4xl font-bold text-gray-900 mb-8">Gerenciar Receitas</h1>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <!-- Formulário de Nova Receita -->
+                        <form id="form-add-receita" class="flex flex-col sm:flex-row gap-4 mb-6 pb-6 border-b">
+                            <div class="flex-grow">
+                                <label for="receita-nome" class="block text-sm font-medium text-gray-700">Nome da Receita</label>
+                                <input type="text" id="receita-nome" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <button type="submit"
+                                class="self-end bg-green-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                                Criar Receita
+                            </button>
+                        </form>
+        
+                        <!-- Lista de Receitas -->
+                        <h3 class="text-xl font-semibold mb-3 text-gray-800">Minhas Receitas</h3>
+                        <div id="lista-receitas" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                            <!-- Receitas serão injetadas aqui pelo JS -->
+                            <p id="receitas-vazio" class="text-gray-500">Nenhuma receita cadastrada.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- TELA: Gerenciamento de Insumos -->
+                <section id="tela-insumos" class="view-section">
+                    <h1 class="text-4xl font-bold text-gray-900 mb-8">Gerenciar Insumos (Ingredientes)</h1>
+                    
+                    <div class="bg-white p-6 rounded-lg shadow-lg">
+                        <p class="mb-4 text-gray-600">Adicione seus ingredientes e seus custos. Atualize os custos aqui sempre
+                            que mudarem.</p>
+        
+                        <!-- Formulário de Novo Insumo -->
+                        <form id="form-add-insumo" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 pb-6 border-b">
+                            <div>
+                                <label for="insumo-nome" class="block text-sm font-medium text-gray-700">Nome</label>
+                                <input type="text" id="insumo-nome" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="insumo-unidade" class="block text-sm font-medium text-gray-700">Unidade (ex: kg,
+                                    L, un)</label>
+                                <input type="text" id="insumo-unidade" placeholder="kg" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <div>
+                                <label for="insumo-custo" class="block text-sm font-medium text-gray-700">Custo por
+                                    Unidade</label>
+                                <input type="number" step="0.01" id="insumo-custo" placeholder="10.50" required
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </div>
+                            <button type="submit"
+                                class="sm:col-span-3 w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                Adicionar Insumo
+                            </button>
+                        </form>
+        
+                        <!-- Lista de Insumos -->
+                        <h3 class="text-xl font-semibold mb-3 text-gray-800">Lista de Insumos</h3>
+                        <div id="lista-insumos" class="space-y-3 max-h-96 overflow-y-auto pr-2">
+                            <!-- Insumos serão injetados aqui pelo JS -->
+                            <p id="insumos-vazio" class="text-gray-500">Nenhum insumo cadastrado.</p>
+                        </div>
+                    </div>
+                </section>
+                
+            </div> <!-- Fim do container do main -->
+        </main>
+    </div> <!-- Fim do layout flex -->
+
+    <!-- Modal: Editar Insumo -->
+    <div id="modal-edit-insumo" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div
+            class="modal-content bg-white rounded-lg shadow-xl w-full max-w-md p-6 transform scale-95">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold text-gray-800">Editar Insumo</h3>
+                <button id="modal-edit-insumo-close" class="text-gray-500 hover:text-gray-800">&times;</button>
+            </div>
+            <form id="form-edit-insumo">
+                <input type="hidden" id="edit-insumo-id">
+                <div class="space-y-4">
+                    <div>
+                        <label for="edit-insumo-nome" class="block text-sm font-medium text-gray-700">Nome</label>
+                        <input type="text" id="edit-insumo-nome" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="edit-insumo-unidade" class="block text-sm font-medium text-gray-700">Unidade</label>
+                        <input type="text" id="edit-insumo-unidade" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label for="edit-insumo-custo" class="block text-sm font-medium text-gray-700">Custo por
+                            Unidade</label>
+                        <input type="number" step="0.01" id="edit-insumo-custo" required
+                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end gap-3">
+                    <button type="button" id="modal-edit-insumo-cancel"
+                        class="bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-md hover:bg-gray-300">
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                        class="bg-blue-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-blue-700">
+                        Salvar Mudanças
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Gerenciar Receita (Adicionar Insumos, Foto e Gerar PDF) -->
+    <div id="modal-manage-receita" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
+        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 transform scale-95 max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="modal-receita-nome" class="text-2xl font-semibold text-gray-800">Gerenciar Receita</h3>
+                <button id="modal-manage-receita-close" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
+            </div>
+
+            <div class="flex-grow overflow-y-auto pr-2 grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Coluna 1: Ingredientes e Custos -->
+                <div>
+                    <!-- Formulário de Adicionar Ingrediente à Receita -->
+                    <form id="form-add-ingrediente-receita" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 pb-6 border-b">
+                        <div class="sm:col-span-2">
+                            <label for="receita-insumo-select"
+                                class="block text-sm font-medium text-gray-700">Insumo</label>
+                            <select id="receita-insumo-select" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                <option value="">Selecione um insumo...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="receita-insumo-qtd" class="block text-sm font-medium text-gray-700">Qtd.</label>
+                            <input type="number" step="0.001" id="receita-insumo-qtd" required
+                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <button type="submit"
+                            class="sm:col-span-3 w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-blue-700">
+                            Adicionar Ingrediente
+                        </button>
+                    </form>
+
+                    <!-- Lista de Ingredientes da Receita -->
+                    <h4 class="text-xl font-semibold mb-3 text-gray-800">Ingredientes da Receita</h4>
+                    <div id="receita-ingredientes-list" class="space-y-2 mb-6">
+                        <p id="receita-ingredientes-vazio" class="text-gray-500">Nenhum ingrediente adicionado.</p>
+                    </div>
+                </div>
+
+                <!-- Coluna 2: Foto da Receita -->
+                <div>
+                    <h4 class="text-xl font-semibold mb-3 text-gray-800">Foto da Receita</h4>
+                    <div id="foto-preview-container" class="foto-preview mb-4">
+                        <span>Sem foto</span>
+                    </div>
+                    <label for="receita-foto-upload" class="block text-sm font-medium text-gray-700">Carregar nova foto</label>
+                    <input type="file" id="receita-foto-upload" accept="image/png, image/jpeg"
+                           class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                    <span id="upload-status" class="text-sm text-gray-600 mt-2 block"></span>
+                </div>
+
+            </div>
+
+            <!-- Rodapé do Modal -->
+            <div class="mt-6 pt-6 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-lg font-bold text-gray-800">
+                    Custo Total da Receita: <span id="receita-custo-total" class="text-green-700">R$ 0,00</span>
+                </div>
+                <button id="btn-generate-pdf"
+                    class="w-full sm:w-auto bg-red-600 text-white font-medium py-2 px-6 rounded-md shadow-sm hover:bg-red-700 flex items-center justify-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                    </svg>
+                    Gerar Ficha (PDF)
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast Message -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white py-3 px-5 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 z-50">
+        Mensagem
+    </div>
+
+
+    <!-- Firebase e Lógica do App -->
+    <script type="module">
+        // Importações do Firebase
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import {
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import {
+            getFirestore,
+            collection,
+            doc,
+            addDoc,
+            setDoc,
+            updateDoc,
+            deleteDoc,
+            onSnapshot,
+            query,
+            serverTimestamp,
+            setLogLevel // Importar setLogLevel
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // Importação do STORAGE (Novo)
+        import {
+            getStorage,
+            ref,
+            uploadBytes,
+            getDownloadURL,
+            deleteObject
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        // --- Configuração do Firebase ---
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let app, auth, db, storage, userId;
+        let insumosCollectionRef, receitasCollectionRef;
+
+        // Estado local
+        let localInsumos = [];
+        let localReceitas = [];
+        let currentManagingRecipeId = null;
+
+        // Elementos do DOM
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const authStatus = document.getElementById('auth-status');
+        const navLinks = document.querySelectorAll('.nav-link');
+        const viewSections = document.querySelectorAll('.view-section');
+
+        // Forms
+        const formAddInsumo = document.getElementById('form-add-insumo');
+        const formAddReceita = document.getElementById('form-add-receita');
+
+        // Listas
+        const listaInsumos = document.getElementById('lista-insumos');
+        const insumosVazio = document.getElementById('insumos-vazio');
+        const listaReceitas = document.getElementById('lista-receitas');
+        const receitasVazio = document.getElementById('receitas-vazio');
+
+        // Modal Editar Insumo
+        const modalEditInsumo = document.getElementById('modal-edit-insumo');
+        const formEditInsumo = document.getElementById('form-edit-insumo');
+        const editInsumoId = document.getElementById('edit-insumo-id');
+        const editInsumoNome = document.getElementById('edit-insumo-nome');
+        const editInsumoUnidade = document.getElementById('edit-insumo-unidade');
+        const editInsumoCusto = document.getElementById('edit-insumo-custo');
+
+        // Modal Gerenciar Receita
+        const modalManageReceita = document.getElementById('modal-manage-receita');
+        const modalReceitaNome = document.getElementById('modal-receita-nome');
+        const formAddIngredienteReceita = document.getElementById('form-add-ingrediente-receita');
+        const receitaInsumoSelect = document.getElementById('receita-insumo-select');
+        const receitaInsumoQtd = document.getElementById('receita-insumo-qtd');
+        const receitaIngredientesList = document.getElementById('receita-ingredientes-list');
+        const receitaIngredientesVazio = document.getElementById('receita-ingredientes-vazio');
+        const receitaCustoTotal = document.getElementById('receita-custo-total');
+        const btnGeneratePDF = document.getElementById('btn-generate-pdf');
+        
+        // Novos elementos de Foto Upload
+        const fotoPreviewContainer = document.getElementById('foto-preview-container');
+        const receitaFotoUpload = document.getElementById('receita-foto-upload');
+        const uploadStatus = document.getElementById('upload-status');
+        
+        // Toast
+        const toast = document.getElementById('toast');
+
+        // --- Inicialização ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                storage = getStorage(app); // Inicializa o Storage
+
+                // Habilitar logs de debug do Firestore
+                setLogLevel('debug');
+
+                // Autenticação
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        authStatus.textContent = `Conectado (ID: ${userId.substring(0, 6)}...)`;
+                        console.log("Usuário autenticado:", userId);
+                        setupApp();
+                    } else {
+                        console.log("Nenhum usuário. Tentando login...");
+                        try {
+                            if (initialAuthToken) {
+                                console.log("Tentando signInWithCustomToken...");
+                                await signInWithCustomToken(auth, initialAuthToken);
+                            } else {
+                                console.log("Tentando signInAnonymously...");
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Erro na autenticação:", error);
+                            authStatus.textContent = "Falha na autenticação.";
+                            loadingOverlay.style.display = 'none';
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Erro ao inicializar o Firebase:", error);
+                authStatus.textContent = "Erro ao conectar com o banco de dados.";
+                loadingOverlay.style.display = 'none';
+            }
+        });
+
+        // --- Configuração Pós-Autenticação ---
+        function setupApp() {
+            // Define os caminhos das coleções
+            const basePath = `artifacts/${appId}/users/${userId}`;
+            insumosCollectionRef = collection(db, `${basePath}/insumos`);
+            receitasCollectionRef = collection(db, `${basePath}/receitas`);
+            console.log("Caminhos do Firestore definidos:", `${basePath}/insumos`);
+
+            setupNavigation();
+            setupInsumosListener();
+            setupReceitasListener();
+            setupForms();
+            setupModals();
+            
+            loadingOverlay.style.display = 'none';
+        }
+        
+        // --- Navegação ---
+        function setupNavigation() {
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const view = link.dataset.view;
+                    
+                    // Mostra a tela correta
+                    viewSections.forEach(section => {
+                        section.classList.toggle('active', section.id === `tela-${view}`);
+                    });
+                    
+                    // Atualiza o link ativo
+                    navLinks.forEach(navLink => {
+                        navLink.classList.toggle('active-link', navLink.dataset.view === view);
+                        navLink.classList.toggle('bg-gray-200', navLink.dataset.view === view);
+                        navLink.classList.toggle('hover:bg-gray-100', navLink.dataset.view !== view);
+                    });
+                });
+            });
+        }
+
+        // --- Funções de Toast ---
+        function showToast(message, isError = false) {
+            toast.textContent = message;
+            toast.classList.toggle('bg-red-600', isError);
+            toast.classList.toggle('bg-gray-900', !isError);
+            toast.classList.remove('opacity-0');
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 3000);
+        }
+
+        // --- Insumos (sem mudanças) ---
+        function setupInsumosListener() {
+            onSnapshot(query(insumosCollectionRef), (snapshot) => {
+                localInsumos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                localInsumos.sort((a, b) => a.nome.localeCompare(b.nome));
+                renderInsumos();
+                renderInsumoSelectDropdown();
+            }, (error) => console.error("Erro ao carregar insumos:", error));
+        }
+        function renderInsumos() {
+            listaInsumos.innerHTML = '';
+            if (localInsumos.length === 0) {
+                insumosVazio.style.display = 'block'; return;
+            }
+            insumosVazio.style.display = 'none';
+            localInsumos.forEach(insumo => {
+                const item = document.createElement('div');
+                item.className = "flex justify-between items-center p-3 bg-gray-50 rounded-md border";
+                item.innerHTML = `
+                    <div class="flex-1 overflow-hidden">
+                        <p class="font-medium text-gray-800 truncate">${insumo.nome}</p>
+                        <p class="text-sm text-gray-600">
+                            R$ ${parseFloat(insumo.custo).toFixed(2)} / ${insumo.unidade}
+                        </p>
+                    </div>
+                    <div class="flex-shrink-0 ml-4 space-x-2">
+                        <button data-id="${insumo.id}" class="btn-edit-insumo text-blue-600 hover:text-blue-800" title="Editar">...</button> <!-- SVG omitido por brevidade -->
+                        <button data-id="${insumo.id}" class="btn-delete-insumo text-red-600 hover:text-red-800" title="Excluir">...</button> <!-- SVG omitido por brevidade -->
+                    </div>`;
+                // Re-adicionando SVGs que omiti no comentário
+                item.querySelector('.btn-edit-insumo').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
+                item.querySelector('.btn-delete-insumo').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+                listaInsumos.appendChild(item);
+            });
+            document.querySelectorAll('.btn-edit-insumo').forEach(btn => btn.addEventListener('click', () => openEditInsumoModal(btn.dataset.id)));
+            document.querySelectorAll('.btn-delete-insumo').forEach(btn => btn.addEventListener('click', () => deleteInsumo(btn.dataset.id)));
+        }
+        function renderInsumoSelectDropdown() {
+            receitaInsumoSelect.innerHTML = '<option value="">Selecione um insumo...</option>';
+            localInsumos.forEach(insumo => {
+                const option = document.createElement('option');
+                option.value = insumo.id;
+                option.textContent = `${insumo.nome} (${insumo.unidade})`;
+                receitaInsumoSelect.appendChild(option);
+            });
+        }
+        async function addInsumo(e) {
+            e.preventDefault();
+            const nome = document.getElementById('insumo-nome').value;
+            const unidade = document.getElementById('insumo-unidade').value;
+            const custo = parseFloat(document.getElementById('insumo-custo').value);
+            if (!nome || !unidade || isNaN(custo)) return;
+            try {
+                await addDoc(insumosCollectionRef, { nome, unidade, custo, createdAt: serverTimestamp() });
+                formAddInsumo.reset();
+                showToast("Insumo adicionado!");
+            } catch (error) { console.error("Erro addInsumo:", error); showToast("Erro ao adicionar insumo.", true); }
+        }
+        async function updateInsumo(e) {
+            e.preventDefault();
+            const id = editInsumoId.value;
+            const nome = editInsumoNome.value;
+            const unidade = editInsumoUnidade.value;
+            const custo = parseFloat(editInsumoCusto.value);
+            if (!nome || !unidade || isNaN(custo)) return;
+            try {
+                await updateDoc(doc(insumosCollectionRef, id), { nome, unidade, custo });
+                closeEditInsumoModal();
+                showToast("Insumo atualizado!");
+            } catch (error) { console.error("Erro updateInsumo:", error); showToast("Erro ao atualizar insumo.", true); }
+        }
+        async function deleteInsumo(id) {
+            try {
+                await deleteDoc(doc(insumosCollectionRef, id));
+                showToast("Insumo excluído.");
+            } catch (error) { console.error("Erro deleteInsumo:", error); showToast("Erro ao excluir insumo.", true); }
+        }
+
+        // --- Receitas ---
+        function setupReceitasListener() {
+            onSnapshot(query(receitasCollectionRef), (snapshot) => {
+                localReceitas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                localReceitas.sort((a, b) => a.nome.localeCompare(b.nome));
+                renderReceitas();
+            }, (error) => console.error("Erro ao carregar receitas:", error));
+        }
+        function renderReceitas() {
+            listaReceitas.innerHTML = '';
+            if (localReceitas.length === 0) {
+                receitasVazio.style.display = 'block'; return;
+            }
+            receitasVazio.style.display = 'none';
+            localReceitas.forEach(receita => {
+                const item = document.createElement('div');
+                item.className = "flex justify-between items-center p-3 bg-gray-50 rounded-md border";
+                item.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-10 rounded bg-gray-200 bg-cover bg-center" style="background-image: ${receita.fotoURL ? `url(${receita.fotoURL})` : 'none'}"></div>
+                        <p class="font-medium text-gray-800 truncate">${receita.nome}</p>
+                    </div>
+                    <div class="flex-shrink-0 ml-4 space-x-2">
+                        <button data-id="${receita.id}" class="btn-manage-receita text-green-600 hover:text-green-800" title="Gerenciar">...</button> <!-- SVG omitido -->
+                        <button data-id="${receita.id}" class="btn-delete-receita text-red-600 hover:text-red-800" title="Excluir">...</button> <!-- SVG omitido -->
+                    </div>`;
+                // Re-adicionando SVGs
+                item.querySelector('.btn-manage-receita').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16.88 4-1.54 1.54a3 3 0 0 1-4.24 0L9.62 4a3 3 0 0 1-4.24 0L4 5.5a3 3 0 0 0 0 4.24l1.54 1.54a3 3 0 0 1 0 4.24L4 18.5a3 3 0 0 0 0 4.24l1.54 1.54a3 3 0 0 1 4.24 0l1.48-1.48a3 3 0 0 1 4.24 0l1.48 1.48a3 3 0 0 1 4.24 0l1.54-1.54a3 3 0 0 0 0-4.24L18.5 14a3 3 0 0 1 0-4.24l1.54-1.54a3 3 0 0 0 0-4.24L18.5 4a3 3 0 0 1-4.24 0Z"></path></svg>`;
+                item.querySelector('.btn-delete-receita').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+                
+                listaReceitas.appendChild(item);
+            });
+            document.querySelectorAll('.btn-manage-receita').forEach(btn => btn.addEventListener('click', () => openManageReceitaModal(btn.dataset.id)));
+            document.querySelectorAll('.btn-delete-receita').forEach(btn => btn.addEventListener('click', () => deleteReceita(btn.dataset.id)));
+        }
+        async function addReceita(e) {
+            e.preventDefault();
+            const nome = document.getElementById('receita-nome').value;
+            if (!nome) return;
+            try {
+                await addDoc(receitasCollectionRef, {
+                    nome,
+                    ingredientes: [],
+                    fotoURL: null,
+                    createdAt: serverTimestamp()
+                });
+                formAddReceita.reset();
+                showToast("Receita criada!");
+            } catch (error) { console.error("Erro addReceita:", error); showToast("Erro ao criar receita.", true); }
+        }
+        async function deleteReceita(id) {
+            const receita = localReceitas.find(r => r.id === id);
+            if (!receita) return;
+            
+            try {
+                // Exclui a foto do Storage, se existir
+                if (receita.fotoURL) {
+                    const fotoRef = ref(storage, receita.fotoURL);
+                    await deleteObject(fotoRef);
+                }
+                // Exclui o documento do Firestore
+                await deleteDoc(doc(receitasCollectionRef, id));
+                showToast("Receita excluída.");
+            } catch (error) {
+                console.error("Erro deleteReceita:", error);
+                // Mesmo se falhar ao deletar foto (ex: permissão), tenta deletar o doc
+                if (error.code !== 'storage/object-not-found') {
+                   try {
+                       await deleteDoc(doc(receitasCollectionRef, id)); // Tenta deletar mesmo assim
+                       showToast("Receita excluída (erro ao limpar foto).");
+                   } catch (deleteDocError) {
+                       console.error("Erro ao deletar doc do firestore:", deleteDocError);
+                       showToast("Erro ao excluir receita.", true);
+   
+                   }
+                } else {
+                   showToast("Erro ao excluir receita.", true);
+                }
+            }
+        }
+        
+        // --- Gerenciamento de Ingredientes da Receita (sem mudança) ---
+        async function addIngredienteToReceita(e) {
+            e.preventDefault();
+            const insumoId = receitaInsumoSelect.value;
+            const quantidade = parseFloat(receitaInsumoQtd.value);
+            if (!insumoId || isNaN(quantidade) || quantidade <= 0) return;
+            const insumo = localInsumos.find(i => i.id === insumoId);
+            const receita = localReceitas.find(r => r.id === currentManagingRecipeId);
+            if (!insumo || !receita) return;
+            const novoIngrediente = { insumoId: insumo.id, nome: insumo.nome, unidade: insumo.unidade, quantidade: quantidade };
+            const ingredientesAtuais = receita.ingredientes || [];
+            const indexExistente = ingredientesAtuais.findIndex(i => i.insumoId === insumoId);
+            let novosIngredientes = [];
+            if (indexExistente > -1) {
+                novosIngredientes = ingredientesAtuais.map((item, index) => index === indexExistente ? novoIngrediente : item);
+                showToast("Quantidade do ingrediente atualizada.");
+            } else {
+                novosIngredientes = [...ingredientesAtuais, novoIngrediente];
+                showToast("Ingrediente adicionado.");
+            }
+            try {
+                await updateDoc(doc(receitasCollectionRef, currentManagingRecipeId), { ingredientes: novosIngredientes });
+                formAddIngredienteReceita.reset();
+                renderIngredientesDaReceita(novosIngredientes); // Atualização otimista da UI
+            } catch (error) { console.error("Erro addIngrediente:", error); showToast("Erro ao salvar ingrediente.", true); }
+        }
+        async function removeIngredienteFromReceita(insumoId) {
+            const receita = localReceitas.find(r => r.id === currentManagingRecipeId);
+            if (!receita) return;
+            const novosIngredientes = (receita.ingredientes || []).filter(i => i.insumoId !== insumoId);
+            try {
+                await updateDoc(doc(receitasCollectionRef, currentManagingRecipeId), { ingredientes: novosIngredientes });
+                showToast("Ingrediente removido.");
+                renderIngredientesDaReceita(novosIngredientes); // Atualização otimista
+            } catch (error) { console.error("Erro removeIngrediente:", error); showToast("Erro ao remover ingrediente.", true); }
+        }
+        function renderIngredientesDaReceita(ingredientes) {
+            receitaIngredientesList.innerHTML = '';
+            if (!ingredientes || ingredientes.length === 0) {
+                receitaIngredientesVazio.style.display = 'block';
+                receitaCustoTotal.textContent = 'R$ 0,00';
+                return;
+            }
+            receitaIngredientesVazio.style.display = 'none';
+            let custoTotal = 0;
+            ingredientes.forEach(item => {
+                const insumoData = localInsumos.find(i => i.id === item.insumoId);
+                let custoItem = 0, custoUnitario = 0, nome = item.nome;
+                if (insumoData) {
+                    custoUnitario = parseFloat(insumoData.custo);
+                    custoItem = custoUnitario * item.quantidade;
+                    custoTotal += custoItem;
+                    nome = insumoData.nome;
+                } else { nome = `${item.nome} (INSUMO EXCLUÍDO)`; }
+                const el = document.createElement('div');
+                el.className = "flex justify-between items-center p-3 bg-blue-50 rounded-md";
+                el.innerHTML = `
+                    <div>
+                        <p class="font-medium text-gray-800">${nome}</p>
+                        <p class="text-sm text-gray-600">${item.quantidade} ${item.unidade} &times; R$ ${custoUnitario.toFixed(2)}</p>
+                    </div>
+                    <div class="flex items-center space-x-4">
+                        <span class="font-medium text-gray-900">R$ ${custoItem.toFixed(2)}</span>
+                        <button data-id="${item.insumoId}" class="btn-remove-ingrediente text-red-500 hover:text-red-700" title="Remover">...</button> <!-- SVG omitido -->
+                    </div>`;
+                el.querySelector('.btn-remove-ingrediente').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
+                receitaIngredientesList.appendChild(el);
+            });
+            receitaCustoTotal.textContent = `R$ ${custoTotal.toFixed(2)}`;
+            document.querySelectorAll('.btn-remove-ingrediente').forEach(btn => btn.addEventListener('click', () => removeIngredienteFromReceita(btn.dataset.id)));
+        }
+        
+        // --- Upload de Foto ---
+        async function handleFotoUpload(e) {
+            const file = e.target.files[0];
+            if (!file || !currentManagingRecipeId) return;
+
+            // --- CORREÇÃO ---
+            // O erro 'storage/unauthorized' indica permissão negada para o caminho privado.
+            // Vamos mudar para o caminho 'public', que geralmente tem permissões de escrita.
+            // Caminho Antigo (Privado): `artifacts/${appId}/users/${userId}/receita_fotos/${currentManagingRecipeId}_${file.name}`;
+            const storagePath = `artifacts/${appId}/public/receita_fotos/${currentManagingRecipeId}_${file.name}`;
+            const storageRef = ref(storage, storagePath);
+
+            try {
+                uploadStatus.textContent = 'Enviando foto...';
+                await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(storageRef);
+                
+                // Atualiza o documento da receita no Firestore com a URL da foto
+                await updateDoc(doc(receitasCollectionRef, currentManagingRecipeId), {
+                    fotoURL: downloadURL
+                });
+                
+                // Atualiza preview
+                fotoPreviewContainer.style.backgroundImage = `url(${downloadURL})`;
+                fotoPreviewContainer.innerHTML = '';
+                
+                uploadStatus.textContent = 'Foto salva!';
+                showToast("Foto da receita atualizada!");
+            } catch (error) {
+                console.error("Erro no upload da foto:", error);
+                uploadStatus.textContent = 'Falha no upload.';
+                showToast("Erro ao enviar foto.", true);
+            }
+        }
+        
+        function updateFotoPreview(receita) {
+            receitaFotoUpload.value = null; // Limpa o input
+            uploadStatus.textContent = '';
+            if (receita.fotoURL) {
+                fotoPreviewContainer.style.backgroundImage = `url(${receita.fotoURL})`;
+                fotoPreviewContainer.innerHTML = '';
+            } else {
+                fotoPreviewContainer.style.backgroundImage = 'none';
+                fotoPreviewContainer.innerHTML = '<span>Sem foto</span>';
+            }
+        }
+
+        // --- PDF Geração (Atualizado com Foto) ---
+        
+        // Função auxiliar para carregar imagem e converter para Base64
+        function fetchImageAsBase64(url) {
+            return fetch(url)
+                .then(response => response.blob())
+                .then(blob => new Promise((resolve, reject) => {
+                    // Adiciona um 'hack' de CORS se a URL for do Firebase Storage
+                    // Isso é um paliativo, o ideal é configurar o CORS no Firebase Storage
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                }));
+        }
+
+        async function generatePDF() {
+            const receita = localReceitas.find(r => r.id === currentManagingRecipeId);
+            if (!receita) return;
+            
+            const { jsPDF } = window.jspdf; // Pega o construtor do objeto global
+            const doc = new jsPDF();
+            
+            doc.setFont('Helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.text(`Ficha de Custo: ${receita.nome}`, 14, 22);
+
+            let startY = 30;
+
+            // Adiciona a foto ao PDF (se existir)
+            if (receita.fotoURL) {
+                try {
+                    // Precisamos de um proxy CORS para converter a imagem do storage
+                    // Solução mais simples é usar um proxy público (não ideal para produção)
+                    const proxyUrl = 'https://images.weserv.nl/?url=';
+                    const imageUrl = receita.fotoURL.replace('https://', ''); // Remove https://
+                    
+                    const base64Img = await fetchImageAsBase64(proxyUrl + imageUrl);
+                    doc.addImage(base64Img, 'JPEG', 14, startY, 60, 45); // x, y, w, h
+                    startY += 55; // Pula a altura da imagem + margem
+                } catch (e) {
+                    console.error("Erro ao carregar imagem para PDF:", e);
+                    doc.text("Erro ao carregar foto", 14, startY);
+                    startY += 10;
+                }
+            }
+            
+            doc.setFont('Helvetica', 'normal');
+            doc.setFontSize(12);
+
+            let custoTotalReceita = 0;
+            const tableHead = [["Ingrediente", "Qtd.", "Unidade", "Custo Unit.", "Custo Total"]];
+            const tableBody = [];
+            
+            const ingredientes = receita.ingredientes || [];
+            ingredientes.forEach(item => {
+                const insumoData = localInsumos.find(i => i.id === item.insumoId);
+                let custoUnit = 0, custoTotalItem = 0, nome = item.nome;
+                if (insumoData) {
+                    custoUnit = parseFloat(insumoData.custo);
+                    custoTotalItem = custoUnit * item.quantidade;
+                    custoTotalReceita += custoTotalItem;
+                    nome = insumoData.nome;
+                } else { nome = `${item.nome} (Excluído)`; }
+                tableBody.push([
+                    nome, item.quantidade.toString(), item.unidade,
+                    `R$ ${custoUnit.toFixed(2)}`, `R$ ${custoTotalItem.toFixed(2)}`
+                ]);
+            });
+            
+            doc.setFontSize(14);
+            doc.setFont('Helvetica', 'bold');
+            doc.text(`Custo Total da Receita: R$ ${custoTotalReceita.toFixed(2)}`, 14, startY);
+            startY += 10;
+
+            // Agora 'doc.autoTable' deve existir
+            doc.autoTable({
+                head: tableHead,
+                body: tableBody,
+                startY: startY,
+                headStyles: { fillColor: [22, 163, 74] },
+                styles: { font: 'Helvetica' }
+            });
+            
+            doc.save(`FichaCusto_${receita.nome.replace(/\s+/g, '_')}.pdf`);
+        }
+
+
+        // --- Handlers de Formulários ---
+        function setupForms() {
+            formAddInsumo.addEventListener('submit', addInsumo);
+            formEditInsumo.addEventListener('submit', updateInsumo);
+            formAddReceita.addEventListener('submit', addReceita);
+            formAddIngredienteReceita.addEventListener('submit', addIngredienteToReceita);
+            btnGeneratePDF.addEventListener('click', generatePDF);
+            receitaFotoUpload.addEventListener('change', handleFotoUpload);
+        }
+
+        // --- Handlers de Modais ---
+        function setupModals() {
+            document.getElementById('modal-edit-insumo-close').addEventListener('click', closeEditInsumoModal);
+            document.getElementById('modal-edit-insumo-cancel').addEventListener('click', closeEditInsumoModal);
+            document.getElementById('modal-manage-receita-close').addEventListener('click', closeManageReceitaModal);
+        }
+        function openEditInsumoModal(id) {
+            const insumo = localInsumos.find(i => i.id === id);
+            if (!insumo) return;
+            editInsumoId.value = insumo.id;
+            editInsumoNome.value = insumo.nome;
+            editInsumoUnidade.value = insumo.unidade;
+            editInsumoCusto.value = insumo.custo;
+            modalEditInsumo.classList.remove('opacity-0', 'pointer-events-none');
+            modalEditInsumo.querySelector('.modal-content').classList.remove('scale-95');
+        }
+        function closeEditInsumoModal() {
+            modalEditInsumo.classList.add('opacity-0', 'pointer-events-none');
+            modalEditInsumo.querySelector('.modal-content').classList.add('scale-95');
+            formEditInsumo.reset();
+        }
+        function openManageReceitaModal(id) {
+            const receita = localReceitas.find(r => r.id === id);
+            if (!receita) return;
+            currentManagingRecipeId = id;
+            modalReceitaNome.textContent = receita.nome;
+            renderIngredientesDaReceita(receita.ingredientes || []);
+            updateFotoPreview(receita); // Atualiza o preview da foto
+            modalManageReceita.classList.remove('opacity-0', 'pointer-events-none');
+            modalManageReceita.querySelector('.modal-content').classList.remove('scale-95');
+        }
+        function closeManageReceitaModal() {
+            modalManageReceita.classList.add('opacity-0', 'pointer-events-none');
+            modalManageReceita.querySelector('.modal-content').classList.add('scale-95');
+            currentManagingRecipeId = null;
+            formAddIngredienteReceita.reset();
+        }
+    </script>
+</body>
+</html>
