@@ -1,901 +1,1960 @@
 <!DOCTYPE html>
-<html lang="pt-br">
-
+<html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerador de Ficha de Custos Pro</title>
-    <!-- Tailwind CSS -->
+    <title>Controle de Estoque e Produção</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- jsPDF (para gerar PDF) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-
-    <!-- CORREÇÃO: Alias para o plugin autoTable -->
-    <!-- O plugin autoTable (v3.x) espera window.jsPDF (maiúsculo), mas o jspdf (v2.x) UMD se registra como window.jspdf (minúsculo) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    
     <script>
-        if (window.jspdf && window.jspdf.jsPDF) {
-            window.jsPDF = window.jspdf.jsPDF;
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'] },
+                    colors: {
+                        ios: {
+                            bg: '#000000', card: '#1c1c1e', cardHover: '#2c2c2e', blue: '#0a84ff',
+                            green: '#30d158', red: '#ff453a', orange: '#ff9f0a', text: '#ffffff',
+                            textMuted: 'rgba(235, 235, 245, 0.6)', border: '#38383a', input: '#2c2c2e'
+                        }
+                    }
+                }
+            }
         }
     </script>
     
-    <!-- jsPDF AutoTable plugin (para tabelas fáceis no PDF) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf-autotable.umd.min.js"></script>
-    
-    <!-- Font Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Ícones (Lucide) -->
-    <script src="https://unpkg.com/lucide-react@0.395.0/dist/lucide-react.js"></script>
-    
-    <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-        }
-        /* Estilos para o modal */
-        .modal {
-            transition: opacity 0.25s ease;
-        }
-        .modal-content {
-            transition: transform 0.25s ease;
-        }
-        /* Oculta seções por padrão */
-        .view-section {
-            display: none;
-        }
-        .view-section.active {
-            display: block;
-        }
-        /* Estilo para preview da foto */
-        .foto-preview {
-            width: 100%;
-            height: 200px;
-            background-color: #e5e7eb;
-            border-radius: 8px;
-            background-size: cover;
-            background-position: center;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #9ca3af;
-            border: 2px dashed #d1d5db;
+    <style type="text/tailwindcss">
+        @layer components {
+            body { @apply bg-ios-bg text-ios-text font-sans antialiased pb-16; }
+            .card { @apply bg-ios-card p-6 rounded-2xl shadow-sm border border-ios-border; }
+            .title-lg { @apply text-3xl font-bold text-white mb-6 tracking-tight; }
+            .title-md { @apply text-xl font-semibold text-white mb-4 tracking-tight; }
+            .form-label { @apply block text-sm font-medium text-ios-textMuted mb-1; }
+            .form-input { @apply block w-full bg-ios-input text-white rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-ios-blue transition-all border border-ios-border/50; }
+            .btn-primary { @apply bg-ios-blue hover:opacity-90 text-white font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center; }
+            .btn-secondary { @apply bg-ios-cardHover hover:bg-gray-700 text-white font-semibold py-3 px-5 rounded-xl transition-all border border-ios-border flex items-center justify-center; }
+            .btn-danger { @apply bg-ios-red hover:opacity-90 text-white font-semibold py-3 px-5 rounded-xl transition-all flex items-center justify-center; }
+            .btn-success { @apply bg-ios-green hover:opacity-90 text-white font-semibold py-3 px-5 rounded-xl transition-all; }
+            .table-container { @apply overflow-x-auto rounded-xl border border-ios-border bg-ios-card; }
+            .base-table { @apply w-full text-sm text-left text-ios-textMuted; }
+            .base-thead { @apply text-xs uppercase bg-ios-cardHover text-gray-400 border-b border-ios-border; }
+            .base-tr { @apply border-b border-ios-border hover:bg-ios-cardHover transition-colors; }
+            .base-th { @apply px-5 py-4 font-semibold whitespace-nowrap; }
+            .base-td { @apply px-5 py-4; }
+            .stat-icon { @apply p-3 rounded-xl flex items-center justify-center w-12 h-12 text-xl; }
+            .modal-content { @apply bg-ios-card border border-ios-border rounded-3xl shadow-2xl p-6 w-full transform transition-all; }
+            .badge { @apply text-xs font-semibold px-2 py-1 rounded-md; }
         }
     </style>
+    <style>
+        .sidebar { transition: width 0.3s ease-in-out; }
+        .modal { display: none; position: fixed; z-index: 50; inset: 0; align-items: center; justify-content: center; background-color: rgba(0, 0, 0, 0.85); backdrop-filter: blur(8px); }
+        .table-header-sortable { cursor: pointer; user-select: none; }
+        .table-header-sortable:hover { color: #ffffff; }
+        
+        .searchable-container { position: relative; width: 100%; }
+        .searchable-dropdown { 
+            position: absolute; top: 100%; left: 0; right: 0; z-index: 9999; max-height: 280px; 
+            overflow-y: auto; background-color: #2c2c2e; border: 1px solid #38383a; 
+            border-radius: 0.75rem; box-shadow: 0 10px 30px rgba(0,0,0,0.8); margin-top: 4px;
+        }
+        .searchable-item { padding: 0.85rem 1rem; cursor: pointer; color: #ffffff; border-bottom: 1px solid #38383a; transition: background-color 0.2s; }
+        .searchable-item:last-child { border-bottom: none; }
+        .searchable-item:hover { background-color: #0a84ff; }
+        
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #48484a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #636366; }
+
+        .toggle-status { appearance: none; width: 40px; height: 20px; background: #38383a; border-radius: 20px; position: relative; cursor: pointer; outline: none; transition: background 0.3s; }
+        .toggle-status::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; background: white; border-radius: 50%; transition: transform 0.3s; }
+        .toggle-status:checked { background: #30d158; }
+        .toggle-status:checked::after { transform: translateX(20px); }
+
+        .timer-active { color: #ff9f0a; animation: pulse-text 1.5s infinite; }
+        @keyframes pulse-text { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        
+        .check-nativo {
+            appearance: auto !important;
+            width: 1.5rem !important; 
+            height: 1.5rem !important; 
+            cursor: pointer;
+            accent-color: #30d158;
+            margin: 0;
+            padding: 0;
+        }
+
+        .form-input { transition: all 0.4s ease; }
+    </style>
 </head>
+<body class="bg-ios-bg text-ios-text font-sans antialiased flex h-screen overflow-hidden w-full relative">
 
-<body class="antialiased text-gray-800">
+    <div id="loading-overlay" class="fixed inset-0 z-[1000] flex flex-col items-center justify-center bg-black bg-opacity-80 backdrop-blur-md transition-opacity">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-ios-cardHover border-t-ios-blue mb-4"></div>
+        <p class="text-ios-textMuted font-medium" id="loading-text">Conectando Nuvem...</p>
+    </div>
 
-    <div class="flex h-screen bg-gray-100">
+    <div id="notification-modal" class="fixed top-6 left-1/2 transform -translate-x-1/2 z-[2000] hidden py-3 px-6 rounded-full shadow-2xl font-semibold text-white transition-all text-sm backdrop-blur-md"></div>
 
-        <!-- Menu Lateral -->
-        <nav class="w-64 bg-white shadow-lg">
-            <div class="p-6">
-                <h2 class="text-2xl font-bold text-blue-600">Ficha de Custos</h2>
-                <div id="auth-status" class="mt-1 text-xs text-gray-500">Conectando...</div>
-            </div>
-            <ul class="mt-6">
-                <li>
-                    <a href="#" data-view="receitas" class="nav-link active-link flex items-center px-6 py-4 text-gray-700 bg-gray-200">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect></svg>
-                        <span class="ml-3">Receitas</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#" data-view="insumos" class="nav-link flex items-center px-6 py-4 text-gray-700 hover:bg-gray-100">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M5.5 21a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h13a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2z"></path><path d="M15.5 21V16a2 2 0 0 0-2-2h-3a2 2 0 0 0-2 2v5"></path><path d="M15.5 3V9"></path><path d="M8.5 3V9"></path><path d="M12 21v-5"></path><path d="M12 9H8.5"></path><path d="M12 9h3.5"></path></svg>
-                        <span class="ml-3">Insumos (Ingredientes)</span>
-                    </a>
-                </li>
-            </ul>
-        </nav>
+    <!-- Tela de Login -->
+    <div id="login-wrapper" class="absolute inset-0 z-[999] flex flex-col items-center justify-center bg-ios-bg text-center px-4 hidden">
+        <div class="card max-w-md w-full py-10 px-6 border border-ios-border/50 shadow-2xl">
+            <div class="w-20 h-20 rounded-2xl bg-ios-blue flex items-center justify-center text-white font-bold text-4xl shadow-lg shadow-ios-blue/30 mx-auto mb-6"><i class="fa-solid fa-layer-group"></i></div>
+            <h2 class="title-lg mb-2 text-white">Acesso Restrito</h2>
+            <p class="text-ios-textMuted mb-8 text-sm">Faça login com sua conta Google para sincronizar com o banco de dados da fábrica (Firebase).</p>
+            <button id="btn-login-google" class="btn-primary w-full py-4 text-lg font-bold"><i class="fa-brands fa-google mr-2"></i>Entrar com o Google</button>
+            <p id="mensagem-erro" class="text-ios-red mt-4 font-semibold text-sm"></p>
+        </div>
+    </div>
 
-        <!-- Conteúdo Principal -->
-        <main class="flex-1 overflow-x-hidden overflow-y-auto bg-gray-100">
-            <div class="container mx-auto p-6 md:p-10">
-
-                <!-- Loading -->
-                <div id="loading-overlay" class="fixed inset-0 bg-white/80 z-50 flex items-center justify-center">
-                    <div class="flex flex-col items-center">
-                        <svg class="animate-spin h-8 w-8 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none"
-                            viewBox="0 0 24 24">
-                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                            <path class="opacity-75" fill="currentColor"
-                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
-                            </path>
-                        </svg>
-                        <span class="text-lg text-gray-700 mt-3 font-medium">Carregando dados...</span>
+    <!-- App Principal -->
+    <div id="app-wrapper" class="flex h-screen overflow-hidden w-full hidden">
+        <!-- Barra Flutuante Global de Separação -->
+        <div id="global-picking-bar" class="fixed bottom-0 left-0 right-0 bg-ios-cardHover border-t border-ios-orange shadow-[0_-10px_30px_rgba(255,159,10,0.15)] z-[45] hidden slide-up-active backdrop-blur-md">
+            <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="bg-ios-orange/20 text-ios-orange p-2 rounded-full w-10 h-10 flex items-center justify-center animate-pulse"><i class="fa-solid fa-dolly"></i></div>
+                    <div>
+                        <h4 class="text-white font-bold text-sm" id="global-picking-title">Separação em Andamento</h4>
+                        <p class="text-xs text-ios-textMuted" id="global-picking-subtitle">Estoquista: João</p>
                     </div>
                 </div>
-
-                <!-- TELA: Gerenciamento de Receitas -->
-                <section id="tela-receitas" class="view-section active">
-                    <h1 class="text-4xl font-bold text-gray-900 mb-8">Gerenciar Receitas</h1>
-                    
-                    <div class="bg-white p-6 rounded-lg shadow-lg">
-                        <!-- Formulário de Nova Receita -->
-                        <form id="form-add-receita" class="flex flex-col sm:flex-row gap-4 mb-6 pb-6 border-b">
-                            <div class="flex-grow">
-                                <label for="receita-nome" class="block text-sm font-medium text-gray-700">Nome da Receita</label>
-                                <input type="text" id="receita-nome" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            </div>
-                            <button type="submit"
-                                class="self-end bg-green-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
-                                Criar Receita
-                            </button>
-                        </form>
-        
-                        <!-- Lista de Receitas -->
-                        <h3 class="text-xl font-semibold mb-3 text-gray-800">Minhas Receitas</h3>
-                        <div id="lista-receitas" class="space-y-3 max-h-96 overflow-y-auto pr-2">
-                            <!-- Receitas serão injetadas aqui pelo JS -->
-                            <p id="receitas-vazio" class="text-gray-500">Nenhuma receita cadastrada.</p>
-                        </div>
+                <div class="flex items-center gap-6">
+                    <div class="text-right">
+                        <p class="text-[10px] uppercase text-ios-textMuted font-bold mb-0.5">Tempo Gasto</p>
+                        <div id="global-picking-timer" class="text-xl font-mono font-bold text-ios-orange tracking-wider">00:00</div>
                     </div>
-                </section>
+                    <button id="btn-return-picking" class="btn-primary py-2 text-sm shadow-lg shadow-ios-blue/30"><i class="fa-solid fa-up-right-from-square mr-2"></i>Abrir Check-list</button>
+                </div>
+            </div>
+        </div>
 
-                <!-- TELA: Gerenciamento de Insumos -->
-                <section id="tela-insumos" class="view-section">
-                    <h1 class="text-4xl font-bold text-gray-900 mb-8">Gerenciar Insumos (Ingredientes)</h1>
-                    
-                    <div class="bg-white p-6 rounded-lg shadow-lg">
-                        <p class="mb-4 text-gray-600">Adicione seus ingredientes e seus custos. Atualize os custos aqui sempre
-                            que mudarem.</p>
-        
-                        <!-- Formulário de Novo Insumo -->
-                        <form id="form-add-insumo" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 pb-6 border-b">
-                            <div>
-                                <label for="insumo-nome" class="block text-sm font-medium text-gray-700">Nome</label>
-                                <input type="text" id="insumo-nome" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label for="insumo-unidade" class="block text-sm font-medium text-gray-700">Unidade (ex: kg,
-                                    L, un)</label>
-                                <input type="text" id="insumo-unidade" placeholder="kg" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            </div>
-                            <div>
-                                <label for="insumo-custo" class="block text-sm font-medium text-gray-700">Custo por
-                                    Unidade</label>
-                                <input type="number" step="0.01" id="insumo-custo" placeholder="10.50" required
-                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            </div>
-                            <button type="submit"
-                                class="sm:col-span-3 w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
-                                Adicionar Insumo
-                            </button>
-                        </form>
-        
-                        <!-- Lista de Insumos -->
-                        <h3 class="text-xl font-semibold mb-3 text-gray-800">Lista de Insumos</h3>
-                        <div id="lista-insumos" class="space-y-3 max-h-96 overflow-y-auto pr-2">
-                            <!-- Insumos serão injetados aqui pelo JS -->
-                            <p id="insumos-vazio" class="text-gray-500">Nenhum insumo cadastrado.</p>
-                        </div>
-                    </div>
-                </section>
+        <!-- Sidebar -->
+        <aside class="w-20 lg:w-64 bg-[#000000] border-r border-ios-border flex flex-col py-6 transition-all duration-300 z-40">
+            <div class="px-4 mb-8 flex items-center justify-center lg:justify-start">
+                <div class="w-10 h-10 rounded-xl bg-ios-blue flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-ios-blue/30"><i class="fa-solid fa-layer-group"></i></div>
+                <span class="ml-3 font-bold text-xl text-white hidden lg:block tracking-tight">Estoque OS</span>
+            </div>
+            <nav class="flex-1 w-full px-3 space-y-2 overflow-y-auto">
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="dashboard"><i class="fa-solid fa-chart-pie w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Visão Geral</span></a>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="entry"><i class="fa-solid fa-box-open w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Entrada</span></a>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="inventory"><i class="fa-solid fa-boxes-stacked w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Estoque</span></a>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="recipes"><i class="fa-solid fa-book-bookmark w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Receitas</span></a>
                 
-            </div> <!-- Fim do container do main -->
-        </main>
-    </div> <!-- Fim do layout flex -->
-
-    <!-- Modal: Editar Insumo -->
-    <div id="modal-edit-insumo" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
-        <div
-            class="modal-content bg-white rounded-lg shadow-xl w-full max-w-md p-6 transform scale-95">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-semibold text-gray-800">Editar Insumo</h3>
-                <button id="modal-edit-insumo-close" class="text-gray-500 hover:text-gray-800">&times;</button>
+                <div class="border-t border-ios-border my-2 mx-2"></div>
+                
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all relative" data-target="picking">
+                    <i class="fa-solid fa-dolly w-6 text-center text-lg text-ios-orange"></i>
+                    <span class="ml-3 hidden lg:block font-medium text-ios-orange">Separação (Picking)</span>
+                    <span id="badge-nav-picking" class="absolute top-3 right-3 w-2.5 h-2.5 bg-ios-orange rounded-full animate-pulse hidden"></span>
+                </a>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all relative" data-target="production">
+                    <i class="fa-solid fa-hammer w-6 text-center text-lg"></i>
+                    <span class="ml-3 hidden lg:block font-medium">Produção (OP)</span>
+                    <span id="badge-nav-prod" class="absolute top-3 right-3 w-2.5 h-2.5 bg-ios-blue rounded-full animate-pulse hidden"></span>
+                </a>
+                
+                <div class="border-t border-ios-border my-2 mx-2"></div>
+                
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="requisitions"><i class="fa-solid fa-arrow-right-from-bracket w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Requisição</span></a>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="adjustments"><i class="fa-solid fa-sliders w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Ajuste</span></a>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="consumption"><i class="fa-solid fa-chart-line w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Consumo</span></a>
+            </nav>
+            <div class="mt-auto w-full px-3 pt-4 border-t border-ios-border">
+                <button id="btn-show-alerts" class="p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all relative text-left">
+                    <i class="fa-solid fa-bell w-6 text-center text-lg text-ios-red"></i>
+                    <span class="ml-3 hidden lg:block font-medium">Alertas Estoque</span>
+                    <span id="badge-nav-alerts" class="absolute top-3 right-3 bg-ios-red text-white text-[10px] px-2 py-0.5 rounded-full hidden font-bold shadow-sm shadow-ios-red/50">0</span>
+                </button>
+                <a href="#" class="nav-item p-3 rounded-xl flex items-center w-full text-ios-textMuted hover:bg-ios-card hover:text-white transition-all" data-target="settings"><i class="fa-solid fa-gear w-6 text-center text-lg"></i><span class="ml-3 hidden lg:block font-medium">Ajustes App</span></a>
+                
+                <div class="flex items-center justify-between mt-4 px-2 py-3 bg-ios-card rounded-xl border border-ios-border/50">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="w-8 h-8 rounded-full bg-ios-blue/20 text-ios-blue flex items-center justify-center shrink-0"><i class="fa-solid fa-user text-xs"></i></div>
+                        <span id="nome-usuario" class="text-xs text-white font-bold truncate">...</span>
+                    </div>
+                    <button id="btn-sair" class="text-ios-red hover:text-red-400 p-2 shrink-0 bg-ios-red/10 rounded-lg transition-colors" title="Sair do Sistema"><i class="fa-solid fa-right-from-bracket"></i></button>
+                </div>
             </div>
-            <form id="form-edit-insumo">
-                <input type="hidden" id="edit-insumo-id">
-                <div class="space-y-4">
-                    <div>
-                        <label for="edit-insumo-nome" class="block text-sm font-medium text-gray-700">Nome</label>
-                        <input type="text" id="edit-insumo-nome" required
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+        </aside>
+
+        <main class="flex-1 p-6 lg:p-10 overflow-y-auto bg-ios-bg relative z-0 h-full">
+            <!-- Dashboard -->
+            <div id="screen-dashboard" class="screen-panel">
+                <h1 class="title-lg">Visão Geral</h1>
+                <p class="text-ios-textMuted mb-6 italic">"Não se gerencia o que não se mede, não se mede o que não se define."</p>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5 mb-8">
+                    <div class="card flex items-center">
+                        <div class="stat-icon bg-ios-blue/20 text-ios-blue"><i class="fa-solid fa-cube"></i></div>
+                        <div class="ml-4"><p class="text-sm text-ios-textMuted font-medium">Itens Únicos</p><p id="stat-total-items" class="text-2xl font-bold text-white">0</p></div>
                     </div>
-                    <div>
-                        <label for="edit-insumo-unidade" class="block text-sm font-medium text-gray-700">Unidade</label>
-                        <input type="text" id="edit-insumo-unidade" required
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <div class="card flex items-center">
+                        <div class="stat-icon bg-ios-green/20 text-ios-green"><i class="fa-solid fa-boxes-packing"></i></div>
+                        <div class="ml-4"><p class="text-sm text-ios-textMuted font-medium">Volume Físico</p><p id="stat-total-quantity" class="text-2xl font-bold text-white">0</p></div>
                     </div>
-                    <div>
-                        <label for="edit-insumo-custo" class="block text-sm font-medium text-gray-700">Custo por
-                            Unidade</label>
-                        <input type="number" step="0.01" id="edit-insumo-custo" required
-                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    <div class="card flex items-center">
+                        <div class="stat-icon bg-ios-orange/20 text-ios-orange"><i class="fa-solid fa-dolly"></i></div>
+                        <div class="ml-4"><p class="text-sm text-ios-textMuted font-medium">OPs a Separar</p><p id="stat-pending-picking" class="text-2xl font-bold text-white">0</p></div>
+                    </div>
+                    <!-- Card Clicável para Alertas -->
+                    <div class="card flex items-center cursor-pointer hover:bg-ios-cardHover transition-colors border border-transparent hover:border-ios-red/50" id="card-stat-low-stock">
+                        <div class="stat-icon bg-ios-red/20 text-ios-red"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                        <div class="ml-4"><p class="text-sm text-ios-textMuted font-medium">Estoque Baixo</p><p id="stat-low-stock" class="text-2xl font-bold text-white">0</p></div>
+                    </div>
+                    <div class="card flex items-center cursor-pointer hover:bg-ios-cardHover transition-colors border border-transparent hover:border-ios-red/50" id="card-stat-expiring">
+                        <div class="stat-icon bg-ios-red/20 text-ios-red"><i class="fa-solid fa-clock"></i></div>
+                        <div class="ml-4"><p class="text-sm text-ios-textMuted font-medium">Vencendo (45d)</p><p id="stat-expiring-soon" class="text-2xl font-bold text-white">0</p></div>
                     </div>
                 </div>
-                <div class="mt-6 flex justify-end gap-3">
-                    <button type="button" id="modal-edit-insumo-cancel"
-                        class="bg-gray-200 text-gray-700 font-medium py-2 px-4 rounded-md hover:bg-gray-300">
-                        Cancelar
-                    </button>
-                    <button type="submit"
-                        class="bg-blue-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-blue-700">
-                        Salvar Mudanças
-                    </button>
+                
+                <h2 class="title-md mt-10 mb-4 text-ios-blue"><i class="fa-solid fa-ranking-star mr-2"></i>Indicadores de Eficiência (Separação)</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
+                    <div class="card flex flex-col">
+                        <h3 class="text-sm font-semibold text-ios-textMuted uppercase mb-4">Ranking da Equipe (Estoquistas)</h3>
+                        <div class="table-container flex-1">
+                            <table class="base-table">
+                                <thead class="base-thead"><tr><th class="base-th">Posição & Nome</th><th class="base-th text-center">OPs Concluídas</th><th class="base-th text-right">Tempo Médio/OP</th></tr></thead>
+                                <tbody id="emp-ranking-body"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="card flex flex-col">
+                        <h3 class="text-sm font-semibold text-ios-textMuted uppercase mb-4">Demanda de Tempo por Linha (Minutos)</h3>
+                        <div class="h-48 mt-auto"><canvas id="line-efficiency-chart"></canvas></div>
+                    </div>
                 </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5 mt-8 border-t border-ios-border pt-8">
+                    <div class="card"><div class="flex justify-between mb-4"><h2 class="title-md mb-0">Consumo Hoje</h2></div><div class="h-64"><canvas id="daily-output-chart"></canvas></div></div>
+                    <div class="card"><div class="flex justify-between mb-4"><h2 class="title-md mb-0">Previsto 48h</h2></div><div class="h-64"><canvas id="scheduled-output-chart"></canvas></div></div>
+                </div>
+                <div class="card"><h2 class="title-md">Curva ABC de Consumo</h2><div class="h-64"><canvas id="abc-curve-chart"></canvas></div></div>
+            </div>
+
+            <!-- Entrada -->
+            <div id="screen-entry" class="screen-panel hidden">
+                <h1 class="title-lg">Nova Entrada Físico</h1>
+                <div class="card max-w-3xl mx-auto">
+                    <div class="bg-ios-blue/10 border border-ios-blue/30 rounded-xl p-4 mb-6">
+                        <p class="text-sm text-ios-blue font-medium"><i class="fa-solid fa-wand-magic-sparkles mr-2"></i>Dica: Digite o código de um produto já existente para preencher automaticamente os dados do fornecedor e prazos.</p>
+                    </div>
+                    <form id="entry-form">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div class="md:col-span-2">
+                                <label class="form-label">Código do Produto <span class="text-xs text-ios-textMuted font-normal">- Use 8110 p/ Trigo</span></label>
+                                <input type="text" name="product-code" class="form-input text-lg font-mono placeholder:text-sm placeholder:font-sans" placeholder="Busca automática ao digitar...">
+                            </div>
+                            <div class="md:col-span-2">
+                                <label class="form-label">Nome do Produto</label>
+                                <input type="text" name="product-name" required class="form-input">
+                            </div>
+                            <div>
+                                <label class="form-label">Tipo de Produto</label>
+                                <select name="product-type" required class="form-input">
+                                    <option value="insumo">Insumo (Matéria Prima / Embalagem)</option>
+                                    <option value="semi_acabado">Semi-acabado (Massa, Recheio, Base)</option>
+                                </select>
+                            </div>
+                            <div><label class="form-label">Fornecedor</label><input type="text" name="supplier" required class="form-input" placeholder="Ex: Fornecedor X"></div>
+                            
+                            <div><label class="form-label">Prazo Entrega (Dias)</label><input type="number" name="lead-time" min="0" class="form-input text-ios-blue" placeholder="Ex: 5"></div>
+                            <div><label class="form-label">Estoque Mínimo (Alerta)</label><input type="number" name="min-stock" min="0" step="0.01" class="form-input text-ios-orange" placeholder="Opcional"></div>
+                            
+                            <div><label class="form-label">Quantidade FÍSICA</label><input type="number" name="quantity" required min="0.01" step="0.01" class="form-input text-ios-blue font-bold"></div>
+                            <div><label class="form-label">Data de Recebimento</label><input type="date" id="receipt-date" required class="form-input"></div>
+                            <div><label class="form-label">Data de Fabricação</label><input type="date" id="mfg-date" class="form-input"></div>
+                            <div><label class="form-label">Data de Validade</label><input type="date" id="expiry-date" class="form-input"></div>
+                        </div>
+                        <div class="mt-8 flex justify-end"><button type="submit" class="btn-primary"><i class="fa-solid fa-plus mr-2"></i>Registrar no Estoque</button></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Estoque -->
+            <div id="screen-inventory" class="screen-panel hidden">
+                <h1 class="title-lg">Estoque Atual</h1>
+                <div class="card p-0 overflow-hidden border-none bg-transparent">
+                    <div class="flex flex-wrap gap-3 mb-5 p-1">
+                        <input type="text" id="search-inventory" placeholder="Pesquisar itens..." class="form-input w-full md:w-64">
+                        <select id="type-filter" class="form-input w-auto">
+                            <option value="">Todos os Tipos</option>
+                            <option value="insumo">Insumos</option>
+                            <option value="semi_acabado">Semi-acabados</option>
+                        </select>
+                        <select id="supplier-filter" class="form-input w-auto"><option value="">Fornecedores</option></select>
+                        <button id="btn-export-excel" class="btn-secondary ml-auto"><i class="fa-solid fa-arrow-up-from-bracket mr-2"></i>Exportar</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="base-table">
+                            <thead class="base-thead">
+                                <tr>
+                                    <th class="base-th table-header-sortable" data-sort="name">Produto <i class="fa-solid fa-sort ml-1 text-ios-textMuted"></i></th>
+                                    <th class="base-th">Tipo</th>
+                                    <th class="base-th table-header-sortable" data-sort="supplier">Fornecedor <i class="fa-solid fa-sort ml-1 text-ios-textMuted"></i></th>
+                                    <th class="base-th text-right table-header-sortable" data-sort="totalQuantity">Saldo Consolidado <i class="fa-solid fa-sort ml-1 text-ios-textMuted"></i></th>
+                                    <th class="base-th table-header-sortable" data-sort="expiry">Próx. Validade <i class="fa-solid fa-sort ml-1 text-ios-textMuted"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody id="inventory-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Receitas -->
+            <div id="screen-recipes" class="screen-panel hidden">
+                <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
+                    <h1 class="title-lg mb-0">Fichas Técnicas / Receitas</h1>
+                    <div class="flex gap-3">
+                        <input type="text" id="search-recipe" placeholder="Buscar receita..." class="form-input w-64">
+                        <button id="btn-export-recipe-book" class="btn-secondary"><i class="fa-solid fa-file-pdf mr-2"></i>Livro PDF</button>
+                        <button id="btn-new-recipe" class="btn-primary"><i class="fa-solid fa-plus mr-2"></i>Criar Receita</button>
+                    </div>
+                </div>
+                <div class="flex flex-col xl:flex-row gap-6">
+                    <div class="w-full xl:w-1/4 card self-start">
+                        <h2 class="text-sm font-semibold text-ios-textMuted uppercase mb-3">Linhas de Produção</h2>
+                        <ul id="recipe-categories-list" class="space-y-1"></ul>
+                    </div>
+                    <div id="recipes-grid" class="w-full xl:w-3/4 grid grid-cols-1 md:grid-cols-2 gap-5 self-start"></div>
+                </div>
+            </div>
+
+            <!-- Separação (Picking) -->
+            <div id="screen-picking" class="screen-panel hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <div>
+                        <h1 class="title-lg mb-0 text-ios-orange"><i class="fa-solid fa-dolly mr-3"></i>Separação (Kitting por Linha)</h1>
+                        <p class="text-ios-textMuted mt-1 text-sm">Organize as matérias-primas por setor. Os cronómetros rodam de forma independente.</p>
+                    </div>
+                </div>
+                <div id="picking-lines-container" class="space-y-6"></div>
+            </div>
+
+            <!-- Produção (OP) -->
+            <div id="screen-production" class="screen-panel hidden">
+                <div class="flex justify-between items-center mb-6">
+                    <h1 class="title-lg mb-0">Ordens de Produção (OP)</h1>
+                    <div class="flex gap-3">
+                        <button id="btn-confirm-production" class="btn-success"><i class="fa-solid fa-check-double mr-2"></i>Efetivar OPs Selecionadas</button>
+                        <button id="btn-new-production-order" class="btn-primary"><i class="fa-solid fa-plus mr-2"></i>Nova OP</button>
+                    </div>
+                </div>
+                <div class="card mb-5 flex flex-wrap gap-4 items-center border-l-4 border-l-ios-blue">
+                    <label class="text-sm font-medium text-ios-textMuted"><i class="fa-solid fa-filter mr-2"></i>Filtrar Programação:</label>
+                    <input type="date" id="search-po-by-date" class="form-input w-auto py-2">
+                </div>
+                <div id="production-orders-list" class="grid grid-cols-1 xl:grid-cols-2 gap-5"></div>
+            </div>
+
+            <!-- Consumo Mensal -->
+            <div id="screen-consumption" class="screen-panel hidden">
+                <h1 class="title-lg">Relatório de Consumo</h1>
+                <div class="card p-0 bg-transparent border-none">
+                    <div class="flex gap-3 mb-5">
+                        <select id="consumption-month-filter" class="form-input w-auto py-2"></select>
+                        <select id="consumption-year-filter" class="form-input w-auto py-2"></select>
+                        <input type="text" id="search-consumption" placeholder="Buscar produto..." class="form-input flex-1 py-2">
+                    </div>
+                    <div class="table-container">
+                        <table class="base-table">
+                            <thead class="base-thead"><tr><th class="base-th">Produto</th><th class="base-th text-right">Volume Consumido</th></tr></thead>
+                            <tbody id="consumption-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Requisições -->
+            <div id="screen-requisitions" class="screen-panel hidden">
+                <h1 class="title-lg">Baixa Avulsa (Requisição)</h1>
+                <div class="card max-w-4xl mx-auto">
+                    <div class="bg-ios-orange/10 border border-ios-orange/30 rounded-xl p-4 mb-6">
+                        <p class="text-sm text-ios-orange font-medium"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Atenção: O sistema bloqueará a requisição se não houver saldo físico suficiente nos lotes ou se os lotes estiverem bloqueados em quarentena.</p>
+                    </div>
+                    <form id="requisition-form">
+                        <div class="grid grid-cols-2 gap-5 mb-6">
+                            <div><label class="form-label">Destino / Motivo</label><input type="text" id="requisition-reason" required class="form-input" placeholder="Ex: Quebra, Teste, Refeição"></div>
+                            <div><label class="form-label">Solicitante</label><input type="text" id="requisition-responsible" required class="form-input" placeholder="Nome"></div>
+                        </div>
+                        <div class="border-t border-ios-border pt-4">
+                            <h3 class="title-md text-sm uppercase text-ios-textMuted mb-4">Itens da Requisição</h3>
+                            <div id="requisition-items-container" class="space-y-3 mb-5"></div>
+                            <button type="button" id="add-requisition-item-btn" class="text-ios-blue hover:text-blue-400 font-medium text-sm flex items-center"><i class="fa-solid fa-circle-plus mr-2 text-lg"></i>Adicionar Insumo</button>
+                        </div>
+                        <div class="mt-8 flex justify-end"><button type="submit" class="btn-primary">Confirmar Saída Avulsa</button></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Ajustes -->
+            <div id="screen-adjustments" class="screen-panel hidden">
+                <h1 class="title-lg">Ajuste Manual de Lote</h1>
+                <div class="card max-w-2xl mx-auto">
+                    <form id="adjustment-form" class="space-y-5">
+                        <div class="z-50 relative"><label class="form-label">Buscar Produto</label><div id="adjustment-searchable-container" class="searchable-container"></div></div>
+                        <div><label class="form-label">Selecionar Lote Físico</label><select id="adjustment-batch" required class="form-input"><option value="">Aguardando produto...</option></select></div>
+                        <div><label class="form-label">Nova Quantidade Real (Física)</label><input type="number" id="adjustment-new-quantity" required min="0" step="0.01" class="form-input text-lg font-bold text-ios-blue"></div>
+                        <div><label class="form-label">Motivo do Ajuste</label><input type="text" id="adjustment-reason" required class="form-input" placeholder="Ex: Recontagem de inventário"></div>
+                        <div><label class="form-label">Responsável</label><input type="text" id="adjustment-responsible" required class="form-input"></div>
+                        <div class="mt-8 flex justify-end"><button type="submit" class="btn-primary">Registrar Ajuste</button></div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Configurações -->
+            <div id="screen-settings" class="screen-panel hidden">
+                <h1 class="title-lg">Ajustes do Aplicativo</h1>
+                <div class="card max-w-2xl mx-auto space-y-8 divide-y divide-ios-border">
+                    <div class="pt-2">
+                        <h2 class="title-md mb-1"><i class="fa-solid fa-cloud-arrow-down mr-2 text-ios-blue"></i>Exportar Backup</h2>
+                        <p class="text-sm text-ios-textMuted mb-4">Gera um arquivo seguro contendo toda a base de dados em Nuvem (JSON).</p>
+                        <button id="btn-download-backup" class="w-full btn-secondary text-ios-blue border-ios-blue/30 bg-ios-blue/10">Baixar Cópia</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modal Picking (Separação Agrupada - REVISADO) -->
+    <div id="picking-modal" class="modal z-[60]">
+        <div class="modal-content max-w-5xl max-h-[95vh] overflow-hidden flex flex-col p-0 bg-ios-bg border border-ios-border">
+            <div class="flex justify-between items-start shrink-0 p-6 border-b border-ios-border bg-ios-cardHover">
+                <div>
+                    <h2 id="picking-modal-title" class="title-md mb-1 text-ios-orange flex items-center"><i class="fa-solid fa-dolly mr-3 text-2xl"></i><span>Check-list de Separação</span></h2>
+                    <p id="picking-modal-subtitle" class="text-sm text-ios-textMuted font-medium"></p>
+                </div>
+                <button class="text-ios-textMuted hover:text-white text-4xl ml-4 close-modal leading-none" data-target="picking-modal">&times;</button>
+            </div>
+            
+            <!-- Etapa 1: Iniciar Separação (Quem está separando?) -->
+            <div id="picking-setup-view" class="p-10 flex flex-col items-center justify-center bg-ios-card h-[50vh]">
+                <i class="fa-solid fa-clipboard-user text-6xl text-ios-orange mb-6"></i>
+                <h3 class="text-2xl font-bold text-white mb-2">Quem vai separar esta linha?</h3>
+                <p class="text-ios-textMuted text-sm mb-8 text-center max-w-md">Insira o seu nome abaixo para iniciar o cronómetro independente desta linha.</p>
+                
+                <input type="text" id="picking-responsible" class="form-input max-w-xs text-center text-xl py-4 mb-6 shadow-inner border border-ios-border" placeholder="O seu nome aqui" autocomplete="off">
+                <button id="btn-start-picking" class="btn-success py-4 px-10 text-lg rounded-full shadow-lg shadow-ios-green/20 hover:-translate-y-1 transform transition"><i class="fa-solid fa-play mr-2"></i> Iniciar Cronómetro</button>
+            </div>
+
+            <!-- Etapa 2: Check-list e Timer Ativo -->
+            <div id="picking-active-view" class="hidden flex-col flex-1 overflow-hidden h-[70vh]">
+                <div class="bg-ios-bg px-6 py-4 flex flex-wrap justify-between items-center shrink-0 border-b border-ios-border shadow-inner gap-4">
+                    <div>
+                        <p class="text-[10px] text-ios-textMuted uppercase font-bold tracking-widest mb-1">Estoquista Responsável</p>
+                        <p class="font-bold text-white text-lg flex items-center"><i class="fa-solid fa-user-check text-ios-blue mr-2"></i><span id="picking-active-resp">---</span></p>
+                    </div>
+                    <div class="text-center bg-ios-card px-8 py-2 rounded-2xl border border-ios-border shadow-md">
+                        <div class="text-4xl font-mono font-bold text-ios-orange tracking-widest live-timer timer-active" id="picking-timer-display" data-start="">00:00</div>
+                        <p class="text-[10px] text-ios-textMuted uppercase mt-1">Tempo Corrido</p>
+                    </div>
+                    <button id="btn-finish-picking" class="btn-primary py-3 px-6 shadow-lg shadow-ios-blue/20 rounded-xl"><i class="fa-solid fa-flag-checkered mr-2"></i>Finalizar OP(s)</button>
+                </div>
+
+                <div class="overflow-y-auto flex-1 bg-ios-bg p-6">
+                    <div class="table-container shadow-xl">
+                        <table class="base-table w-full text-left">
+                            <thead class="base-thead sticky top-0 z-10 shadow-sm">
+                                <tr>
+                                    <th class="base-th rounded-tl-lg text-sm">Item a Separar (Consolidado)</th>
+                                    <th class="base-th text-right text-sm">Qtd Necessária</th>
+                                    <th class="base-th text-center w-48 text-sm">Qtd no Carrinho</th>
+                                    <th class="base-th text-center rounded-tr-lg text-sm">Pronto</th>
+                                </tr>
+                            </thead>
+                            <tbody id="picking-checklist-body" class="divide-y divide-ios-border">
+                                <!-- JS content -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Receita -->
+    <div id="recipe-modal" class="modal">
+        <div class="modal-content max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6"><h2 id="recipe-modal-title" class="title-md mb-0">Nova Receita</h2><button class="text-ios-textMuted hover:text-white text-2xl close-modal" data-target="recipe-modal">&times;</button></div>
+            <form id="recipe-form" class="space-y-5">
+                <input type="hidden" id="edit-recipe-id">
+                <div><label class="form-label">Nome da Ficha Técnica / Receita</label><input type="text" id="recipe-name" required class="form-input font-semibold text-lg" placeholder="Ex: Massa de Coxinha ou Bolo de Cenoura"></div>
+                <div>
+                    <label class="form-label">Linha Produtiva</label>
+                    <input type="text" id="recipe-category" list="category-options" required class="form-input" placeholder="Selecione ou digite uma nova linha (ex: Salgados, Pães...)">
+                    <datalist id="category-options">
+                        <option value="Salgados"></option>
+                        <option value="Pães"></option>
+                        <option value="Confeitaria"></option>
+                        <option value="Bases"></option>
+                    </datalist>
+                </div>
+                <div class="p-5 bg-ios-blue/10 border border-ios-blue/30 rounded-xl">
+                    <label class="flex items-center space-x-3 cursor-pointer mb-2">
+                        <input type="checkbox" id="recipe-is-semi" class="check-nativo">
+                        <span class="text-sm font-semibold text-white ml-1">Esta receita gera um produto Semi-Acabado</span>
+                    </label>
+                    <p class="text-xs text-ios-textMuted mb-4 mt-2">Se marcado, a receita entra no estoque como Insumo (Massa, Base, etc). Se NÃO marcado, é classificada como Consumo Direto/Acabado (Não acumula estoque na OP).</p>
+                    <div id="yield-wrapper" class="hidden pt-4 border-t border-ios-blue/20">
+                        <label class="form-label text-ios-blue font-bold">Rendimento (Quantidade FÍSICA que entra no estoque ao processar 1 receita)</label>
+                        <input type="number" id="recipe-yield" min="0.001" step="0.001" value="1" class="form-input text-ios-blue font-bold text-lg" placeholder="Ex: 2.5">
+                    </div>
+                </div>
+                <div class="pt-2">
+                    <h3 class="text-sm font-semibold text-ios-textMuted uppercase mb-3">Composição (Ingredientes)</h3>
+                    <div id="ingredients-container" class="space-y-3 mb-4"></div>
+                    <button type="button" id="add-ingredient-btn" class="text-ios-blue font-medium text-sm flex items-center"><i class="fa-solid fa-circle-plus mr-1"></i>Adicionar Ingrediente</button>
+                </div>
+                <div class="mt-6 flex justify-end"><button type="submit" class="btn-primary" id="save-recipe-btn">Salvar Ficha Técnica</button></div>
             </form>
         </div>
     </div>
 
-    <!-- Modal: Gerenciar Receita (Adicionar Insumos, Foto e Gerar PDF) -->
-    <div id="modal-manage-receita" class="modal fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center p-4 z-50 opacity-0 pointer-events-none">
-        <div class="modal-content bg-white rounded-lg shadow-xl w-full max-w-4xl p-6 transform scale-95 max-h-[90vh] flex flex-col">
-            <div class="flex justify-between items-center mb-4">
-                <h3 id="modal-receita-nome" class="text-2xl font-semibold text-gray-800">Gerenciar Receita</h3>
-                <button id="modal-manage-receita-close" class="text-gray-500 hover:text-gray-800 text-3xl">&times;</button>
-            </div>
+    <!-- Modal OP -->
+    <div id="production-order-modal" class="modal">
+        <div class="modal-content max-w-5xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center mb-6"><h2 id="production-order-modal-title" class="title-md mb-0">Gerar Ordem de Produção (OP)</h2><button class="text-ios-textMuted hover:text-white text-2xl close-modal" data-target="production-order-modal">&times;</button></div>
+            <form id="production-order-form">
+                <input type="hidden" id="edit-po-id">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 bg-ios-bg border border-ios-border p-5 rounded-2xl mb-6 shadow-inner items-start relative z-50">
+                    <div class="md:col-span-2 relative">
+                        <label class="form-label">Receita / Produto a Fabricar</label>
+                        <div id="po-recipe-searchable-container" class="searchable-container"></div>
+                    </div>
+                    <div><label class="form-label">Multiplicador (Qtd Receitas)</label><input type="number" id="po-quantity" value="1" min="0.01" step="0.01" required class="form-input text-ios-blue font-bold text-lg"></div>
+                    
+                    <div class="md:col-span-1 mt-2"><label class="form-label">Data Agendada</label><input type="date" id="po-date" required class="form-input"></div>
+                    
+                    <div class="md:col-span-4 mt-2">
+                        <label class="flex items-center gap-3 cursor-pointer bg-ios-orange/10 p-3 rounded-xl border border-ios-orange/30 w-max hover:bg-ios-orange/20 transition-colors">
+                            <input type="checkbox" id="po-is-extra" class="check-nativo">
+                            <span class="text-sm font-bold text-ios-orange ml-1"><i class="fa-solid fa-triangle-exclamation mr-1"></i> OP Extra / Urgente (Menos de 48h)</span>
+                        </label>
+                    </div>
 
-            <div class="flex-grow overflow-y-auto pr-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-                
-                <!-- Coluna 1: Ingredientes e Custos -->
-                <div>
-                    <!-- Formulário de Adicionar Ingrediente à Receita -->
-                    <form id="form-add-ingrediente-receita" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 pb-6 border-b">
-                        <div class="sm:col-span-2">
-                            <label for="receita-insumo-select"
-                                class="block text-sm font-medium text-gray-700">Insumo</label>
-                            <select id="receita-insumo-select" required
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                                <option value="">Selecione um insumo...</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label for="receita-insumo-qtd" class="block text-sm font-medium text-gray-700">Qtd.</label>
-                            <input type="number" step="0.001" id="receita-insumo-qtd" required
-                                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        </div>
-                        <button type="submit"
-                            class="sm:col-span-3 w-full bg-blue-600 text-white font-medium py-2 px-4 rounded-md shadow-sm hover:bg-blue-700">
-                            Adicionar Ingrediente
-                        </button>
-                    </form>
-
-                    <!-- Lista de Ingredientes da Receita -->
-                    <h4 class="text-xl font-semibold mb-3 text-gray-800">Ingredientes da Receita</h4>
-                    <div id="receita-ingredientes-list" class="space-y-2 mb-6">
-                        <p id="receita-ingredientes-vazio" class="text-gray-500">Nenhum ingrediente adicionado.</p>
+                    <div id="po-output-fields" class="col-span-1 md:col-span-4 grid grid-cols-1 md:grid-cols-3 gap-4 mt-2 pt-4 border-t border-ios-border hidden">
+                        <div><label class="form-label">Total Gerado (Entrada Físico)</label><input type="text" id="po-total-output" readonly class="form-input bg-gray-800 text-ios-green font-bold text-lg border-none" value="0.0000" title="Calculado = Rendimento x Multiplicador"></div>
+                        <div><label class="form-label">Lote Sugerido (Saída)</label><input type="text" id="po-output-batch" class="form-input"></div>
+                        <div><label class="form-label">Validade Lote Gerado</label><input type="date" id="po-output-expiry" class="form-input"></div>
                     </div>
                 </div>
+                <h3 class="title-md text-sm uppercase text-ios-textMuted mb-3">Previsão de Consumo</h3>
+                <div class="table-container mb-6">
+                    <table class="base-table">
+                        <thead class="base-thead"><tr><th class="base-th">Insumo</th><th class="base-th">Estoque Atual</th><th class="base-th">Qtd a Descontar</th><th class="base-th">Lotes Reservados</th></tr></thead>
+                        <tbody id="po-ingredients-body"></tbody>
+                    </table>
+                </div>
+                <div class="flex justify-end"><button type="submit" class="btn-primary">Salvar OP na Fila</button></div>
+            </form>
+        </div>
+    </div>
 
-                <!-- Coluna 2: Foto da Receita -->
+    <!-- Modal Alertas Estoque Mínimo -->
+    <div id="low-stock-modal" class="modal z-[60]">
+        <div class="modal-content max-w-2xl max-h-[80vh] flex flex-col p-0 overflow-hidden">
+            <div class="flex justify-between items-start shrink-0 p-6 border-b border-ios-border bg-ios-cardHover">
                 <div>
-                    <h4 class="text-xl font-semibold mb-3 text-gray-800">Foto da Receita</h4>
-                    <div id="foto-preview-container" class="foto-preview mb-4">
-                        <span>Sem foto</span>
-                    </div>
-                    <label for="receita-foto-upload" class="block text-sm font-medium text-gray-700">Carregar nova foto</label>
-                    <input type="file" id="receita-foto-upload" accept="image/png, image/jpeg"
-                           class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <span id="upload-status" class="text-sm text-gray-600 mt-2 block"></span>
+                    <h2 class="title-md mb-1 text-ios-red flex items-center"><i class="fa-solid fa-bell mr-3 text-2xl"></i><span>Itens Abaixo do Mínimo</span></h2>
+                    <p class="text-sm text-ios-textMuted font-medium">Atenção para reposição imediata. Você define o que mede!</p>
                 </div>
-
+                <button class="text-ios-textMuted hover:text-white text-4xl ml-4 close-modal leading-none" data-target="low-stock-modal">&times;</button>
             </div>
+            <div class="overflow-y-auto p-6 bg-ios-bg">
+                <ul id="low-stock-list" class="space-y-3"></ul>
+            </div>
+        </div>
+    </div>
 
-            <!-- Rodapé do Modal -->
-            <div class="mt-6 pt-6 border-t flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div class="text-lg font-bold text-gray-800">
-                    Custo Total da Receita: <span id="receita-custo-total" class="text-green-700">R$ 0,00</span>
+    <!-- Modal Alertas Vencimentos 45 dias -->
+    <div id="expiring-modal" class="modal z-[60]">
+        <div class="modal-content max-w-2xl max-h-[80vh] flex flex-col p-0 overflow-hidden">
+            <div class="flex justify-between items-start shrink-0 p-6 border-b border-ios-border bg-ios-cardHover">
+                <div>
+                    <h2 class="title-md mb-1 text-ios-red flex items-center"><i class="fa-solid fa-clock mr-3 text-2xl"></i><span>Lotes Vencendo (Próx. 45 Dias)</span></h2>
+                    <p class="text-sm text-ios-textMuted font-medium">Acompanhamento e priorização de saída PEPS.</p>
                 </div>
-                <button id="btn-generate-pdf"
-                    class="w-full sm:w-auto bg-red-600 text-white font-medium py-2 px-6 rounded-md shadow-sm hover:bg-red-700 flex items-center justify-center gap-2">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                        <line x1="16" y1="13" x2="8" y2="13"></line>
-                        <line x1="16" y1="17" x2="8" y2="17"></line>
-                    </svg>
-                    Gerar Ficha (PDF)
-                </button>
+                <button class="text-ios-textMuted hover:text-white text-4xl ml-4 close-modal leading-none" data-target="expiring-modal">&times;</button>
+            </div>
+            <div class="overflow-y-auto p-6 bg-ios-bg">
+                <ul id="expiring-list" class="space-y-3"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Detalhes Item (Estoque) -->
+    <div id="item-details-modal" class="modal">
+        <div class="modal-content max-w-5xl max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h2 class="title-md flex items-center mb-1 text-2xl tracking-tight"><span id="details-product-name"></span></h2>
+                    <span id="details-product-type-badge" class="badge bg-ios-cardHover text-ios-textMuted border border-ios-border"></span>
+                </div>
+                <div class="flex items-center gap-3">
+                    <button id="btn-edit-item" class="text-ios-blue bg-ios-blue/10 p-3 rounded-full hover:bg-ios-blue/20 transition-colors"><i class="fa-solid fa-pen"></i></button>
+                    <button id="btn-delete-item" class="text-ios-red bg-ios-red/10 p-3 rounded-full hover:bg-ios-red/20 transition-colors"><i class="fa-solid fa-trash"></i></button>
+                    <button class="text-ios-textMuted hover:text-white text-3xl ml-2 close-modal" data-target="item-details-modal">&times;</button>
+                </div>
+            </div>
+            <div id="item-details-view" class="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm bg-ios-bg p-5 rounded-2xl mb-6 shadow-inner border border-ios-border">
+                <div><span class="text-ios-textMuted block mb-1">Código</span><span id="details-product-code" class="text-white font-medium"></span></div>
+                <div class="md:col-span-2"><span class="text-ios-textMuted block mb-1">Fornecedor</span><span id="details-supplier" class="text-white font-medium"></span></div>
+                <div><span class="text-ios-textMuted block mb-1">Prazo Entr.</span><span id="details-lead-time" class="text-white font-medium"></span></div>
+                <div><span class="text-ios-textMuted block mb-1">Estoque Mín.</span><span id="details-min-stock" class="text-ios-orange font-medium"></span></div>
+                <div><span class="text-ios-textMuted block mb-1">Saldo Físico</span><span id="details-total-quantity" class="text-ios-green font-bold text-xl"></span></div>
+            </div>
+            <div id="item-details-edit" class="hidden mb-6 bg-ios-bg p-5 rounded-2xl border border-ios-border shadow-inner">
+                <form id="edit-item-form" class="grid grid-cols-1 md:grid-cols-6 gap-5">
+                    <input type="hidden" id="edit-item-id">
+                    <div class="md:col-span-6">
+                        <label class="form-label">Classificação</label>
+                        <select id="edit-product-type" required class="form-input">
+                            <option value="insumo">Insumo</option>
+                            <option value="semi_acabado">Semi-acabado</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-6"><label class="form-label">Nome</label><input type="text" id="edit-product-name" required class="form-input"></div>
+                    <div class="md:col-span-1"><label class="form-label">Cód</label><input type="text" id="edit-product-code" class="form-input"></div>
+                    <div class="md:col-span-2"><label class="form-label">Fornecedor</label><input type="text" id="edit-supplier" class="form-input"></div>
+                    <div class="md:col-span-1"><label class="form-label" title="Prazo de Entrega do Fornecedor em Dias">Prazo (Dias)</label><input type="number" id="edit-lead-time" min="0" class="form-input"></div>
+                    <div class="md:col-span-2 relative border border-ios-border p-3 rounded-xl bg-ios-cardHover">
+                        <div class="flex gap-2 mb-2 items-end">
+                            <div class="flex-1"><label class="text-[10px] text-ios-textMuted uppercase mb-1 block">Margem Seg. (Dias)</label><input type="number" id="edit-safety-margin" min="0" class="form-input py-1 px-2 text-sm" value="2"></div>
+                            <button type="button" id="btn-calc-min-stock" class="text-ios-blue text-[10px] bg-ios-blue/10 px-2 py-1 rounded hover:bg-ios-blue/20 transition-colors h-8" title="Calcula baseado no consumo médio diário (últimos 30 dias) × (Prazo + Margem)"><i class="fa-solid fa-calculator mr-1"></i>Sugerir Ideal</button>
+                        </div>
+                        <label class="text-xs text-ios-orange font-bold mb-1 block">Estoque Mínimo (Ponto de Pedido)</label>
+                        <input type="number" step="0.01" id="edit-min-stock" class="form-input text-ios-orange font-bold">
+                    </div>
+                    <div class="md:col-span-6 flex justify-end gap-3 mt-2"><button type="button" id="btn-cancel-edit" class="btn-secondary">Cancelar</button><button type="submit" class="btn-primary">Salvar Edição</button></div>
+                </form>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div>
+                    <h3 class="text-sm font-semibold text-ios-textMuted uppercase mb-3">Lotes Físicos na Prateleira</h3>
+                    <div class="table-container mb-8 max-h-96 overflow-y-auto">
+                        <table class="base-table">
+                            <thead class="base-thead"><tr><th class="base-th">Lote</th><th class="base-th">Status</th><th class="base-th">Volume</th><th class="base-th">Validade</th><th class="base-th text-center">Gestão</th></tr></thead>
+                            <tbody id="details-batches-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-sm font-semibold text-ios-textMuted uppercase mb-3 flex justify-between items-center">
+                        Extrato de Movimentação
+                        <button id="btn-clear-hist-filters" class="text-xs text-ios-blue hover:text-blue-300 font-normal underline hidden">Limpar Filtros</button>
+                    </h3>
+                    <div class="flex flex-wrap gap-2 mb-3 bg-ios-bg p-3 rounded-xl border border-ios-border shadow-inner">
+                        <div class="w-full text-xs text-ios-textMuted font-medium mb-1">Filtrar por Período:</div>
+                        <input type="date" id="hist-filter-start" class="form-input py-1 px-2 text-xs w-auto border-ios-border">
+                        <span class="text-ios-textMuted flex items-center text-xs">até</span>
+                        <input type="date" id="hist-filter-end" class="form-input py-1 px-2 text-xs w-auto border-ios-border">
+                        <select id="hist-filter-type" class="form-input py-1 px-2 text-xs w-auto border-ios-border ml-auto">
+                            <option value="">Todas Movimentações</option>
+                            <option value="entrada">Entradas (Todas)</option>
+                            <option value="saída">Saídas / Consumo</option>
+                            <option value="requisição">Requisição Avulsa</option>
+                            <option value="ajuste">Ajustes</option>
+                        </select>
+                    </div>
+                    <div class="table-container max-h-72 overflow-y-auto bg-ios-bg p-2" id="details-history-container"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Editar Lote Específico -->
+    <div id="edit-batch-modal" class="modal z-[60]">
+        <div class="modal-content max-w-sm">
+            <h2 class="title-md mb-4">Editar Lote</h2>
+            <form id="edit-batch-form" class="space-y-4">
+                <input type="hidden" id="edit-batch-id">
+                <input type="hidden" id="edit-batch-product-id">
+                <div><label class="form-label">Código do Lote</label><input type="text" id="edit-batch-code" required class="form-input bg-ios-bg border-ios-border"></div>
+                <div><label class="form-label">Quantidade</label><input type="number" step="0.001" id="edit-batch-qty" required class="form-input text-ios-blue font-bold bg-ios-bg border-ios-border"></div>
+                <div><label class="form-label">Validade</label><input type="date" id="edit-batch-expiry" class="form-input bg-ios-bg border-ios-border"></div>
+                <div class="flex justify-end gap-2 mt-2"><button type="button" class="btn-secondary close-modal" data-target="edit-batch-modal">Cancelar</button><button type="submit" class="btn-primary">Salvar</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Seletor Manual de Lotes -->
+    <div id="batch-selector-modal" class="modal z-[60]">
+        <div class="modal-content max-w-xl">
+            <h2 id="batch-selector-title" class="title-md mb-4">Descontar de quais lotes?</h2>
+            <div class="bg-ios-bg border border-ios-border p-4 rounded-xl flex justify-between mb-5 items-center">
+                <span class="text-ios-textMuted text-sm">Alvo: <span id="batch-selector-needed" class="text-white font-semibold"></span></span>
+                <span class="text-ios-textMuted text-sm">Marcado: <span id="batch-selector-selected" class="font-bold text-lg text-ios-blue"></span></span>
+            </div>
+            <div id="batch-selector-list" class="max-h-64 overflow-y-auto mb-6 pr-2 space-y-2"></div>
+            <div class="flex justify-end gap-3"><button class="btn-secondary close-modal" data-target="batch-selector-modal">Cancelar</button><button id="confirm-batch-selection" class="btn-primary">Aplicar Seleção</button></div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmação Base -->
+    <div id="confirm-action-modal" class="modal z-[9999]">
+        <div class="modal-content max-w-md text-center flex flex-col items-center">
+            <div class="w-16 h-16 rounded-full bg-ios-cardHover border border-ios-border flex items-center justify-center mb-5"><i class="fa-solid fa-circle-question text-3xl text-ios-blue"></i></div>
+            <h3 id="confirm-title" class="title-md mb-2"></h3>
+            <p id="confirm-message" class="text-ios-textMuted text-sm mb-8 leading-relaxed"></p>
+            <div class="flex gap-3 w-full justify-center">
+                <button id="cancel-action-btn" class="btn-secondary flex-1">Cancelar</button>
+                <button id="confirm-action-btn" class="btn-primary flex-1">Sim, Continuar</button>
             </div>
         </div>
     </div>
     
-    <!-- Toast Message -->
-    <div id="toast" class="fixed bottom-4 right-4 bg-gray-900 text-white py-3 px-5 rounded-lg shadow-xl opacity-0 transition-opacity duration-300 z-50">
-        Mensagem
-    </div>
+<script type="module">
+    // Helper functions com travões de segurança
+    const id = n => document.getElementById(n);
+    const show = el => { if(el) { el.style.display = 'flex'; el.classList.remove('hidden'); } };
+    const hide = el => { if(el) { el.style.display = 'none'; el.classList.add('hidden'); } };
 
+    const addEvt = (elementId, eventType, handler) => {
+        const el = document.getElementById(elementId);
+        if(el) el.addEventListener(eventType, handler);
+    };
 
-    <!-- Firebase e Lógica do App -->
-    <script type="module">
-        // Importações do Firebase
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import {
-            getAuth,
-            signInAnonymously,
-            signInWithCustomToken,
-            onAuthStateChanged
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import {
-            getFirestore,
-            collection,
-            doc,
-            addDoc,
-            setDoc,
-            updateDoc,
-            deleteDoc,
-            onSnapshot,
-            query,
-            serverTimestamp,
-            setLogLevel // Importar setLogLevel
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        // Importação do STORAGE (Novo)
-        import {
-            getStorage,
-            ref,
-            uploadBytes,
-            getDownloadURL,
-            deleteObject
-        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+    // --- FIREBASE IMPORTS ---
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+    import { getFirestore, collection, doc, addDoc, setDoc, getDoc, getDocs, deleteDoc, query, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
 
-        // --- Configuração do Firebase ---
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+    // --- FIREBASE CONFIG (Usando a sua) ---
+    const firebaseConfig = {
+        apiKey: "AIzaSyDev8spgKoKZi2pOohmk0r9SFLtLMcePa8",
+        authDomain: "estoque-b50df.firebaseapp.com",
+        projectId: "estoque-b50df",
+        storageBucket: "estoque-b50df.firebasestorage.app",
+        messagingSenderId: "634756791567",
+        appId: "1:634756791567:web:993e61243b57b7e057d27a",
+        measurementId: "G-JFHTWJJQE9"
+    };
 
-        let app, auth, db, storage, userId;
-        let insumosCollectionRef, receitasCollectionRef;
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
+    const db = getFirestore(app);
 
-        // Estado local
-        let localInsumos = [];
-        let localReceitas = [];
-        let currentManagingRecipeId = null;
+    // --- DB WRAPPER (Firestore Integrado) ---
+    const DB = (() => {
+        return {
+            add: async (coll, data) => {
+                const docRef = await addDoc(collection(db, coll), data);
+                await setDoc(docRef, { id: docRef.id }, { merge: true });
+                return docRef.id;
+            },
+            update: async (coll, data) => {
+                if(!data.id) return;
+                await setDoc(doc(db, coll, data.id), data, { merge: true });
+            },
+            remove: async (coll, idStr) => {
+                if(!idStr) return;
+                await deleteDoc(doc(db, coll, idStr));
+            },
+            get: async (coll, idStr) => {
+                if(!idStr) return null;
+                const docSnap = await getDoc(doc(db, coll, idStr));
+                return docSnap.exists() ? docSnap.data() : null;
+            },
+            getAll: async (coll) => {
+                const qs = await getDocs(collection(db, coll));
+                return qs.docs.map(d => d.data());
+            },
+            getByIndex: async (coll, idx, val) => {
+                const q = query(collection(db, coll), where(idx, "==", val));
+                const qs = await getDocs(q);
+                return qs.empty ? null : qs.docs[0].data();
+            },
+            clear: async (coll) => {
+                const qs = await getDocs(collection(db, coll));
+                const batch = writeBatch(db);
+                qs.docs.forEach(d => batch.delete(d.ref));
+                await batch.commit();
+            }
+        };
+    })();
 
-        // Elementos do DOM
-        const loadingOverlay = document.getElementById('loading-overlay');
-        const authStatus = document.getElementById('auth-status');
-        const navLinks = document.querySelectorAll('.nav-link');
-        const viewSections = document.querySelectorAll('.view-section');
+    // --- LOGIN E SESSÃO ---
+    addEvt('btn-login-google', 'click', () => {
+        const msg = id('mensagem-erro');
+        if(msg) msg.innerText = "Abrindo pop-up do Google...";
+        signInWithPopup(auth, provider).catch((error) => {
+            if(msg) msg.innerText = "Erro ao fazer login: " + error.message;
+            console.error(error);
+        });
+    });
 
-        // Forms
-        const formAddInsumo = document.getElementById('form-add-insumo');
-        const formAddReceita = document.getElementById('form-add-receita');
+    addEvt('btn-sair', 'click', () => {
+        signOut(auth).then(() => {
+            showNotif('Você saiu do sistema com segurança.');
+        }).catch(err => console.error(err));
+    });
 
-        // Listas
-        const listaInsumos = document.getElementById('lista-insumos');
-        const insumosVazio = document.getElementById('insumos-vazio');
-        const listaReceitas = document.getElementById('lista-receitas');
-        const receitasVazio = document.getElementById('receitas-vazio');
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            hide(id('login-wrapper')); 
+            show(id('app-wrapper'));
+            const nu = id('nome-usuario');
+            if(nu) nu.innerText = user.displayName || 'Estoquista';
+            
+            show(id('loading-overlay'));
+            const t = new Date().toISOString().split('T')[0];
+            if(id('receipt-date')) id('receipt-date').value = t; 
+            if(id('search-po-by-date')) id('search-po-by-date').value = t; 
+            if(id('mfg-date')) id('mfg-date').value = t;
+            
+            navTo('dashboard');
+            
+            try { 
+                await refreshData(); 
+            } catch(e) { 
+                console.error(e); 
+                if(id('loading-text')) id('loading-text').innerText = "Erro Fatal no BD"; 
+            }
+            hide(id('loading-overlay'));
+        } else {
+            show(id('login-wrapper')); 
+            hide(id('app-wrapper'));
+            hide(id('loading-overlay'));
+        }
+    });
 
-        // Modal Editar Insumo
-        const modalEditInsumo = document.getElementById('modal-edit-insumo');
-        const formEditInsumo = document.getElementById('form-edit-insumo');
-        const editInsumoId = document.getElementById('edit-insumo-id');
-        const editInsumoNome = document.getElementById('edit-insumo-nome');
-        const editInsumoUnidade = document.getElementById('edit-insumo-unidade');
-        const editInsumoCusto = document.getElementById('edit-insumo-custo');
+    // --- ESTADO GLOBAL ---
+    let localInventory=[], localBatches=[], localHistory=[], localRecipes=[], localProductionOrders=[], localMonthlyConsumption=[];
+    let dailyChart=null, schedChart=null, abcChart=null, lineChart=null, currentRecipeCategory='Todos';
+    let currentBatchTarget=null;
+    let invSort = { col: 'name', asc: true };
+    let currentHistoryProductId = null;
+    
+    let activePickingLine = null;
+    let activePickingOpIds = [];
 
-        // Modal Gerenciar Receita
-        const modalManageReceita = document.getElementById('modal-manage-receita');
-        const modalReceitaNome = document.getElementById('modal-receita-nome');
-        const formAddIngredienteReceita = document.getElementById('form-add-ingrediente-receita');
-        const receitaInsumoSelect = document.getElementById('receita-insumo-select');
-        const receitaInsumoQtd = document.getElementById('receita-insumo-qtd');
-        const receitaIngredientesList = document.getElementById('receita-ingredientes-list');
-        const receitaIngredientesVazio = document.getElementById('receita-ingredientes-vazio');
-        const receitaCustoTotal = document.getElementById('receita-custo-total');
-        const btnGeneratePDF = document.getElementById('btn-generate-pdf');
+    const typeLabels = { insumo: 'Insumo', semi_acabado: 'Semi-acabado' };
+
+    // --- EVENT LISTENERS GERAIS ---
+    document.querySelectorAll('.close-modal').forEach(btn => {
+        btn.addEventListener('click', () => { hide(id(btn.dataset.target)); });
+    });
+
+    const screens = ['dashboard','entry','inventory','recipes','production','requisitions','adjustments','consumption','settings','picking'];
+    function navTo(target) {
+        screens.forEach(s => { id('screen-'+s)?.classList.add('hidden'); });
+        document.querySelectorAll('.nav-item').forEach(n => { n.classList.remove('bg-ios-card', 'text-white'); n.classList.add('text-ios-textMuted'); });
+        const screenEl = id('screen-'+target); if(screenEl) screenEl.classList.remove('hidden');
+        const activeLink = document.querySelector(`.nav-item[data-target="${target}"]`);
+        if(activeLink) { activeLink.classList.remove('text-ios-textMuted'); activeLink.classList.add('bg-ios-card', 'text-white'); }
         
-        // Novos elementos de Foto Upload
-        const fotoPreviewContainer = document.getElementById('foto-preview-container');
-        const receitaFotoUpload = document.getElementById('receita-foto-upload');
-        const uploadStatus = document.getElementById('upload-status');
+        if(target==='adjustments') { createSearchableSelect(id('adjustment-searchable-container'), localInventory, 'Buscar produto inteligente...', p => { const batchEl = id('adjustment-batch'); if(batchEl) batchEl.innerHTML = '<option value="">Selecione Lote...</option>' + localBatches.filter(b=>b.productId===p.id && b.quantity>0).map(b=>`<option value="${b.id}">${b.code}</option>`).join(''); }); }
+        if(target==='requisitions') { const reqCont = id('requisition-items-container'); if (reqCont) { reqCont.innerHTML=''; addIngRowReq(reqCont); } }
+        if(target==='picking') { renderPickingScreen(); }
+    }
+    document.querySelectorAll('.nav-item').forEach(link => { link.addEventListener('click', e => { e.preventDefault(); navTo(link.dataset.target); }); });
+
+    function showConfirmationModal(title, message, onConfirm) {
+        const titleEl = id('confirm-title'); if(titleEl) titleEl.textContent = title; 
+        const msgEl = id('confirm-message'); if(msgEl) msgEl.innerHTML = message; 
+        const modal = id('confirm-action-modal'); if(modal) modal.style.display = 'flex';
         
-        // Toast
-        const toast = document.getElementById('toast');
+        const cancelBtn = id('cancel-action-btn'); const confirmBtn = id('confirm-action-btn');
+        if(cancelBtn && confirmBtn && modal) {
+            const cleanup = () => { modal.style.display='none'; confirmBtn.replaceWith(confirmBtn.cloneNode(true)); cancelBtn.replaceWith(cancelBtn.cloneNode(true)); };
+            cancelBtn.addEventListener('click', cleanup, { once: true }); confirmBtn.addEventListener('click', () => { onConfirm(); cleanup(); }, { once: true });
+        }
+    }
 
-        // --- Inicialização ---
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                storage = getStorage(app); // Inicializa o Storage
+    function createSearchableSelect(container, items, placeholder, onSelect) {
+        if(!container) return;
+        container.innerHTML = `<div class="searchable-container"><input type="text" class="form-input bg-ios-input text-white border-ios-border w-full" placeholder="${placeholder}" autocomplete="off"><div class="searchable-dropdown hidden"></div></div>`;
+        const input = container.querySelector('input'); const dropdown = container.querySelector('.searchable-dropdown');
+        if(!input || !dropdown) return;
+        
+        const renderList = (searchTerm) => {
+            let filtered = items;
+            if(searchTerm) { const term = searchTerm.toLowerCase(); filtered = filtered.filter(i => (i.searchName || i.name).toLowerCase().includes(term) || (i.code && i.code.toLowerCase().includes(term))); }
+            if(filtered.length) { dropdown.innerHTML = filtered.map(i => `<div class="searchable-item flex justify-between items-center" data-id="${i.id}"><span class="font-medium">${i.searchName || i.name}</span>${i.type ? `<span class="text-xs text-ios-textMuted bg-black/30 px-2 py-1 rounded">${typeLabels[i.type]||''}</span>` : ''}</div>`).join(''); dropdown.classList.remove('hidden'); } 
+            else { dropdown.innerHTML = `<div class="p-3 text-ios-textMuted text-sm">Nenhum resultado...</div>`; dropdown.classList.remove('hidden'); }
+        };
+        input.addEventListener('focus', () => renderList(input.value)); input.addEventListener('input', () => renderList(input.value));
+        dropdown.addEventListener('click', e => { const row = e.target.closest('.searchable-item'); if(row) { const item = items.find(i => i.id == row.dataset.id); input.value = item.searchName || item.name; input.dataset.selectedId = item.id; dropdown.classList.add('hidden'); if(onSelect) onSelect(item); } });
+        document.addEventListener('click', e => { if(!container.contains(e.target)) dropdown.classList.add('hidden'); });
+    }
 
-                // Habilitar logs de debug do Firestore
-                setLogLevel('debug');
+    function getFIFOPlan(productId, qtyNeeded) {
+        const batches = localBatches.filter(b => b.productId === productId && b.quantity > 0 && b.isReleased !== false).sort((a,b) => new Date(a.expiryDate || '9999-01-01') - new Date(b.expiryDate || '9999-01-01'));
+        let remaining = qtyNeeded; let plan = [];
+        for (let b of batches) { if (remaining <= 0) break; const take = Math.min(b.quantity, remaining); plan.push({ batchId: b.id, batchCode: b.code, quantity: take }); remaining -= take; }
+        return { plan, isSufficient: remaining <= 0.0001 };
+    }
 
-                // Autenticação
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        authStatus.textContent = `Conectado (ID: ${userId.substring(0, 6)}...)`;
-                        console.log("Usuário autenticado:", userId);
-                        setupApp();
-                    } else {
-                        console.log("Nenhum usuário. Tentando login...");
-                        try {
-                            if (initialAuthToken) {
-                                console.log("Tentando signInWithCustomToken...");
-                                await signInWithCustomToken(auth, initialAuthToken);
-                            } else {
-                                console.log("Tentando signInAnonymously...");
-                                await signInAnonymously(auth);
-                            }
-                        } catch (error) {
-                            console.error("Erro na autenticação:", error);
-                            authStatus.textContent = "Falha na autenticação.";
-                            loadingOverlay.style.display = 'none';
-                        }
-                    }
-                });
-            } catch (error) {
-                console.error("Erro ao inicializar o Firebase:", error);
-                authStatus.textContent = "Erro ao conectar com o banco de dados.";
-                loadingOverlay.style.display = 'none';
+    // --- REFRESH DATA ---
+    async function refreshData() {
+        try {
+            [localInventory, localBatches, localHistory, localRecipes, localProductionOrders, localMonthlyConsumption] = await Promise.all([DB.getAll('inventory'), DB.getAll('batches'), DB.getAll('history'), DB.getAll('recipes'), DB.getAll('productionOrders'), DB.getAll('monthlyConsumption')]);
+            
+            let changed = false;
+            const ghostBatches = localBatches.filter(b => b.code === 'AJUSTE-SYS'); 
+            for(let gb of ghostBatches) { await DB.remove('batches', gb.id); changed = true; }
+            if(changed) localBatches = await DB.getAll('batches');
+
+            for(let i of localInventory) {
+                if(!i.type || i.type === 'acabado') { i.type = 'insumo'; changed = true; } 
+                const batches = localBatches.filter(b => b.productId === i.id); const batchSum = batches.reduce((sum, b) => sum + Math.max(0, b.quantity), 0);
+                if (Math.abs((i.totalQuantity || 0) - batchSum) > 0.001) { i.totalQuantity = batchSum; await DB.update('inventory', i); changed = true; }
+            }
+            if(changed) { localInventory = await DB.getAll('inventory'); localBatches = await DB.getAll('batches'); }
+
+            for(let op of localProductionOrders) {
+                let opChanged = false;
+                if(!op.picking) { op.picking = { status: 'pendente', responsible: '', start: null, end: null, duration: 0, pickedItems: {} }; opChanged = true; }
+                if(!op.recipeCategory) { const rec = localRecipes.find(r=>r.id===op.recipeId); if(rec) { op.recipeCategory = rec.category; opChanged = true; } }
+                if(typeof op.isExtra === 'undefined') { op.isExtra = false; opChanged = true; } 
+                if(opChanged) await DB.update('productionOrders', op);
+            }
+
+            populateFilters(); renderInv(); renderRecipes(); renderPO(); renderDash(); renderConsum();
+            updateSidebarBadges();
+            
+            const scrPicking = id('screen-picking');
+            if(scrPicking && !scrPicking.classList.contains('hidden')) renderPickingScreen();
+            if(currentHistoryProductId) renderItemDetailsHistory();
+            
+        } catch(e) { showNotif('Erro ao carregar dados offline da Nuvem.', true); console.error(e); }
+    }
+
+    function populateFilters() {
+        const curSup = id('supplier-filter')?.value; const suppliers = [...new Set(localInventory.map(i=>i.supplier))].filter(Boolean).sort();
+        const sf = id('supplier-filter'); if(sf) { sf.innerHTML = '<option value="">Fornecedores</option>' + suppliers.map(s=>`<option value="${s}">${s}</option>`).join(''); sf.value = curSup; }
+        
+        const cy = id('consumption-year-filter')?.value || new Date().getFullYear().toString(); const cm = id('consumption-month-filter')?.value || (new Date().getMonth()+1).toString();
+        const cYears = [...new Set(localMonthlyConsumption.map(c=>c.period.substring(0,4)))].filter(Boolean).sort((a,b)=>b-a); if(!cYears.includes(cy)) cYears.push(cy);
+        
+        const yf = id('consumption-year-filter'); if(yf) { yf.innerHTML = cYears.map(y=>`<option value="${y}">${y}</option>`).join(''); yf.value = cy; }
+        const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+        const mf = id('consumption-month-filter'); if(mf) { mf.innerHTML = months.map((m,i)=>`<option value="${i+1}">${m}</option>`).join(''); mf.value = cm; }
+    }
+
+    // --- SIDEBAR BADGES & ALERTS ---
+    function updateSidebarBadges() {
+        const isPickingActive = localProductionOrders.some(op => op.picking?.status === 'em_andamento');
+        const badgeProd = id('badge-nav-prod'); const badgePicking = id('badge-nav-picking');
+        
+        if (isPickingActive) {
+            if(badgeProd) badgeProd.classList.remove('hidden');
+            if(badgePicking) badgePicking.classList.remove('hidden');
+        } else {
+            if(badgeProd) badgeProd.classList.add('hidden');
+            if(badgePicking) badgePicking.classList.add('hidden');
+        }
+
+        const lowStockItems = localInventory.filter(i => (i.minStock || 0) > 0 && (i.totalQuantity || 0) <= i.minStock);
+        const badgeAlerts = id('badge-nav-alerts');
+        if (badgeAlerts) {
+            if (lowStockItems.length > 0) { badgeAlerts.innerText = lowStockItems.length; badgeAlerts.classList.remove('hidden'); } 
+            else { badgeAlerts.classList.add('hidden'); }
+        }
+        
+        const statLowStock = id('stat-low-stock'); if (statLowStock) statLowStock.innerText = lowStockItems.length;
+
+        const listAlerts = id('low-stock-list');
+        if (listAlerts) {
+            if(lowStockItems.length > 0) {
+                listAlerts.innerHTML = lowStockItems.map(item => `
+                    <li class="bg-ios-cardHover p-4 rounded-xl border-l-4 border-l-ios-red flex flex-wrap justify-between items-center gap-4 cursor-pointer hover:bg-ios-border transition alert-item" data-id="${item.id}">
+                        <div>
+                            <h4 class="font-bold text-white text-lg">${item.name}</h4>
+                            <p class="text-xs text-ios-textMuted">Cód: ${item.code || '-'} | Fornecedor: ${item.supplier || '-'}</p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-[10px] uppercase text-ios-textMuted mb-1 font-bold">Atual / Mínimo</p>
+                            <p class="font-mono"><span class="text-ios-red font-bold text-xl">${(item.totalQuantity || 0).toFixed(2)}</span> <span class="text-ios-textMuted text-sm">/ ${item.minStock.toFixed(2)}</span></p>
+                        </div>
+                    </li>
+                `).join('');
+            } else {
+                listAlerts.innerHTML = '<li class="text-center text-ios-textMuted py-8"><i class="fa-solid fa-check-circle text-4xl text-ios-green mb-3 block"></i>Todos os itens estão acima do estoque mínimo.</li>';
+            }
+        }
+    }
+
+    addEvt('btn-show-alerts', 'click', () => { show(id('low-stock-modal')); });
+    addEvt('card-stat-low-stock', 'click', () => { show(id('low-stock-modal')); });
+    addEvt('card-stat-expiring', 'click', () => { show(id('expiring-modal')); });
+
+    addEvt('low-stock-list', 'click', e => {
+        const item = e.target.closest('.alert-item');
+        if (item) { hide(id('low-stock-modal')); navTo('inventory'); window.openDetails(item.dataset.id); }
+    });
+
+    // --- TIMERS MULTIPLOS BACKGROUND ---
+    setInterval(() => {
+        document.querySelectorAll('.live-timer').forEach(el => {
+            const startTime = parseInt(el.dataset.start);
+            if(startTime && startTime > 0) {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const h = Math.floor(elapsed / 3600); const m = Math.floor((elapsed % 3600) / 60); const s = Math.floor(elapsed % 60);
+                let timeStr = '';
+                if (h > 0) timeStr = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                else timeStr = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+                el.innerText = timeStr;
             }
         });
+    }, 1000);
 
-        // --- Configuração Pós-Autenticação ---
-        function setupApp() {
-            // Define os caminhos das coleções
-            const basePath = `artifacts/${appId}/users/${userId}`;
-            insumosCollectionRef = collection(db, `${basePath}/insumos`);
-            receitasCollectionRef = collection(db, `${basePath}/receitas`);
-            console.log("Caminhos do Firestore definidos:", `${basePath}/insumos`);
-
-            setupNavigation();
-            setupInsumosListener();
-            setupReceitasListener();
-            setupForms();
-            setupModals();
-            
-            loadingOverlay.style.display = 'none';
-        }
+    // --- ESTOQUE ---
+    addEvt('search-inventory', 'input', renderInv);
+    addEvt('supplier-filter', 'input', renderInv);
+    addEvt('type-filter', 'input', renderInv);
+    
+    document.querySelectorAll('#screen-inventory .table-header-sortable').forEach(th => { th.addEventListener('click', () => { if (invSort.col === th.dataset.sort) invSort.asc = !invSort.asc; else { invSort.col = th.dataset.sort; invSort.asc = true; } renderInv(); }); });
+    function renderInv() {
+        const tbody = id('inventory-table-body'); if(!tbody) return;
+        const term = id('search-inventory')?.value.toLowerCase() || ''; const sup = id('supplier-filter')?.value || ''; const typ = id('type-filter')?.value || '';
         
-        // --- Navegação ---
-        function setupNavigation() {
-            navLinks.forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const view = link.dataset.view;
-                    
-                    // Mostra a tela correta
-                    viewSections.forEach(section => {
-                        section.classList.toggle('active', section.id === `tela-${view}`);
-                    });
-                    
-                    // Atualiza o link ativo
-                    navLinks.forEach(navLink => {
-                        navLink.classList.toggle('active-link', navLink.dataset.view === view);
-                        navLink.classList.toggle('bg-gray-200', navLink.dataset.view === view);
-                        navLink.classList.toggle('hover:bg-gray-100', navLink.dataset.view !== view);
-                    });
-                });
-            });
-        }
+        document.querySelectorAll('#screen-inventory .table-header-sortable').forEach(th => { const icon = th.querySelector('i'); if(icon) { if (th.dataset.sort === invSort.col) icon.className = invSort.asc ? 'fa-solid fa-sort-up ml-1 text-ios-blue' : 'fa-solid fa-sort-down ml-1 text-ios-blue'; else icon.className = 'fa-solid fa-sort ml-1 text-ios-textMuted'; } });
+        let list = localInventory.filter(i => i.name.toLowerCase().includes(term) && (!sup || i.supplier === sup) && (!typ || i.type === typ));
+        const getExp = item => localBatches.filter(bt=>bt.productId===item.id && bt.quantity>0 && bt.expiryDate).sort((x,y)=>new Date(x.expiryDate)-new Date(y.expiryDate))[0]?.expiryDate || '9999-12-31';
+        list.sort((a,b) => { let valA, valB; if(invSort.col === 'name') { valA = a.name.toLowerCase(); valB = b.name.toLowerCase(); } else if(invSort.col === 'supplier') { valA = (a.supplier||'').toLowerCase(); valB = (b.supplier||'').toLowerCase(); } else if(invSort.col === 'totalQuantity') { valA = a.totalQuantity||0; valB = b.totalQuantity||0; } else if(invSort.col === 'expiry') { valA = getExp(a); valB = getExp(b); } if(valA < valB) return invSort.asc ? -1 : 1; if(valA > valB) return invSort.asc ? 1 : -1; return 0; });
+        if(!list.length) { tbody.innerHTML = `<tr><td colspan="5" class="base-td text-center text-ios-textMuted py-8">Nenhum item em estoque.</td></tr>`; return; }
+        tbody.innerHTML = list.map(item => {
+            const exp = getExp(item); const expFormat = exp !== '9999-12-31' ? new Date(exp+'T00:00:00').toLocaleDateString('pt-BR') : '-';
+            const typeClass = item.type==='semi_acabado' ? 'bg-ios-orange/20 text-ios-orange border-ios-orange/30' : 'bg-gray-800 text-gray-300 border-gray-600';
+            return `<tr class="base-tr cursor-pointer" data-id="${item.id}"><td class="base-td text-white font-medium">${item.name}</td><td class="base-td"><span class="badge border ${typeClass}">${typeLabels[item.type] || 'Insumo'}</span></td><td class="base-td text-ios-textMuted">${item.supplier || '-'}</td><td class="base-td text-right font-bold text-white">${(item.totalQuantity||0).toFixed(2)}</td><td class="base-td text-ios-textMuted">${expFormat}</td></tr>`;
+        }).join('');
+    }
+    addEvt('inventory-table-body', 'click', e => { const row = e.target.closest('tr'); if(row && row.dataset.id) openDetails(row.dataset.id); });
 
-        // --- Funções de Toast ---
-        function showToast(message, isError = false) {
-            toast.textContent = message;
-            toast.classList.toggle('bg-red-600', isError);
-            toast.classList.toggle('bg-gray-900', !isError);
-            toast.classList.remove('opacity-0');
-            setTimeout(() => {
-                toast.classList.add('opacity-0');
-            }, 3000);
-        }
+    // --- DETALHES E HISTÓRICO ---
+    addEvt('hist-filter-start', 'change', renderItemDetailsHistory); 
+    addEvt('hist-filter-end', 'change', renderItemDetailsHistory); 
+    addEvt('hist-filter-type', 'change', renderItemDetailsHistory);
+    addEvt('btn-clear-hist-filters', 'click', () => { if(id('hist-filter-start')) id('hist-filter-start').value = ''; if(id('hist-filter-end')) id('hist-filter-end').value = ''; if(id('hist-filter-type')) id('hist-filter-type').value = ''; renderItemDetailsHistory(); });
 
-        // --- Insumos (sem mudanças) ---
-        function setupInsumosListener() {
-            onSnapshot(query(insumosCollectionRef), (snapshot) => {
-                localInsumos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                localInsumos.sort((a, b) => a.nome.localeCompare(b.nome));
-                renderInsumos();
-                renderInsumoSelectDropdown();
-            }, (error) => console.error("Erro ao carregar insumos:", error));
-        }
-        function renderInsumos() {
-            listaInsumos.innerHTML = '';
-            if (localInsumos.length === 0) {
-                insumosVazio.style.display = 'block'; return;
-            }
-            insumosVazio.style.display = 'none';
-            localInsumos.forEach(insumo => {
-                const item = document.createElement('div');
-                item.className = "flex justify-between items-center p-3 bg-gray-50 rounded-md border";
-                item.innerHTML = `
-                    <div class="flex-1 overflow-hidden">
-                        <p class="font-medium text-gray-800 truncate">${insumo.nome}</p>
-                        <p class="text-sm text-gray-600">
-                            R$ ${parseFloat(insumo.custo).toFixed(2)} / ${insumo.unidade}
-                        </p>
-                    </div>
-                    <div class="flex-shrink-0 ml-4 space-x-2">
-                        <button data-id="${insumo.id}" class="btn-edit-insumo text-blue-600 hover:text-blue-800" title="Editar">...</button> <!-- SVG omitido por brevidade -->
-                        <button data-id="${insumo.id}" class="btn-delete-insumo text-red-600 hover:text-red-800" title="Excluir">...</button> <!-- SVG omitido por brevidade -->
-                    </div>`;
-                // Re-adicionando SVGs que omiti no comentário
-                item.querySelector('.btn-edit-insumo').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>`;
-                item.querySelector('.btn-delete-insumo').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
-                listaInsumos.appendChild(item);
-            });
-            document.querySelectorAll('.btn-edit-insumo').forEach(btn => btn.addEventListener('click', () => openEditInsumoModal(btn.dataset.id)));
-            document.querySelectorAll('.btn-delete-insumo').forEach(btn => btn.addEventListener('click', () => deleteInsumo(btn.dataset.id)));
-        }
-        function renderInsumoSelectDropdown() {
-            receitaInsumoSelect.innerHTML = '<option value="">Selecione um insumo...</option>';
-            localInsumos.forEach(insumo => {
-                const option = document.createElement('option');
-                option.value = insumo.id;
-                option.textContent = `${insumo.nome} (${insumo.unidade})`;
-                receitaInsumoSelect.appendChild(option);
-            });
-        }
-        async function addInsumo(e) {
-            e.preventDefault();
-            const nome = document.getElementById('insumo-nome').value;
-            const unidade = document.getElementById('insumo-unidade').value;
-            const custo = parseFloat(document.getElementById('insumo-custo').value);
-            if (!nome || !unidade || isNaN(custo)) return;
-            try {
-                await addDoc(insumosCollectionRef, { nome, unidade, custo, createdAt: serverTimestamp() });
-                formAddInsumo.reset();
-                showToast("Insumo adicionado!");
-            } catch (error) { console.error("Erro addInsumo:", error); showToast("Erro ao adicionar insumo.", true); }
-        }
-        async function updateInsumo(e) {
-            e.preventDefault();
-            const id = editInsumoId.value;
-            const nome = editInsumoNome.value;
-            const unidade = editInsumoUnidade.value;
-            const custo = parseFloat(editInsumoCusto.value);
-            if (!nome || !unidade || isNaN(custo)) return;
-            try {
-                await updateDoc(doc(insumosCollectionRef, id), { nome, unidade, custo });
-                closeEditInsumoModal();
-                showToast("Insumo atualizado!");
-            } catch (error) { console.error("Erro updateInsumo:", error); showToast("Erro ao atualizar insumo.", true); }
-        }
-        async function deleteInsumo(id) {
-            try {
-                await deleteDoc(doc(insumosCollectionRef, id));
-                showToast("Insumo excluído.");
-            } catch (error) { console.error("Erro deleteInsumo:", error); showToast("Erro ao excluir insumo.", true); }
-        }
+    function renderItemDetailsHistory() {
+        const pId = currentHistoryProductId; if(!pId) return; const p = localInventory.find(i=>i.id===pId); if(!p) return;
+        const cont = id('details-history-container'); if(!cont) return;
+        let hist = localHistory.filter(h=>h.productId===pId).sort((a,b)=>new Date(b.date)-new Date(a.date));
+        const start = id('hist-filter-start')?.value; const end = id('hist-filter-end')?.value; const type = id('hist-filter-type')?.value;
+        if (start || end || type) show(id('btn-clear-hist-filters')); else hide(id('btn-clear-hist-filters'));
+        if(start) hist = hist.filter(h => h.date >= start); if(end) hist = hist.filter(h => h.date <= end);
+        if(type) { if(type === 'entrada') hist = hist.filter(h => h.type.includes('entrada')); else if(type === 'saída') hist = hist.filter(h => h.type === 'saída'); else hist = hist.filter(h => h.type === type); }
+        if(!hist.length) { cont.innerHTML = '<div class="py-5 text-center text-ios-textMuted text-xs">Nenhuma movimentação no período.</div>'; return; }
+        cont.innerHTML = hist.map(h=>`<div class="py-3 border-b border-ios-border text-sm flex justify-between items-center hover:bg-ios-card transition-colors px-2 rounded"><div><span class="font-bold text-xs uppercase ${h.type.includes('entrada')?'text-ios-green':h.type==='saída'||h.type==='requisição'?'text-ios-red':'text-ios-blue'}">${h.type}</span><p class="text-xs text-ios-textMuted mt-1 w-48 truncate" title="${h.reason||'Movimentação'}">${h.reason||'Movimentação'}</p></div><div class="text-right"><span class="font-bold text-white ${h.type.includes('entrada')?'':'text-ios-red'}">${h.type.includes('entrada')?'+':'-'} ${h.quantity.toFixed(2)}</span><br><span class="text-xs text-ios-textMuted"><i class="fa-regular fa-calendar mr-1"></i>${new Date(h.date+'T00:00:00').toLocaleDateString('pt-BR')}</span></div></div>`).join('');
+    }
 
-        // --- Receitas ---
-        function setupReceitasListener() {
-            onSnapshot(query(receitasCollectionRef), (snapshot) => {
-                localReceitas = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                localReceitas.sort((a, b) => a.nome.localeCompare(b.nome));
-                renderReceitas();
-            }, (error) => console.error("Erro ao carregar receitas:", error));
+    function openDetails(pId) {
+        currentHistoryProductId = pId; const p = localInventory.find(i=>i.id===pId); if(!p) return;
+        if(id('details-product-name')) id('details-product-name').innerText = p.name; 
+        if(id('details-product-type-badge')) id('details-product-type-badge').innerText = typeLabels[p.type||'insumo']; 
+        if(id('details-product-code')) id('details-product-code').innerText = p.code||'-'; 
+        if(id('details-supplier')) id('details-supplier').innerText = p.supplier||'-'; 
+        if(id('details-lead-time')) id('details-lead-time').innerText = (p.leadTime||0) + ' dias';
+        if(id('details-min-stock')) id('details-min-stock').innerText = (p.minStock||0).toFixed(2);
+        if(id('details-total-quantity')) id('details-total-quantity').innerText = (p.totalQuantity||0).toFixed(2);
+        
+        if(id('edit-item-id')) id('edit-item-id').value = p.id; 
+        if(id('edit-product-name')) id('edit-product-name').value = p.name; 
+        if(id('edit-product-type')) id('edit-product-type').value = p.type||'insumo'; 
+        if(id('edit-product-code')) id('edit-product-code').value = p.code||''; 
+        if(id('edit-supplier')) id('edit-supplier').value = p.supplier||'';
+        if(id('edit-lead-time')) id('edit-lead-time').value = p.leadTime||0;
+        if(id('edit-min-stock')) id('edit-min-stock').value = p.minStock||0;
+        
+        const is8110 = p.code === '8110';
+        const batchesTable = id('details-batches-table');
+        if(batchesTable) {
+            batchesTable.innerHTML = localBatches.filter(b=>b.productId===pId && b.quantity>0).map(b=>{
+                let statusHtml = `<span class="text-xs text-ios-green font-bold"><i class="fa-solid fa-check mr-1"></i>Liberado</span>`;
+                if(is8110) { statusHtml = `<div class="flex items-center gap-2" title="Lotes não liberados não entram em OP nem Requisição"><input type="checkbox" class="toggle-status toggle-release-batch" data-bid="${b.id}" ${b.isReleased?'checked':''}><span class="text-xs font-bold ${b.isReleased?'text-ios-green':'text-ios-orange'} w-16">${b.isReleased?'Liberado':'Quarentena'}</span></div>`; } 
+                else if (b.isReleased === false) { statusHtml = `<div class="flex items-center gap-2"><input type="checkbox" class="toggle-status toggle-release-batch" data-bid="${b.id}"><span class="text-xs font-bold text-ios-orange w-16">Bloqueado</span></div>`; }
+                return `<tr class="base-tr"><td class="base-td font-medium text-white">${b.code}</td><td class="base-td">${statusHtml}</td><td class="base-td font-bold text-ios-blue">${b.quantity.toFixed(2)}</td><td class="base-td text-ios-textMuted">${b.expiryDate?new Date(b.expiryDate+'T00:00:00').toLocaleDateString('pt-BR'):'-'}</td><td class="base-td text-center"><button class="text-ios-blue hover:text-blue-400 p-2 edit-batch-btn bg-ios-bg rounded-lg border border-ios-border mr-1" data-id="${b.id}"><i class="fa-solid fa-pen"></i></button><button class="text-ios-red hover:text-red-400 p-2 del-batch-btn bg-ios-bg rounded-lg border border-ios-border" data-id="${b.id}"><i class="fa-solid fa-trash"></i></button></td></tr>`
+            }).join('');
         }
-        function renderReceitas() {
-            listaReceitas.innerHTML = '';
-            if (localReceitas.length === 0) {
-                receitasVazio.style.display = 'block'; return;
-            }
-            receitasVazio.style.display = 'none';
-            localReceitas.forEach(receita => {
-                const item = document.createElement('div');
-                item.className = "flex justify-between items-center p-3 bg-gray-50 rounded-md border";
-                item.innerHTML = `
-                    <div class="flex items-center space-x-3">
-                        <div class="w-12 h-10 rounded bg-gray-200 bg-cover bg-center" style="background-image: ${receita.fotoURL ? `url(${receita.fotoURL})` : 'none'}"></div>
-                        <p class="font-medium text-gray-800 truncate">${receita.nome}</p>
-                    </div>
-                    <div class="flex-shrink-0 ml-4 space-x-2">
-                        <button data-id="${receita.id}" class="btn-manage-receita text-green-600 hover:text-green-800" title="Gerenciar">...</button> <!-- SVG omitido -->
-                        <button data-id="${receita.id}" class="btn-delete-receita text-red-600 hover:text-red-800" title="Excluir">...</button> <!-- SVG omitido -->
-                    </div>`;
-                // Re-adicionando SVGs
-                item.querySelector('.btn-manage-receita').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16.88 4-1.54 1.54a3 3 0 0 1-4.24 0L9.62 4a3 3 0 0 1-4.24 0L4 5.5a3 3 0 0 0 0 4.24l1.54 1.54a3 3 0 0 1 0 4.24L4 18.5a3 3 0 0 0 0 4.24l1.54 1.54a3 3 0 0 1 4.24 0l1.48-1.48a3 3 0 0 1 4.24 0l1.48 1.48a3 3 0 0 1 4.24 0l1.54-1.54a3 3 0 0 0 0-4.24L18.5 14a3 3 0 0 1 0-4.24l1.54-1.54a3 3 0 0 0 0-4.24L18.5 4a3 3 0 0 1-4.24 0Z"></path></svg>`;
-                item.querySelector('.btn-delete-receita').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>`;
+        renderItemDetailsHistory(); show(id('item-details-view')); hide(id('item-details-edit')); show(id('item-details-modal'));
+    }
+
+    window.openDetails = openDetails;
+
+    addEvt('details-batches-table', 'change', async e => {
+        if(e.target.classList.contains('toggle-release-batch')) {
+            const bId = e.target.dataset.bid; const b = await DB.get('batches', bId);
+            if(b) { b.isReleased = e.target.checked; await DB.update('batches', b); showNotif(b.isReleased ? 'Lote Liberado para Produção' : 'Lote Colocado em Quarentena (Bloqueado)', !b.isReleased); await refreshData(); openDetails(id('edit-item-id').value); }
+        }
+    });
+
+    addEvt('details-batches-table', 'click', e => {
+        const delBtn = e.target.closest('.del-batch-btn');
+        if(delBtn) showConfirmationModal('Excluir Lote?', 'Atenção: Apagar o lote remove a quantidade do saldo total sem registrar saída.', async () => { await DB.remove('batches', delBtn.dataset.id); await refreshData(); openDetails(id('edit-item-id').value); showNotif('Lote apagado'); });
+        const editBtn = e.target.closest('.edit-batch-btn');
+        if(editBtn) { const b = localBatches.find(x => x.id === editBtn.dataset.id); if(b) { if(id('edit-batch-id')) id('edit-batch-id').value = b.id; if(id('edit-batch-product-id')) id('edit-batch-product-id').value = b.productId; if(id('edit-batch-code')) id('edit-batch-code').value = b.code; if(id('edit-batch-qty')) id('edit-batch-qty').value = b.quantity; if(id('edit-batch-expiry')) id('edit-batch-expiry').value = b.expiryDate || ''; show(id('edit-batch-modal')); } }
+    });
+
+    addEvt('edit-batch-form', 'submit', async e => {
+        e.preventDefault(); const bId = id('edit-batch-id')?.value; const pId = id('edit-batch-product-id')?.value;
+        if(!bId || !pId) return;
+        const b = await DB.get('batches', bId); if(b) { b.code = id('edit-batch-code').value; b.quantity = parseFloat(id('edit-batch-qty').value); b.expiryDate = id('edit-batch-expiry').value; await DB.update('batches', b); hide(id('edit-batch-modal')); await refreshData(); openDetails(pId); showNotif('Lote atualizado!'); }
+    });
+
+    addEvt('btn-edit-item', 'click', () => { hide(id('item-details-view')); show(id('item-details-edit')); }); 
+    addEvt('btn-cancel-edit', 'click', () => { show(id('item-details-view')); hide(id('item-details-edit')); });
+    
+    addEvt('btn-calc-min-stock', 'click', () => {
+        const pId = id('edit-item-id').value; 
+        const leadTime = parseInt(id('edit-lead-time').value) || 0;
+        const safetyMargin = parseInt(id('edit-safety-margin')?.value) || 0;
+        
+        if(leadTime === 0) return showNotif('Informe o Prazo de Entrega (Dias) primeiro!', true);
+        const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const startDateStr = thirtyDaysAgo.toISOString().split('T')[0];
+        const recentOut = localHistory.filter(h => h.productId === pId && (h.type === 'saída' || h.type === 'requisição') && h.date >= startDateStr);
+        const totalOut = recentOut.reduce((sum, h) => sum + h.quantity, 0);
+        
+        const dailyAvg = totalOut / 30; 
+        const finalSuggestion = dailyAvg * (leadTime + safetyMargin);
+        
+        if(id('edit-min-stock')) id('edit-min-stock').value = finalSuggestion.toFixed(2);
+        showNotif(`Ponto de Pedido Calculado: ${finalSuggestion.toFixed(2)} (Média: ${dailyAvg.toFixed(2)}/dia x ${leadTime + safetyMargin} dias)`);
+    });
+
+    addEvt('edit-item-form', 'submit', async e => { 
+        e.preventDefault(); const p = await DB.get('inventory', id('edit-item-id').value); 
+        if(!p) return;
+        p.name = id('edit-product-name').value; p.type = id('edit-product-type').value; p.code = id('edit-product-code').value; p.supplier = id('edit-supplier').value; 
+        p.leadTime = parseInt(id('edit-lead-time').value) || 0; p.minStock = parseFloat(id('edit-min-stock').value) || 0;
+        await DB.update('inventory', p); showNotif('Atualizado!'); hide(id('item-details-edit')); show(id('item-details-view')); refreshData(); openDetails(p.id); 
+    });
+    addEvt('btn-delete-item', 'click', () => { const pId = id('edit-item-id').value; showConfirmationModal('Excluir?', 'Histórico e lotes serão perdidos.', async () => { await DB.remove('inventory', pId); refreshData(); hide(id('item-details-modal')); showNotif('Excluído'); }); });
+
+    // --- ENTRADA (AUTO-FILL) ---
+    const entryCodeInput = document.querySelector('#entry-form input[name="product-code"]');
+    if(entryCodeInput) {
+        entryCodeInput.addEventListener('input', e => {
+            const code = e.target.value.trim();
+            if(!code) return;
+            const p = localInventory.find(i => i.code === code);
+            if(p) {
+                const form = id('entry-form');
+                form.elements['product-name'].value = p.name || '';
+                form.elements['product-type'].value = p.type || 'insumo';
+                form.elements['supplier'].value = p.supplier || '';
+                form.elements['lead-time'].value = p.leadTime || '';
+                form.elements['min-stock'].value = p.minStock || '';
                 
-                listaReceitas.appendChild(item);
-            });
-            document.querySelectorAll('.btn-manage-receita').forEach(btn => btn.addEventListener('click', () => openManageReceitaModal(btn.dataset.id)));
-            document.querySelectorAll('.btn-delete-receita').forEach(btn => btn.addEventListener('click', () => deleteReceita(btn.dataset.id)));
-        }
-        async function addReceita(e) {
-            e.preventDefault();
-            const nome = document.getElementById('receita-nome').value;
-            if (!nome) return;
-            try {
-                await addDoc(receitasCollectionRef, {
-                    nome,
-                    ingredientes: [],
-                    fotoURL: null,
-                    createdAt: serverTimestamp()
+                ['product-name', 'supplier', 'lead-time', 'min-stock'].forEach(fname => {
+                    const el = form.elements[fname];
+                    el.classList.add('border-ios-green', 'bg-ios-green/10');
+                    setTimeout(() => el.classList.remove('border-ios-green', 'bg-ios-green/10'), 800);
                 });
-                formAddReceita.reset();
-                showToast("Receita criada!");
-            } catch (error) { console.error("Erro addReceita:", error); showToast("Erro ao criar receita.", true); }
-        }
-        async function deleteReceita(id) {
-            const receita = localReceitas.find(r => r.id === id);
-            if (!receita) return;
-            
-            try {
-                // Exclui a foto do Storage, se existir
-                if (receita.fotoURL) {
-                    const fotoRef = ref(storage, receita.fotoURL);
-                    await deleteObject(fotoRef);
-                }
-                // Exclui o documento do Firestore
-                await deleteDoc(doc(receitasCollectionRef, id));
-                showToast("Receita excluída.");
-            } catch (error) {
-                console.error("Erro deleteReceita:", error);
-                // Mesmo se falhar ao deletar foto (ex: permissão), tenta deletar o doc
-                if (error.code !== 'storage/object-not-found') {
-                   try {
-                       await deleteDoc(doc(receitasCollectionRef, id)); // Tenta deletar mesmo assim
-                       showToast("Receita excluída (erro ao limpar foto).");
-                   } catch (deleteDocError) {
-                       console.error("Erro ao deletar doc do firestore:", deleteDocError);
-                       showToast("Erro ao excluir receita.", true);
-   
-                   }
-                } else {
-                   showToast("Erro ao excluir receita.", true);
-                }
+                showNotif('Dados carregados do cadastro!');
             }
+        });
+    }
+
+    addEvt('entry-form', 'submit', async e => {
+        e.preventDefault(); const fd = new FormData(e.target); const autoBatch = 'LT-' + new Date().getTime().toString(36).toUpperCase();
+        const data = {code:fd.get('product-code'), type:fd.get('product-type'), name:fd.get('product-name'), supplier:fd.get('supplier'), qtd:parseFloat(fd.get('quantity')), valid:id('expiry-date').value, minStock: parseFloat(fd.get('min-stock')) || 0, leadTime: parseInt(fd.get('lead-time')) || 0 };
+        let p = await DB.getByIndex('inventory','code',data.code); if(!p || !data.code) { p = {code:data.code, name:data.name, type:data.type, supplier:data.supplier, totalQuantity:0, minStock: data.minStock, leadTime: data.leadTime}; }
+        else { p.supplier = data.supplier; p.name = data.name; p.type = data.type; if (data.minStock > 0) p.minStock = data.minStock; if (data.leadTime > 0) p.leadTime = data.leadTime; }
+        
+        if(!p.id) p.id = await DB.add('inventory', p); else await DB.update('inventory', p);
+
+        const freshP = await DB.get('inventory', p.id);
+        freshP.totalQuantity += data.qtd; await DB.update('inventory', freshP);
+        
+        const isReleased = (freshP.code !== '8110');
+        await DB.add('batches', {productId:freshP.id, code:autoBatch, quantity:data.qtd, expiryDate:data.valid, isReleased: isReleased});
+        await DB.add('history', {productId:freshP.id, batchCode:autoBatch, type:'entrada', quantity:data.qtd, date:id('receipt-date').value, reason: `Recepção Forn. ${freshP.supplier}`});
+        if(!isReleased) showNotif('Registrada! Lote em Quarentena.', true); else showNotif('Entrada Registrada!'); 
+        e.target.reset(); refreshData(); if(id('receipt-date')) id('receipt-date').value = new Date().toISOString().split('T')[0];
+    });
+
+    // --- RECEITAS ---
+    addEvt('search-recipe', 'input', renderRecipes);
+    function renderRecipes() {
+        const grid = id('recipes-grid'); if(!grid) return;
+        const term = id('search-recipe')?.value.toLowerCase() || '';
+        let f = localRecipes.filter(r => currentRecipeCategory==='Todos' || r.category===currentRecipeCategory);
+        if(term) f = f.filter(r => r.name.toLowerCase().includes(term) || r.category.toLowerCase().includes(term));
+
+        const catList = id('recipe-categories-list');
+        if(catList) {
+            catList.innerHTML = ['Todos', ...new Set(localRecipes.map(r=>r.category))].map(c => 
+                `<li><a href="#" class="block p-3 rounded-lg text-sm text-ios-textMuted hover:bg-ios-card transition-colors ${c===currentRecipeCategory?'bg-ios-card text-white font-semibold':''}" data-cat="${c}">${c}</a></li>`
+            ).join('');
         }
         
-        // --- Gerenciamento de Ingredientes da Receita (sem mudança) ---
-        async function addIngredienteToReceita(e) {
-            e.preventDefault();
-            const insumoId = receitaInsumoSelect.value;
-            const quantidade = parseFloat(receitaInsumoQtd.value);
-            if (!insumoId || isNaN(quantidade) || quantidade <= 0) return;
-            const insumo = localInsumos.find(i => i.id === insumoId);
-            const receita = localReceitas.find(r => r.id === currentManagingRecipeId);
-            if (!insumo || !receita) return;
-            const novoIngrediente = { insumoId: insumo.id, nome: insumo.nome, unidade: insumo.unidade, quantidade: quantidade };
-            const ingredientesAtuais = receita.ingredientes || [];
-            const indexExistente = ingredientesAtuais.findIndex(i => i.insumoId === insumoId);
-            let novosIngredientes = [];
-            if (indexExistente > -1) {
-                novosIngredientes = ingredientesAtuais.map((item, index) => index === indexExistente ? novoIngrediente : item);
-                showToast("Quantidade do ingrediente atualizada.");
-            } else {
-                novosIngredientes = [...ingredientesAtuais, novoIngrediente];
-                showToast("Ingrediente adicionado.");
-            }
-            try {
-                await updateDoc(doc(receitasCollectionRef, currentManagingRecipeId), { ingredientes: novosIngredientes });
-                formAddIngredienteReceita.reset();
-                renderIngredientesDaReceita(novosIngredientes); // Atualização otimista da UI
-            } catch (error) { console.error("Erro addIngrediente:", error); showToast("Erro ao salvar ingrediente.", true); }
+        grid.innerHTML = f.map(r => {
+            const isSemi = r.isSemi;
+            const ingredientsHTML = (r.ingredients || []).map(i=>`<li class="flex justify-between py-1 border-b border-ios-border/30 last:border-0"><span class="truncate pr-2">${localInventory.find(p=>p.id===i.productId)?.name||'?'}</span><span class="font-bold text-ios-blue bg-ios-bg px-2 rounded">${i.quantity}</span></li>`).join('');
+            return `
+            <div class="card relative flex flex-col border border-transparent ${isSemi ? 'hover:border-ios-orange/50' : 'hover:border-ios-cardHover'} transition-all">
+                <div class="absolute top-4 right-4 flex gap-2">
+                    <button class="edit-rec-btn text-ios-blue bg-ios-blue/10 p-2 w-8 h-8 rounded-full hover:bg-ios-blue/20 flex items-center justify-center" data-id="${r.id}"><i class="fa-solid fa-pen text-xs"></i></button>
+                    <button class="del-rec-btn text-ios-red bg-ios-red/10 p-2 w-8 h-8 rounded-full hover:bg-ios-red/20 flex items-center justify-center" data-id="${r.id}"><i class="fa-solid fa-trash text-xs"></i></button>
+                </div>
+                <h3 class="text-lg font-bold text-white mb-1 pr-20 leading-tight">${r.name}</h3>
+                <div class="mb-4 mt-1 inline-flex">
+                    ${isSemi ? `<span class="bg-ios-orange/10 border border-ios-orange/50 text-ios-orange text-xs px-2 py-1 rounded-md"><i class="fa-solid fa-box mr-1"></i>Semi-Acabado (Rende: ${r.outputYield||1})</span>` : `<span class="bg-gray-800 border border-gray-600 text-gray-300 text-xs px-2 py-1 rounded-md"><i class="fa-solid fa-utensils mr-1"></i>Produto Acabado</span>`}
+                </div>
+                <div class="mt-auto border-t border-ios-border pt-4 bg-ios-bg -mx-6 -mb-6 px-6 pb-6 rounded-b-2xl">
+                    <p class="text-[10px] text-ios-textMuted uppercase font-bold mb-3 tracking-wider"><i class="fa-solid fa-list-ul mr-1"></i> Ingredientes</p>
+                    <ul class="text-sm text-ios-textMuted">${ingredientsHTML}</ul>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    addEvt('recipe-categories-list', 'click', e => { if(e.target.tagName==='A') { e.preventDefault(); currentRecipeCategory = e.target.dataset.cat; renderRecipes(); }});
+    addEvt('recipes-grid', 'click', e => {
+        const delBtn = e.target.closest('.del-rec-btn'); const editBtn = e.target.closest('.edit-rec-btn');
+        if(delBtn) showConfirmationModal('Apagar Ficha?', 'Confirma a exclusão da receita?', async () => { await DB.remove('recipes', delBtn.dataset.id); refreshData(); showNotif('Excluída'); });
+        if(editBtn) openEditRecipe(editBtn.dataset.id);
+    });
+    addEvt('recipe-is-semi', 'change', e => { if(e.target.checked) show(id('yield-wrapper')); else hide(id('yield-wrapper')); });
+
+    function openEditRecipe(rId) {
+        const r = localRecipes.find(x => x.id === rId); if(!r) return;
+        if(id('edit-recipe-id')) id('edit-recipe-id').value = r.id; 
+        if(id('recipe-name')) id('recipe-name').value = r.name; 
+        if(id('recipe-category')) id('recipe-category').value = r.category;
+        
+        const chkSemi = id('recipe-is-semi');
+        if(chkSemi) { chkSemi.checked = !!r.isSemi; chkSemi.dispatchEvent(new Event('change')); }
+        
+        if(r.isSemi && id('recipe-yield')) id('recipe-yield').value = r.outputYield || 1; 
+        
+        const ingCont = id('ingredients-container');
+        if(ingCont) { ingCont.innerHTML = ''; (r.ingredients || []).forEach(ing => { addIngRowReq(ingCont, ing.productId, ing.quantity); }); }
+        
+        if(id('recipe-modal-title')) id('recipe-modal-title').innerText = 'Editar Receita'; 
+        show(id('recipe-modal'));
+    }
+
+    addEvt('btn-new-recipe', 'click', () => {
+        const rf = id('recipe-form'); if(rf) rf.reset(); 
+        if(id('edit-recipe-id')) id('edit-recipe-id').value=''; 
+        const ingCont = id('ingredients-container'); if(ingCont) ingCont.innerHTML=''; 
+        
+        const chkSemi = id('recipe-is-semi');
+        if(chkSemi) { chkSemi.checked = false; chkSemi.dispatchEvent(new Event('change')); }
+        
+        if(id('recipe-yield')) id('recipe-yield').value = 1;
+        if(ingCont) addIngRowReq(ingCont); 
+        if(id('recipe-modal-title')) id('recipe-modal-title').innerText = 'Nova Receita'; 
+        show(id('recipe-modal'));
+    });
+    
+    addEvt('btn-export-recipe-book', 'click', () => {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        doc.setFontSize(22); doc.setTextColor(10, 132, 255); doc.text("Livro de Receitas - Fichas Técnicas", 14, 20);
+        doc.setFontSize(10); doc.setTextColor(150, 150, 150); doc.text("Gerado em: " + new Date().toLocaleDateString('pt-BR') + " | Controle Interno de Produção", 14, 28);
+        doc.setLineWidth(0.5); doc.line(14, 32, 196, 32);
+        let yPos = 40; const categories = [...new Set(localRecipes.map(r => r.category))].sort();
+        categories.forEach((cat) => {
+            const recs = localRecipes.filter(r => r.category === cat).sort((a,b) => a.name.localeCompare(b.name));
+            if(recs.length === 0) return;
+            if (yPos > 260) { doc.addPage(); yPos = 20; }
+            doc.setFontSize(16); doc.setTextColor(0, 0, 0); doc.setFillColor(240, 240, 245); doc.rect(14, yPos-6, 182, 10, 'F'); doc.text("Setor: " + cat.toUpperCase(), 16, yPos+1); yPos += 12;
+            recs.forEach(r => {
+                if (yPos > 240) { doc.addPage(); yPos = 20; }
+                doc.setFontSize(14); doc.setTextColor(50, 50, 55); doc.text(r.name, 14, yPos); yPos += 6;
+                doc.setFontSize(10); doc.setTextColor(120, 120, 120); const tipo = r.isSemi ? `Semi-Acabado (Rende: ${r.outputYield || 1})` : "Produto Acabado"; doc.text(`Classificação: ${tipo}`, 14, yPos); yPos += 4;
+                const tableData = (r.ingredients || []).map(i => { return [localInventory.find(p => p.id === i.productId)?.name || 'Desconhecido', i.quantity]; });
+                doc.autoTable({ startY: yPos, head: [['Ingrediente / Insumo', 'Quantidade Base']], body: tableData, theme: 'striped', headStyles: { fillColor: [44, 44, 46], textColor: [255, 255, 255] }, alternateRowStyles: { fillColor: [248, 248, 250] }, margin: { left: 14, right: 14 }, styles: { fontSize: 9 } });
+                yPos = doc.lastAutoTable.finalY + 12;
+            }); yPos += 5;
+        });
+        doc.save(`Livro_Receitas_${new Date().toISOString().split('T')[0]}.pdf`); showNotif('PDF Gerado e baixado com sucesso!');
+    });
+    
+    function addIngRowReq(container, prefillId=null, prefillQty='') {
+        if(!container) return;
+        const div = document.createElement('div'); div.className='req-item flex flex-col gap-2 bg-ios-bg p-3 rounded-xl border border-ios-border z-50';
+        div.innerHTML = `
+            <div class="flex gap-3 items-center w-full">
+                <div class="searchable-container flex-1"></div>
+                <input type="number" step="0.0001" value="${prefillQty}" class="form-input w-24 py-2 text-center req-qty-input font-bold" placeholder="Qtd" required>
+                <button type="button" class="text-ios-red p-2 hover:bg-ios-red/20 rounded-lg transition-colors remove-ing"><i class="fa fa-times"></i></button>
+            </div>
+            <div class="flex justify-between items-center text-xs text-ios-textMuted px-1 req-plan-wrapper hidden mt-1 border-t border-ios-border pt-2">
+                <span class="plan-display font-medium"></span>
+                <button type="button" class="text-ios-blue open-batch-selector hidden bg-ios-card px-2 py-1 rounded"><i class="fa-solid fa-pen mr-1"></i> Mudar Lote</button>
+            </div>
+        `;
+        container.appendChild(div);
+        const isRecipe = container.id === 'ingredients-container';
+        const planWrap = div.querySelector('.req-plan-wrapper'); const planDisplay = div.querySelector('.plan-display');
+        const editBtn = div.querySelector('.open-batch-selector'); const qtyInput = div.querySelector('.req-qty-input');
+        if(!isRecipe) planWrap.classList.remove('hidden'); 
+
+        const updatePlan = () => {
+            if(isRecipe) return;
+            const inputS = div.querySelector('.searchable-container input');
+            const pId = inputS ? inputS.dataset.selectedId : null; 
+            const qty = parseFloat(qtyInput.value);
+            if(pId && qty > 0) {
+                const { plan, isSufficient } = getFIFOPlan(pId, qty);
+                div.dataset.productId = pId; div.dataset.plan = JSON.stringify(plan);
+                planDisplay.innerHTML = isSufficient ? '<i class="fa-solid fa-check mr-1"></i> Lotes Alocados: ' + plan.map(x => `<strong>${x.batchCode}</strong>(${x.quantity.toFixed(2)})`).join(', ') : '<i class="fa-solid fa-triangle-exclamation mr-1"></i> ALERTA: Físico Insuficiente ou Bloqueado!';
+                planDisplay.className = isSufficient ? 'plan-display text-ios-green' : 'plan-display text-ios-red';
+                if(isSufficient) show(editBtn); else hide(editBtn);
+            } else { planDisplay.innerText = 'Aguardando produto e qtd...'; hide(editBtn); }
+        };
+
+        createSearchableSelect(div.querySelector('.searchable-container'), localInventory, 'Buscar item...', item => { updatePlan(); });
+        qtyInput.addEventListener('input', updatePlan); div.querySelector('.remove-ing').addEventListener('click', () => div.remove());
+
+        if(prefillId) { const ingProd = localInventory.find(p => p.id === prefillId); if(ingProd) { const inp = div.querySelector('.searchable-container input'); if(inp) { inp.value = ingProd.name; inp.dataset.selectedId = ingProd.id; updatePlan(); } } }
+    }
+    addEvt('add-ingredient-btn', 'click', () => { const c = id('ingredients-container'); if(c) addIngRowReq(c); });
+    
+    addEvt('recipe-form', 'submit', async e => {
+        e.preventDefault();
+        const rId = id('edit-recipe-id')?.value; const isSemi = id('recipe-is-semi')?.checked;
+        const yieldQty = isSemi ? (parseFloat(id('recipe-yield')?.value) || 1) : null; const recName = id('recipe-name')?.value.trim();
+        let outId = null;
+        if (isSemi) { let prod = localInventory.find(i => i.name.toLowerCase() === recName.toLowerCase() && i.type === 'semi_acabado'); if(!prod) outId = await DB.add('inventory', { name: recName, type: 'semi_acabado', totalQuantity: 0, code: '', supplier: 'Produção Interna' }); else outId = prod.id; } 
+
+        const ingCont = id('ingredients-container');
+        if(!ingCont) return;
+        const ings = [...ingCont.children].map(r => ({ productId: r.querySelector('input[type="text"]').dataset.selectedId, quantity: parseFloat(r.querySelector('input[type="number"]').value) }));
+        const data = {name:recName, category:id('recipe-category')?.value, outputProductId:outId, outputYield: yieldQty, isSemi: isSemi, ingredients:ings};
+        if(rId) { data.id = rId; await DB.update('recipes', data); showNotif('Ficha atualizada'); } else { await DB.add('recipes', data); showNotif('Ficha salva'); }
+        hide(id('recipe-modal')); refreshData();
+    });
+
+    // --- SELETOR MANUAL DE LOTES ---
+    document.addEventListener('click', e => {
+        const btn = e.target.closest('.open-batch-selector');
+        if(btn) {
+            currentBatchTarget = btn.closest('.req-item') || btn.closest('tr');
+            const pId = currentBatchTarget.dataset.productId; const qtyStr = currentBatchTarget.querySelector('input[type="number"]').value; const qty = parseFloat(qtyStr) || 0;
+            const currentPlan = JSON.parse(currentBatchTarget.dataset.plan || '[]');
+            openBatchSelector(pId, qty, currentPlan);
         }
-        async function removeIngredienteFromReceita(insumoId) {
-            const receita = localReceitas.find(r => r.id === currentManagingRecipeId);
-            if (!receita) return;
-            const novosIngredientes = (receita.ingredientes || []).filter(i => i.insumoId !== insumoId);
-            try {
-                await updateDoc(doc(receitasCollectionRef, currentManagingRecipeId), { ingredientes: novosIngredientes });
-                showToast("Ingrediente removido.");
-                renderIngredientesDaReceita(novosIngredientes); // Atualização otimista
-            } catch (error) { console.error("Erro removeIngrediente:", error); showToast("Erro ao remover ingrediente.", true); }
+    });
+
+    function openBatchSelector(pId, qtyNeeded, currentPlan) {
+        if(id('batch-selector-needed')) id('batch-selector-needed').innerText = qtyNeeded.toFixed(4);
+        const batches = localBatches.filter(b => b.productId === pId && b.quantity > 0 && b.isReleased !== false);
+        const listEl = id('batch-selector-list');
+        if(listEl) {
+            listEl.innerHTML = batches.map(b => {
+                const inPlan = currentPlan.find(p => p.batchId === b.id); const val = inPlan ? inPlan.quantity : '';
+                return `<div class="flex justify-between items-center mb-3 bg-ios-input p-3 rounded-xl border border-ios-border"><span class="text-white font-medium"><i class="fa-solid fa-box mr-2 text-ios-textMuted"></i>${b.code} <br><span class="text-xs text-ios-textMuted ml-6">Disponível Físico: ${b.quantity.toFixed(2)}</span></span><input type="number" class="form-input w-28 text-right batch-input font-bold" data-bid="${b.id}" data-bcode="${b.code}" max="${b.quantity + (inPlan?inPlan.quantity:0)}" value="${val}" placeholder="0"></div>`;
+            }).join('');
         }
-        function renderIngredientesDaReceita(ingredientes) {
-            receitaIngredientesList.innerHTML = '';
-            if (!ingredientes || ingredientes.length === 0) {
-                receitaIngredientesVazio.style.display = 'block';
-                receitaCustoTotal.textContent = 'R$ 0,00';
-                return;
+        updateBatchSelectorSum(); show(id('batch-selector-modal'));
+    }
+
+    addEvt('batch-selector-list', 'input', updateBatchSelectorSum);
+    function updateBatchSelectorSum() {
+        if(event && event.target.classList.contains('batch-input')) {
+            const listEl = id('batch-selector-list'); if(!listEl) return;
+            const inputs = [...listEl.querySelectorAll('.batch-input')]; const sum = inputs.reduce((a, b) => a + (parseFloat(b.value) || 0), 0);
+            const selEl = id('batch-selector-selected'); const needEl = id('batch-selector-needed');
+            if(selEl && needEl) {
+                selEl.innerText = sum.toFixed(4); const needed = parseFloat(needEl.innerText);
+                selEl.className = Math.abs(sum - needed) < 0.001 ? 'font-bold text-xl text-ios-green' : 'font-bold text-xl text-ios-red';
             }
-            receitaIngredientesVazio.style.display = 'none';
-            let custoTotal = 0;
-            ingredientes.forEach(item => {
-                const insumoData = localInsumos.find(i => i.id === item.insumoId);
-                let custoItem = 0, custoUnitario = 0, nome = item.nome;
-                if (insumoData) {
-                    custoUnitario = parseFloat(insumoData.custo);
-                    custoItem = custoUnitario * item.quantidade;
-                    custoTotal += custoItem;
-                    nome = insumoData.nome;
-                } else { nome = `${item.nome} (INSUMO EXCLUÍDO)`; }
-                const el = document.createElement('div');
-                el.className = "flex justify-between items-center p-3 bg-blue-50 rounded-md";
-                el.innerHTML = `
+        }
+    }
+
+    addEvt('confirm-batch-selection', 'click', () => {
+        if (!currentBatchTarget) return;
+        const needed = parseFloat(id('batch-selector-needed')?.innerText || 0); const sum = parseFloat(id('batch-selector-selected')?.innerText || 0);
+        if(sum < needed - 0.001) return showNotif('A quantidade marcada é menor que a necessária!', true);
+        const listEl = id('batch-selector-list'); if(!listEl) return;
+        const inputs = [...listEl.querySelectorAll('.batch-input')];
+        const newPlan = inputs.map(inp => ({ batchId: inp.dataset.bid, batchCode: inp.dataset.bcode, quantity: parseFloat(inp.value) || 0 })).filter(p => p.quantity > 0);
+        currentBatchTarget.dataset.plan = JSON.stringify(newPlan);
+        const planDisplay = currentBatchTarget.querySelector('.plan-display');
+        if(planDisplay) planDisplay.innerHTML = '<i class="fa-solid fa-hand mr-1"></i> Lotes Manuais: ' + newPlan.map(p => `<strong>${p.batchCode}</strong>(${p.quantity})`).join(', ');
+        hide(id('batch-selector-modal'));
+    });
+
+    // --- SEPARAÇÃO AGRUPADA (PICKING KITTING) & EXTRAS ---
+    function renderPickingScreen() {
+        const container = id('picking-lines-container');
+        if(!container) return;
+
+        const pendingOps = localProductionOrders.filter(po => po.status === 'pendente');
+        
+        const statPending = id('stat-pending-picking');
+        if(statPending) statPending.innerText = pendingOps.filter(po => po.picking && po.picking.status !== 'concluido').length;
+
+        if(!pendingOps.length) { container.innerHTML = `<div class="card text-center py-10"><i class="fa-solid fa-clipboard-check text-5xl text-ios-cardHover mb-4"></i><p class="text-ios-textMuted">Não há Ordens de Produção pendentes.</p></div>`; return; }
+
+        const opsByLine = {};
+        pendingOps.forEach(op => { const line = op.recipeCategory || 'Diversos'; if(!opsByLine[line]) opsByLine[line] = []; opsByLine[line].push(op); });
+
+        container.innerHTML = Object.keys(opsByLine).sort().map(line => {
+            const ops = opsByLine[line];
+            const concluidas = ops.filter(o => o.picking?.status === 'concluido').length;
+            const emAndamento = ops.filter(o => o.picking?.status === 'em_andamento').length;
+            const hasExtrasPending = ops.filter(o => o.isExtra === true && o.picking?.status !== 'concluido');
+            
+            let lineStatusHTML = ''; let isLineActive = emAndamento > 0; let allConcluido = concluidas === ops.length;
+            
+            if(allConcluido) lineStatusHTML = `<span class="badge bg-ios-green/20 text-ios-green"><i class="fa-solid fa-check-double mr-1"></i>Linha Separada</span>`;
+            else if(isLineActive) lineStatusHTML = `<span class="badge bg-ios-blue/20 text-ios-blue animate-pulse"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Em Separação</span>`;
+            else lineStatusHTML = `<span class="badge bg-ios-orange/20 text-ios-orange"><i class="fa-solid fa-clock mr-1"></i>A Separar</span>`;
+
+            const opIdsStr = JSON.stringify(ops.map(o=>o.id));
+
+            return `
+            <div class="card p-0 overflow-hidden border ${isLineActive ? 'border-ios-blue' : 'border-ios-border'} transition-all">
+                <div class="bg-ios-cardHover px-5 py-4 flex flex-wrap justify-between items-center gap-3 ${isLineActive ? 'bg-ios-blue/10' : ''}">
                     <div>
-                        <p class="font-medium text-gray-800">${nome}</p>
-                        <p class="text-sm text-gray-600">${item.quantidade} ${item.unidade} &times; R$ ${custoUnitario.toFixed(2)}</p>
+                        <h3 class="font-bold text-white text-xl flex items-center"><i class="fa-solid fa-layer-group text-ios-blue mr-2"></i>Setor: ${line.toUpperCase()} ${hasExtrasPending.length > 0 ? `<span class="ml-2 badge bg-ios-red text-white">🚨 ${hasExtrasPending.length} EXTRA(s)</span>` : ''}</h3>
+                        <p class="text-xs text-ios-textMuted mt-1">${ops.length} OP(s) programada(s) | ${concluidas} Separada(s)</p>
                     </div>
-                    <div class="flex items-center space-x-4">
-                        <span class="font-medium text-gray-900">R$ ${custoItem.toFixed(2)}</span>
-                        <button data-id="${item.insumoId}" class="btn-remove-ingrediente text-red-500 hover:text-red-700" title="Remover">...</button> <!-- SVG omitido -->
-                    </div>`;
-                el.querySelector('.btn-remove-ingrediente').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-                receitaIngredientesList.appendChild(el);
+                    <div class="flex flex-wrap items-center gap-4">
+                        ${lineStatusHTML}
+                        ${hasExtrasPending.length > 0 ? `<button class="btn-secondary py-2 px-4 shadow text-xs border-ios-red/50 text-ios-red btn-print-extras hover:bg-ios-red/10" data-line="${line}"><i class="fa-solid fa-print mr-2"></i>Folha Extras</button>` : ''}
+                        ${!allConcluido ? `<button class="btn-primary py-2 px-4 shadow-lg shadow-ios-blue/20 btn-open-line-picking" data-line="${line}" data-opids='${opIdsStr}'><i class="fa-solid fa-dolly mr-2"></i>Separar Linha Completa</button>` : ''}
+                    </div>
+                </div>
+                <div class="p-4 bg-ios-bg grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 border-t border-ios-border/50">
+                    ${ops.map(op => {
+                        let timerHtml = op.picking?.status === 'concluido' ? '<i class="fa-solid fa-check text-ios-green"></i>' : '<i class="fa-solid fa-clock text-ios-textMuted"></i>';
+                        if(op.picking?.status === 'em_andamento') {
+                            timerHtml = `<div class="live-timer text-ios-orange font-mono font-bold timer-active" data-start="${op.picking.start}">00:00</div>`;
+                        }
+                        
+                        return `
+                        <div class="bg-ios-card p-3 rounded-lg border border-ios-border text-sm flex justify-between items-center relative overflow-hidden">
+                            ${op.isExtra ? '<div class="absolute left-0 top-0 bottom-0 w-1 bg-ios-red"></div>' : ''}
+                            <div class="${op.isExtra ? 'pl-2' : ''}">
+                                <span class="font-bold text-white">${op.recipeName}</span> <span class="text-ios-blue">(${op.multiplier}x)</span>
+                                ${op.isExtra ? '<span class="badge bg-ios-red text-white text-[9px] ml-1">EXTRA</span>' : ''}<br>
+                                <span class="text-[10px] text-ios-textMuted"><i class="fa-regular fa-calendar mr-1"></i>Data: <strong class="text-gray-300">${new Date(op.date+'T00:00:00').toLocaleDateString('pt-BR')}</strong> | OP-${op.id}</span>
+                            </div>
+                            <div class="ml-2">${timerHtml}</div>
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    addEvt('picking-lines-container', 'click', e => {
+        const btnPick = e.target.closest('.btn-open-line-picking');
+        if(btnPick) openGroupedPickingModal(btnPick.dataset.line, JSON.parse(btnPick.dataset.opids));
+        
+        const btnPrint = e.target.closest('.btn-print-extras');
+        if(btnPrint) printExtras(btnPrint.dataset.line);
+    });
+
+    function printExtras(lineName) {
+        const ops = localProductionOrders.filter(o => o.recipeCategory === lineName && o.status === 'pendente' && o.isExtra === true && o.picking?.status !== 'concluido');
+        if(!ops.length) return showNotif('Nenhuma OP Extra pendente para imprimir.', true);
+
+        const agg = {};
+        ops.forEach(op => {
+            op.ingredients.forEach(ing => {
+                if (!agg[ing.productId]) agg[ing.productId] = 0;
+                agg[ing.productId] += ing.adjustedQuantity;
             });
-            receitaCustoTotal.textContent = `R$ ${custoTotal.toFixed(2)}`;
-            document.querySelectorAll('.btn-remove-ingrediente').forEach(btn => btn.addEventListener('click', () => removeIngredienteFromReceita(btn.dataset.id)));
+        });
+
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        doc.setFontSize(20); doc.setTextColor(255, 69, 58); doc.text(`Folha de Separação: EXTRAS / URGENTES`, 14, 20);
+        doc.setFontSize(12); doc.setTextColor(50, 50, 55); doc.text(`Setor: ${lineName.toUpperCase()}`, 14, 28);
+        doc.setFontSize(10); doc.setTextColor(150, 150, 150); doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')} | Inclui ${ops.length} OPs`, 14, 34);
+        doc.setLineWidth(0.5); doc.line(14, 38, 196, 38);
+
+        const tableData = Object.keys(agg).map(pidStr => {
+            const pName = localInventory.find(p => p.id === pidStr)?.name || 'Desconhecido';
+            return [pName, agg[pidStr].toFixed(4)];
+        });
+
+        doc.autoTable({ startY: 45, head: [['Insumo a Separar', 'Quantidade Total']], body: tableData, theme: 'striped', headStyles: { fillColor: [255, 69, 58], textColor: [255, 255, 255] }, alternateRowStyles: { fillColor: [255, 245, 245] }, margin: { left: 14, right: 14 } });
+        doc.save(`Separacao_Extras_${lineName.replace(/\s+/g,'_')}_${new Date().toISOString().split('T')[0]}.pdf`);
+        showNotif('Folha de Extras gerada para impressão!');
+    }
+
+    function getAggregatedIngredients(opIds) {
+        const ops = localProductionOrders.filter(op => opIds.includes(op.id));
+        const agg = {};
+        ops.forEach(op => { op.ingredients.forEach(ing => { if (!agg[ing.productId]) agg[ing.productId] = { productId: ing.productId, adjustedQuantity: 0 }; agg[ing.productId].adjustedQuantity += ing.adjustedQuantity; }); });
+        return Object.values(agg);
+    }
+
+    function openGroupedPickingModal(lineName, opIds) {
+        activePickingLine = lineName; activePickingOpIds = opIds;
+        const ops = localProductionOrders.filter(op => opIds.includes(op.id));
+        const sampleOp = ops[0];
+        const picking = sampleOp.picking || { status: 'pendente', responsible: '', start: null, end: null, pickedItems: {} };
+
+        const titleEl = id('picking-modal-title'); if(titleEl) titleEl.innerHTML = `<i class="fa-solid fa-dolly mr-3 text-2xl"></i><span>Check-list Setor: ${lineName.toUpperCase()}</span>`;
+        const subEl = id('picking-modal-subtitle'); if(subEl) subEl.innerText = `Agrupando os insumos de ${ops.length} OP(s) para separação única.`;
+        const respEl = id('picking-responsible'); if(respEl) respEl.value = picking.responsible || '';
+
+        const timerEl = id('picking-timer-display');
+        if(timerEl) {
+            timerEl.innerText = '00:00'; 
+            timerEl.classList.remove('timer-active');
+            timerEl.dataset.start = ""; 
+        }
+
+        if(picking.status === 'em_andamento' && picking.start) {
+            hide(id('picking-setup-view')); 
+            show(id('picking-active-view'));
+            const actResp = id('picking-active-resp'); if(actResp) actResp.innerText = picking.responsible;
+            if(timerEl) { timerEl.dataset.start = picking.start; timerEl.classList.add('timer-active'); }
+        } else {
+            show(id('picking-setup-view'));
+            hide(id('picking-active-view'));
+            if(respEl) respEl.focus();
+        }
+
+        const aggregatedItems = getAggregatedIngredients(opIds);
+        const checklistBody = id('picking-checklist-body');
+        if(checklistBody) {
+            checklistBody.innerHTML = aggregatedItems.map((ing) => {
+                const product = localInventory.find(p => p.id === ing.productId);
+                const needed = ing.adjustedQuantity;
+                let totalPicked = 0;
+                ops.forEach(op => { if(op.picking && op.picking.pickedItems && op.picking.pickedItems[ing.productId]) totalPicked += op.picking.pickedItems[ing.productId]; });
+                const isChecked = totalPicked >= needed - 0.001 && totalPicked > 0;
+                
+                return `
+                <tr class="border-b border-ios-border/50 hover:bg-ios-cardHover transition-colors ${isChecked ? 'opacity-50' : ''}" data-pid="${ing.productId}">
+                    <td class="px-6 py-4 font-medium text-white ${isChecked ? 'line-through text-ios-textMuted' : ''}">${product ? product.name : 'Insumo Excluído'}</td>
+                    <td class="px-6 py-4 text-right font-bold text-ios-blue text-lg">${needed.toFixed(4)}</td>
+                    <td class="px-6 py-4 text-center">
+                        <div class="flex items-center justify-center gap-2">
+                            <input type="number" step="0.001" value="${totalPicked > 0 ? totalPicked : ''}" class="form-input py-2 px-3 w-28 text-center font-bold text-white picking-qty-input bg-ios-bg border-ios-border text-lg" placeholder="0.000">
+                            <button class="bg-ios-cardHover border border-ios-border text-xs px-3 py-2 rounded-lg hover:text-white btn-fill-all shadow" title="Preencher Total"><i class="fa-solid fa-check-double"></i></button>
+                        </div>
+                    </td>
+                    <td class="px-6 py-4 text-center"><input type="checkbox" class="ui-checkbox ui-checkbox-success picking-row-check" ${isChecked ? 'checked' : ''}></td>
+                </tr>`;
+            }).join('');
+        }
+
+        show(id('picking-modal'));
+    }
+
+    addEvt('btn-start-picking', 'click', async () => {
+        const respEl = id('picking-responsible');
+        const resp = respEl ? respEl.value.trim() : '';
+        if(!resp) return showNotif('Informe o nome do Estoquista para iniciar a contagem.', true);
+        const now = Date.now();
+        for(let opId of activePickingOpIds) {
+            let op = localProductionOrders.find(x => x.id === opId);
+            if(op) { op.picking.status = 'em_andamento'; op.picking.start = now; op.picking.responsible = resp; await DB.update('productionOrders', op); }
         }
         
-        // --- Upload de Foto ---
-        async function handleFotoUpload(e) {
-            const file = e.target.files[0];
-            if (!file || !currentManagingRecipeId) return;
-
-            // --- CORREÇÃO ---
-            // O erro 'storage/unauthorized' indica permissão negada para o caminho privado.
-            // Vamos mudar para o caminho 'public', que geralmente tem permissões de escrita.
-            // Caminho Antigo (Privado): `artifacts/${appId}/users/${userId}/receita_fotos/${currentManagingRecipeId}_${file.name}`;
-            const storagePath = `artifacts/${appId}/public/receita_fotos/${currentManagingRecipeId}_${file.name}`;
-            const storageRef = ref(storage, storagePath);
-
-            try {
-                uploadStatus.textContent = 'Enviando foto...';
-                await uploadBytes(storageRef, file);
-                const downloadURL = await getDownloadURL(storageRef);
-                
-                // Atualiza o documento da receita no Firestore com a URL da foto
-                await updateDoc(doc(receitasCollectionRef, currentManagingRecipeId), {
-                    fotoURL: downloadURL
-                });
-                
-                // Atualiza preview
-                fotoPreviewContainer.style.backgroundImage = `url(${downloadURL})`;
-                fotoPreviewContainer.innerHTML = '';
-                
-                uploadStatus.textContent = 'Foto salva!';
-                showToast("Foto da receita atualizada!");
-            } catch (error) {
-                console.error("Erro no upload da foto:", error);
-                uploadStatus.textContent = 'Falha no upload.';
-                showToast("Erro ao enviar foto.", true);
-            }
-        }
+        hide(id('picking-setup-view')); 
+        show(id('picking-active-view'));
+        const actResp = id('picking-active-resp'); if(actResp) actResp.innerText = resp;
+        const timerEl = id('picking-timer-display');
+        if(timerEl) { timerEl.dataset.start = now; timerEl.classList.add('timer-active'); }
+        showNotif('Cronómetro Iniciado!'); 
         
-        function updateFotoPreview(receita) {
-            receitaFotoUpload.value = null; // Limpa o input
-            uploadStatus.textContent = '';
-            if (receita.fotoURL) {
-                fotoPreviewContainer.style.backgroundImage = `url(${receita.fotoURL})`;
-                fotoPreviewContainer.innerHTML = '';
+        updateSidebarBadges();
+        renderPickingScreen(); 
+    });
+
+    addEvt('picking-checklist-body', 'click', e => {
+        const btnFill = e.target.closest('.btn-fill-all');
+        if(btnFill) {
+            const row = btnFill.closest('tr'); const neededStr = row.cells[1].innerText;
+            const input = row.querySelector('.picking-qty-input'); const chk = row.querySelector('.picking-row-check');
+            if(input && chk) { input.value = parseFloat(neededStr).toFixed(4); chk.checked = true; }
+            row.classList.add('opacity-50'); row.cells[0].classList.add('line-through', 'text-ios-textMuted');
+        }
+        if(e.target.classList.contains('picking-row-check')) {
+            const row = e.target.closest('tr');
+            if(e.target.checked) {
+                const input = row.querySelector('.picking-qty-input');
+                if(input && (!input.value || parseFloat(input.value) === 0)) input.value = parseFloat(row.cells[1].innerText).toFixed(4);
+                row.classList.add('opacity-50'); row.cells[0].classList.add('line-through', 'text-ios-textMuted');
             } else {
-                fotoPreviewContainer.style.backgroundImage = 'none';
-                fotoPreviewContainer.innerHTML = '<span>Sem foto</span>';
+                row.classList.remove('opacity-50'); row.cells[0].classList.remove('line-through', 'text-ios-textMuted');
             }
         }
+    });
 
-        // --- PDF Geração (Atualizado com Foto) ---
+    addEvt('btn-finish-picking', 'click', async () => {
+        const pickedTotals = {}; let allChecked = true;
+        const bodyEl = id('picking-checklist-body'); if(!bodyEl) return;
+        const rows = bodyEl.querySelectorAll('tr');
+        rows.forEach(row => {
+            const pid = row.dataset.pid; const input = row.querySelector('.picking-qty-input'); const qty = input ? (parseFloat(input.value) || 0) : 0;
+            const chk = row.querySelector('.picking-row-check'); const isChecked = chk ? chk.checked : false; 
+            pickedTotals[pid] = qty;
+            if(!isChecked || qty <= 0) allChecked = false;
+        });
+
+        const finishTask = async () => {
+            const now = Date.now();
+            let opsToUpdate = localProductionOrders.filter(op => activePickingOpIds.includes(op.id));
+            
+            Object.keys(pickedTotals).forEach(pidStr => {
+                const pid = pidStr; let remainingPicked = pickedTotals[pid];
+                opsToUpdate.forEach(op => {
+                    const ing = op.ingredients.find(i => i.productId === pid);
+                    if(ing) {
+                        const take = Math.min(ing.adjustedQuantity, remainingPicked);
+                        if(!op.picking.pickedItems) op.picking.pickedItems = {};
+                        op.picking.pickedItems[pid] = take; remainingPicked -= take;
+                    }
+                });
+            });
+
+            for(let op of opsToUpdate) {
+                op.picking.end = now; op.picking.status = 'concluido';
+                op.picking.duration = Math.floor((op.picking.end - op.picking.start) / 1000); 
+                op.id = op.id; // ensure ID is passed
+                await DB.update('productionOrders', op);
+            }
+            
+            hide(id('picking-modal')); await refreshData(); showNotif('Check-list Concluído!');
+        };
+
+        if(!allChecked) showConfirmationModal('Existem itens não marcados!', 'A Linha não foi separada 100%. Deseja finalizar com pendências (Baixa Parcial)?', finishTask);
+        else finishTask();
+    });
+
+    // --- LOGICA OP (PRODUCAO TELA E EXTRAS) ---
+    addEvt('po-date', 'change', e => {
+        const selectedDate = new Date(e.target.value);
+        const today = new Date();
+        const diffTime = selectedDate - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+        const extraChk = id('po-is-extra'); if (extraChk) extraChk.checked = diffDays <= 2;
+    });
+
+    addEvt('search-po-by-date', 'change', renderPO);
+    function renderPO() {
+        const dateInput = id('search-po-by-date'); if(!dateInput) return;
+        const d = dateInput.value; const list = localProductionOrders.filter(po => po.date === d);
+        const container = id('production-orders-list'); if(!container) return;
+        if(!list.length) { container.innerHTML = `<div class="col-span-full text-center text-ios-textMuted py-10 bg-ios-card rounded-2xl border border-ios-border">A fila de produção está vazia para esta data.</div>`; return; }
         
-        // Função auxiliar para carregar imagem e converter para Base64
-        function fetchImageAsBase64(url) {
-            return fetch(url)
-                .then(response => response.blob())
-                .then(blob => new Promise((resolve, reject) => {
-                    // Adiciona um 'hack' de CORS se a URL for do Firebase Storage
-                    // Isso é um paliativo, o ideal é configurar o CORS no Firebase Storage
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                }));
+        container.innerHTML = list.map(po => {
+            const p = po.picking || { status: 'pendente' }; let pickBadge = '';
+            if(p.status === 'concluido') pickBadge = `<span class="badge bg-ios-green/20 text-ios-green text-[10px] mt-1 inline-block"><i class="fa-solid fa-dolly mr-1"></i>Separado (Tempo: ${formatTime(p.duration||0)})</span>`;
+            else if(p.status === 'em_andamento') pickBadge = `<span class="badge bg-ios-blue/20 text-ios-blue text-[10px] mt-1 inline-block"><i class="fa-solid fa-spinner fa-spin mr-1"></i>Em Separação</span>`;
+            else pickBadge = `<span class="badge bg-ios-orange/20 text-ios-orange text-[10px] mt-1 inline-block"><i class="fa-solid fa-clock mr-1"></i>A Separar</span>`;
+
+            return `
+            <div class="card relative flex flex-col pl-14 border-l-4 ${po.status==='pendente'?'border-l-ios-orange':'border-l-ios-green'}">
+                <div class="absolute top-5 left-3"><input type="checkbox" class="ui-checkbox po-select-checkbox" data-id="${po.id}" ${po.status!=='pendente'?'disabled':''}></div>
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <h3 class="text-white font-bold text-lg">${po.recipeName} <span class="text-ios-blue">(${po.multiplier}x)</span> ${po.isExtra?'<span class="badge bg-ios-red text-white ml-2">🚨 EXTRA</span>':''}</h3>
+                        <p class="text-xs text-ios-textMuted mt-1"><i class="fa-regular fa-calendar mr-1"></i>Prog: <strong class="text-white">${new Date(po.date+'T00:00:00').toLocaleDateString('pt-BR')}</strong> ${po.quantityProduced ? `&nbsp;|&nbsp; Rende: <strong class="text-white">${po.quantityProduced} no lote ${po.outputBatch||'-'}</strong>` : ''}</p>
+                        ${pickBadge}
+                    </div>
+                    <span class="badge uppercase tracking-wider ${po.status==='pendente'?'bg-ios-orange/20 text-ios-orange':'bg-ios-green/20 text-ios-green'}">${po.status}</span>
+                </div>
+                <div class="bg-ios-bg rounded-lg p-3 mt-auto border border-ios-border">
+                    <p class="text-[10px] text-ios-textMuted uppercase font-bold mb-2">Desconto Físico Necessário</p>
+                    <ul class="text-sm text-gray-300 space-y-1">${(po.ingredients || []).map(i=>{
+                        const pName = localInventory.find(pd=>pd.id===i.productId)?.name||'?';
+                        const pLotes = (i.consumptionPlan||[]).map(x=>x.batchCode).join(', ') || 'PEPS Automático';
+                        return `<li class="flex flex-col border-b border-ios-border/50 pb-2 mb-1 last:border-0 last:pb-0 last:mb-0"><div class="flex justify-between"><span class="truncate pr-2">${pName}</span><span class="font-bold text-ios-blue">${i.adjustedQuantity.toFixed(4)}</span></div><span class="text-[10px] text-ios-textMuted mt-1"><i class="fa-solid fa-box mr-1"></i>${pLotes}</span></li>`;
+                    }).join('')}</ul>
+                </div>
+                ${po.status==='pendente'?`<div class="absolute bottom-4 right-4 flex gap-2"><button class="del-po-btn text-ios-red bg-ios-red/10 w-8 h-8 rounded-full hover:bg-ios-red/20 flex items-center justify-center" data-id="${po.id}"><i class="fa-solid fa-trash text-xs"></i></button></div>`:''}
+            </div>`
+        }).join('');
+    }
+    
+    addEvt('production-orders-list', 'click', e => {
+        const delBtn = e.target.closest('.del-po-btn');
+        if(delBtn) showConfirmationModal('Cancelar OP?', 'Remover a ordem da fila?', async () => { await DB.remove('productionOrders', delBtn.dataset.id); refreshData(); showNotif('OP Excluída'); });
+    });
+
+    function updatePOIngredients() {
+        const searchInput = id('po-recipe-searchable-container')?.querySelector('input');
+        if(!searchInput) return;
+        const rId = searchInput.dataset.selectedId;
+        const rec = localRecipes.find(r=>r.id===rId); 
+        const qtyEl = id('po-quantity'); const mult = qtyEl ? (parseFloat(qtyEl.value) || 1) : 1;
+        const bodyEl = id('po-ingredients-body'); const outEl = id('po-total-output');
+        
+        if(!rec) { if(bodyEl) bodyEl.innerHTML = ''; if(outEl) outEl.value = '0.0000'; return; }
+        if (rec.isSemi) { if(outEl) outEl.value = ((rec.outputYield || 1) * mult).toFixed(4); } else { if(outEl) outEl.value = '-'; }
+        
+        if(bodyEl) {
+            bodyEl.innerHTML = (rec.ingredients || []).map(i => {
+                const p = localInventory.find(x=>x.id===i.productId); const reqQty = i.quantity * mult;
+                const { plan, isSufficient } = getFIFOPlan(i.productId, reqQty);
+                const planText = plan.map(x => `<strong>${x.batchCode}</strong>(${x.quantity.toFixed(2)})`).join(', ');
+
+                return `<tr class="base-tr" data-product-id="${i.productId}" data-plan='${JSON.stringify(plan)}'>
+                    <td class="base-td font-medium text-white">${p?p.name:'?'}</td><td class="base-td">${(p?.totalQuantity||0).toFixed(2)}</td>
+                    <td class="base-td"><input type="number" value="${reqQty.toFixed(4)}" class="form-input py-1 text-center font-bold text-ios-blue po-ing-qty bg-ios-bg border-ios-border" readonly></td>
+                    <td class="base-td text-ios-textMuted text-xs"><div class="plan-display ${isSufficient ? 'text-ios-green' : 'text-ios-red font-bold'}">${isSufficient ? '<i class="fa-solid fa-check mr-1"></i>'+planText : '<i class="fa-solid fa-triangle-exclamation mr-1"></i>Faltante/Bloqueado'}</div>
+                        ${isSufficient ? `<button type="button" class="text-ios-blue mt-2 open-batch-selector bg-ios-bg p-1 rounded border border-ios-border"><i class="fa-solid fa-pen mr-1"></i> Trocar Lote</button>` : ''}
+                    </td></tr>`;
+            }).join('');
         }
+    }
 
-        async function generatePDF() {
-            const receita = localReceitas.find(r => r.id === currentManagingRecipeId);
-            if (!receita) return;
-            
-            const { jsPDF } = window.jspdf; // Pega o construtor do objeto global
-            const doc = new jsPDF();
-            
-            doc.setFont('Helvetica', 'bold');
-            doc.setFontSize(18);
-            doc.text(`Ficha de Custo: ${receita.nome}`, 14, 22);
+    addEvt('po-quantity', 'input', updatePOIngredients);
+    addEvt('btn-new-production-order', 'click', () => {
+        const form = id('production-order-form'); if(form) form.reset(); 
+        const bodyEl = id('po-ingredients-body'); if(bodyEl) bodyEl.innerHTML = '';
+        const mappedRecipes = localRecipes.map(r => { return { ...r, searchName: `${r.name}` }; });
+        const cont = id('po-recipe-searchable-container');
+        if(cont) {
+            createSearchableSelect(cont, mappedRecipes, 'Busque pela receita...', r => {
+                if(r.isSemi) { show(id('po-output-fields')); const d = id('po-date')?.value.replace(/-/g,'').slice(2); if(id('po-output-batch')) id('po-output-batch').value = `OP${d}-${r.id}`; } else hide(id('po-output-fields'));
+                updatePOIngredients();
+            });
+        }
+        const d = new Date(); d.setDate(d.getDate() + 2); 
+        if(id('po-date')) id('po-date').value = d.toISOString().split('T')[0];
+        const extraChk = id('po-is-extra');
+        if (extraChk) { extraChk.checked = false; }
+        hide(id('po-output-fields')); show(id('production-order-modal'));
+    });
+    
+    addEvt('production-order-form', 'submit', async e => {
+        e.preventDefault();
+        const searchInput = id('po-recipe-searchable-container')?.querySelector('input');
+        if(!searchInput) return;
+        const rId = searchInput.dataset.selectedId;
+        const rec = localRecipes.find(r=>r.id===rId); if(!rec) return showNotif('Receita inválida', true);
+        const mult = parseFloat(id('po-quantity')?.value || 1); const totalOut = rec.isSemi ? parseFloat(id('po-total-output')?.value || 0) : null;
+        const bodyEl = id('po-ingredients-body'); if(!bodyEl) return;
+        const ingredients = [...bodyEl.children].map(tr => { return { productId: tr.dataset.productId, adjustedQuantity: parseFloat(tr.querySelector('.po-ing-qty').value), consumptionPlan: JSON.parse(tr.dataset.plan || '[]') }; });
+        for(const ing of ingredients) {
+            const sumPlan = ing.consumptionPlan.reduce((s, x) => s + x.quantity, 0);
+            if(sumPlan < ing.adjustedQuantity - 0.001) return showNotif(`Impossível salvar. Insumo insuficiente ou Lotes Bloqueados para algum ingrediente.`, true);
+        }
+        const op = {
+            recipeId: rId, recipeName: rec.name, recipeCategory: rec.category, date: id('po-date')?.value, multiplier: mult, quantityProduced: totalOut,
+            status: 'pendente', outputBatch: rec.isSemi ? id('po-output-batch')?.value : null, ingredients: ingredients, isExtra: id('po-is-extra')?.checked || false,
+            picking: { status: 'pendente', responsible: '', start: null, end: null, duration: 0, pickedItems: {} }
+        };
+        await DB.add('productionOrders', op); showNotif('OP salva na fila!'); hide(id('production-order-modal')); refreshData();
+    });
 
-            let startY = 30;
+    addEvt('btn-confirm-production', 'click', async () => {
+        const checked = document.querySelectorAll('.po-select-checkbox:checked');
+        if(!checked.length) return showNotif('Selecione pelo menos uma OP marcando a caixinha!', true);
+        const selectedIds = Array.from(checked).map(cb => cb.dataset.id);
+        const pendentes = localProductionOrders.filter(po => selectedIds.includes(po.id) && po.status === 'pendente');
+        if(!pendentes.length) return;
+        
+        const opsNaoSeparadas = pendentes.filter(po => po.picking && po.picking.status !== 'concluido');
+        let warnMsg = '';
+        if(opsNaoSeparadas.length > 0) { warnMsg = `<p class="text-ios-red mb-3 font-bold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Atenção: ${opsNaoSeparadas.length} OP(s) selecionada(s) ainda NÃO tiveram a separação física concluída!</p>`; }
 
-            // Adiciona a foto ao PDF (se existir)
-            if (receita.fotoURL) {
-                try {
-                    // Precisamos de um proxy CORS para converter a imagem do storage
-                    // Solução mais simples é usar um proxy público (não ideal para produção)
-                    const proxyUrl = 'https://images.weserv.nl/?url=';
-                    const imageUrl = receita.fotoURL.replace('https://', ''); // Remove https://
-                    
-                    const base64Img = await fetchImageAsBase64(proxyUrl + imageUrl);
-                    doc.addImage(base64Img, 'JPEG', 14, startY, 60, 45); // x, y, w, h
-                    startY += 55; // Pula a altura da imagem + margem
-                } catch (e) {
-                    console.error("Erro ao carregar imagem para PDF:", e);
-                    doc.text("Erro ao carregar foto", 14, startY);
-                    startY += 10;
+        showConfirmationModal('Executar Baixa', `${warnMsg}Isso vai descontar as matérias-primas e gerar as entradas de <strong>${pendentes.length} OP(s)</strong>. Deseja efetivar a produção no sistema?`, async () => {
+            show(id('loading-overlay'));
+            try {
+                for(const op of pendentes) {
+                    for(const ing of op.ingredients) {
+                        const product = await DB.get('inventory', ing.productId);
+                        if(!product || (product.totalQuantity || 0) < ing.adjustedQuantity - 0.001) throw new Error(`Sem saldo Total no estoque para: ${product ? product.name : 'Insumo Excluído'}.`);
+                        for(const pl of ing.consumptionPlan) {
+                            const b = await DB.get('batches', pl.batchId);
+                            if(!b || b.quantity < pl.quantity - 0.001 || b.isReleased === false) throw new Error(`Lote ${pl.batchCode} bloqueado (quarentena) ou esgotado! Recalcule a OP.`);
+                        }
+                    }
                 }
+                for(const op of pendentes) {
+                    for(const ing of op.ingredients) {
+                        const product = await DB.get('inventory', ing.productId);
+                        for(const pl of ing.consumptionPlan) { const b = await DB.get('batches', pl.batchId); b.quantity -= pl.quantity; await DB.update('batches', b); }
+                        product.totalQuantity -= ing.adjustedQuantity; await DB.update('inventory', product);
+                        await DB.add('history', { productId: product.id, type: 'saída', quantity: ing.adjustedQuantity, date: op.date, reason: `Prod: OP-${op.id}` });
+                        
+                        const p = op.date.substring(0,7); let consumptions = await DB.getAll('monthlyConsumption');
+                        let record = consumptions.find(x => x.period === p && x.productId === product.id);
+                        if(record) { record.totalConsumed += ing.adjustedQuantity; record.id = record.id; await DB.update('monthlyConsumption', record); }
+                        else await DB.add('monthlyConsumption', { period: p, productId: product.id, totalConsumed: ing.adjustedQuantity });
+                    }
+                    if(op.quantityProduced) {
+                        const rec = localRecipes.find(r => r.id === op.recipeId);
+                        if(rec && rec.outputProductId) {
+                            const outProduct = await DB.get('inventory', rec.outputProductId);
+                            if(outProduct) {
+                                outProduct.totalQuantity += op.quantityProduced; await DB.update('inventory', outProduct);
+                                const lote = op.outputBatch || `OP-${op.id}`;
+                                await DB.add('batches', { productId: rec.outputProductId, code: lote, quantity: op.quantityProduced, expiryDate: op.outputExpiry||null, isReleased: true });
+                                await DB.add('history', { productId: rec.outputProductId, batchCode: lote, type: 'entrada', quantity: op.quantityProduced, date: op.date, reason: `Gerado OP-${op.id}` });
+                            }
+                        }
+                    }
+                    op.status = 'concluído'; await DB.update('productionOrders', op);
+                }
+                showNotif('Sucesso! Movimentações registradas.'); 
+            } catch(e) { showNotif(e.message || 'Erro crítico nas baixas', true); } finally { hide(id('loading-overlay')); await refreshData(); }
+        });
+    });
+
+    // --- REQUISICOES AVULSAS ---
+    addEvt('add-requisition-item-btn', 'click', () => { const reqCont = id('requisition-items-container'); if(reqCont) addIngRowReq(reqCont, null, ''); });
+    addEvt('requisition-form', 'submit', async e => {
+        e.preventDefault();
+        const reason = id('requisition-reason')?.value; const resp = id('requisition-responsible')?.value;
+        const reqCont = id('requisition-items-container'); if(!reqCont) return;
+        const ings = [...reqCont.children].map(r => ({ productId: r.dataset.productId, quantity: parseFloat(r.querySelector('.req-qty-input').value), plan: JSON.parse(r.dataset.plan || '[]') }));
+        if(ings.some(i=>!i.productId || isNaN(i.quantity) || !i.plan.length)) return showNotif('Preencha quantidades e verifique se há físico livre suficiente (sem bloqueio).', true);
+        show(id('loading-overlay'));
+        try {
+            for(const i of ings) {
+                const p = await DB.get('inventory', i.productId);
+                let sumPlan = i.plan.reduce((s, x) => s + x.quantity, 0);
+                if(sumPlan < i.quantity - 0.001) throw new Error(`Sem saldo suficiente ou lote bloqueado de ${p.name}`);
+                for(const pl of i.plan) { const b = await DB.get('batches', pl.batchId); b.quantity -= pl.quantity; await DB.update('batches', b); }
+                p.totalQuantity -= i.quantity; await DB.update('inventory', p);
+                await DB.add('history', { productId: p.id, type: 'requisição', quantity: i.quantity, date: new Date().toISOString().split('T')[0], reason: reason, responsible: resp }); 
             }
-            
-            doc.setFont('Helvetica', 'normal');
-            doc.setFontSize(12);
+            showNotif('Requisição processada!'); e.target.reset(); reqCont.innerHTML=''; await refreshData();
+        } catch (err) { showNotif(err.message, true); } finally { hide(id('loading-overlay')); }
+    });
 
-            let custoTotalReceita = 0;
-            const tableHead = [["Ingrediente", "Qtd.", "Unidade", "Custo Unit.", "Custo Total"]];
-            const tableBody = [];
-            
-            const ingredientes = receita.ingredientes || [];
-            ingredientes.forEach(item => {
-                const insumoData = localInsumos.find(i => i.id === item.insumoId);
-                let custoUnit = 0, custoTotalItem = 0, nome = item.nome;
-                if (insumoData) {
-                    custoUnit = parseFloat(insumoData.custo);
-                    custoTotalItem = custoUnit * item.quantidade;
-                    custoTotalReceita += custoTotalItem;
-                    nome = insumoData.nome;
-                } else { nome = `${item.nome} (Excluído)`; }
-                tableBody.push([
-                    nome, item.quantidade.toString(), item.unidade,
-                    `R$ ${custoUnit.toFixed(2)}`, `R$ ${custoTotalItem.toFixed(2)}`
-                ]);
-            });
-            
-            doc.setFontSize(14);
-            doc.setFont('Helvetica', 'bold');
-            doc.text(`Custo Total da Receita: R$ ${custoTotalReceita.toFixed(2)}`, 14, startY);
-            startY += 10;
-
-            // Agora 'doc.autoTable' deve existir
-            doc.autoTable({
-                head: tableHead,
-                body: tableBody,
-                startY: startY,
-                headStyles: { fillColor: [22, 163, 74] },
-                styles: { font: 'Helvetica' }
-            });
-            
-            doc.save(`FichaCusto_${receita.nome.replace(/\s+/g, '_')}.pdf`);
-        }
-
-
-        // --- Handlers de Formulários ---
-        function setupForms() {
-            formAddInsumo.addEventListener('submit', addInsumo);
-            formEditInsumo.addEventListener('submit', updateInsumo);
-            formAddReceita.addEventListener('submit', addReceita);
-            formAddIngredienteReceita.addEventListener('submit', addIngredienteToReceita);
-            btnGeneratePDF.addEventListener('click', generatePDF);
-            receitaFotoUpload.addEventListener('change', handleFotoUpload);
+    // --- DASHBOARD METRICS E CHARTS ---
+    function renderDash() {
+        const invQtd = localInventory.reduce((s,i)=>s+(i.totalQuantity||0),0);
+        const statTotalItems = id('stat-total-items'); if(statTotalItems) statTotalItems.innerText = localInventory.length; 
+        const statTotalQty = id('stat-total-quantity'); if(statTotalQty) statTotalQty.innerText = invQtd.toFixed(2);
+        
+        const quarentaECincoDias = new Date(); quarentaECincoDias.setDate(quarentaECincoDias.getDate() + 45);
+        const expiringBatches = localBatches.filter(b => b.quantity > 0 && b.expiryDate && new Date(b.expiryDate) <= quarentaECincoDias);
+        const statExpSoon = id('stat-expiring-soon');
+        if(statExpSoon) statExpSoon.innerText = expiringBatches.length;
+        
+        const expList = id('expiring-list');
+        if(expList) {
+            if(expiringBatches.length > 0) {
+                expList.innerHTML = expiringBatches.map(b => {
+                    const p = localInventory.find(i => i.id === b.productId);
+                    const diffTime = new Date(b.expiryDate) - new Date();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    let color = diffDays <= 7 ? 'text-ios-red' : 'text-ios-orange';
+                    return `
+                    <li class="bg-ios-cardHover p-4 rounded-xl border-l-4 border-l-ios-red flex flex-wrap justify-between items-center gap-4 cursor-pointer hover:bg-ios-border transition alert-item" data-id="${p?.id}">
+                        <div>
+                            <h4 class="font-bold text-white text-lg">${p?.name || 'Desconhecido'}</h4>
+                            <p class="text-xs text-ios-textMuted">Lote: ${b.code} | Qtd: ${b.quantity.toFixed(2)}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="font-bold ${color} text-lg">${diffDays} dias</span><br>
+                            <span class="text-xs text-ios-textMuted">${new Date(b.expiryDate+'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                        </div>
+                    </li>`;
+                }).join('');
+            } else {
+                 expList.innerHTML = '<li class="text-center text-ios-textMuted py-8">Nenhum lote vencendo nos próximos 45 dias.</li>';
+            }
         }
 
-        // --- Handlers de Modais ---
-        function setupModals() {
-            document.getElementById('modal-edit-insumo-close').addEventListener('click', closeEditInsumoModal);
-            document.getElementById('modal-edit-insumo-cancel').addEventListener('click', closeEditInsumoModal);
-            document.getElementById('modal-manage-receita-close').addEventListener('click', closeManageReceitaModal);
+        const opsSeparadas = localProductionOrders.filter(po => po.picking && po.picking.status === 'concluido');
+        const empStats = {}; const lineStats = {};
+        opsSeparadas.forEach(po => {
+            const resp = po.picking.responsible || 'Desconhecido'; const duration = po.picking.duration || 0; const line = po.recipeCategory || 'Diversos';
+            if(!empStats[resp]) empStats[resp] = { ops: 0, totalTime: 0 }; empStats[resp].ops += 1; empStats[resp].totalTime += duration;
+            if(!lineStats[line]) lineStats[line] = { ops: 0, totalTime: 0 }; lineStats[line].ops += 1; lineStats[line].totalTime += duration;
+        });
+
+        const empSorted = Object.keys(empStats).map(k => ({ name: k, ops: empStats[k].ops, avgTime: empStats[k].totalTime / empStats[k].ops })).sort((a,b) => a.avgTime - b.avgTime);
+        const empRankingBody = id('emp-ranking-body');
+        if (empRankingBody) {
+            if(!empSorted.length) empRankingBody.innerHTML = `<tr><td colspan="3" class="base-td text-center border-none py-6">Sem dados de separação.</td></tr>`;
+            else {
+                const medals = ['🥇', '🥈', '🥉'];
+                empRankingBody.innerHTML = empSorted.map((e, idx) => {
+                    const positionHtml = idx < 3 ? `<span class="mr-2 text-xl">${medals[idx]}</span>` : `<span class="text-ios-textMuted font-normal mr-2">${idx+1}º</span>`;
+                    return `<tr class="base-tr hover:bg-ios-cardHover/50 transition"><td class="base-td font-bold text-white flex items-center">${positionHtml} ${e.name}</td><td class="base-td text-center font-bold text-ios-blue">${e.ops}</td><td class="base-td text-right font-mono">${formatTime(e.avgTime)}</td></tr>`;
+                }).join('');
+            }
         }
-        function openEditInsumoModal(id) {
-            const insumo = localInsumos.find(i => i.id === id);
-            if (!insumo) return;
-            editInsumoId.value = insumo.id;
-            editInsumoNome.value = insumo.nome;
-            editInsumoUnidade.value = insumo.unidade;
-            editInsumoCusto.value = insumo.custo;
-            modalEditInsumo.classList.remove('opacity-0', 'pointer-events-none');
-            modalEditInsumo.querySelector('.modal-content').classList.remove('scale-95');
+
+        Chart.defaults.color = 'rgba(235, 235, 245, 0.6)'; Chart.defaults.borderColor = '#38383a';
+        if(lineChart) lineChart.destroy();
+        const ctxLine = id('line-efficiency-chart');
+        if(ctxLine && Object.keys(lineStats).length > 0) {
+            const labels = Object.keys(lineStats); const dataAvg = labels.map(l => Math.floor(lineStats[l].totalTime / lineStats[l].ops / 60));
+            lineChart = new Chart(ctxLine, {type:'bar', data:{labels:labels, datasets:[{label:'Tempo Médio (minutos)', data:dataAvg, backgroundColor:'#ff9f0a', borderRadius: 4}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}});
         }
-        function closeEditInsumoModal() {
-            modalEditInsumo.classList.add('opacity-0', 'pointer-events-none');
-            modalEditInsumo.querySelector('.modal-content').classList.add('scale-95');
-            formEditInsumo.reset();
-        }
-        function openManageReceitaModal(id) {
-            const receita = localReceitas.find(r => r.id === id);
-            if (!receita) return;
-            currentManagingRecipeId = id;
-            modalReceitaNome.textContent = receita.nome;
-            renderIngredientesDaReceita(receita.ingredientes || []);
-            updateFotoPreview(receita); // Atualiza o preview da foto
-            modalManageReceita.classList.remove('opacity-0', 'pointer-events-none');
-            modalManageReceita.querySelector('.modal-content').classList.remove('scale-95');
-        }
-        function closeManageReceitaModal() {
-            modalManageReceita.classList.add('opacity-0', 'pointer-events-none');
-            modalManageReceita.querySelector('.modal-content').classList.add('scale-95');
-            currentManagingRecipeId = null;
-            formAddIngredienteReceita.reset();
-        }
-    </script>
+
+        if(dailyChart) dailyChart.destroy(); const ctxD = id('daily-output-chart');
+        if(ctxD) dailyChart = new Chart(ctxD, {type:'bar', data:{labels:['Consumos de Hoje'], datasets:[{label:'Qtd', data:[0], backgroundColor:'#0a84ff', borderRadius: 4}]}, options:{responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}}}});
+        renderABC();
+    }
+    function renderABC() {
+        const ctx = id('abc-curve-chart'); if(abcChart) abcChart.destroy(); if(!ctx) return;
+        abcChart = new Chart(ctx, { type:'doughnut', data:{ labels:['Curva A','Curva B','Curva C'], datasets:[{data:[30,50,20], backgroundColor:['#0a84ff','#30d158','#ff9f0a'], borderColor:'#1c1c1e', borderWidth:4}] }, options:{ responsive:true, maintainAspectRatio:false, cutout: '75%' } });
+    }
+
+    // --- CONSUMO ---
+    ['search-consumption', 'consumption-month-filter', 'consumption-year-filter'].forEach(el => { addEvt(el, el === 'search-consumption' ? 'input' : 'change', renderConsum); });
+    
+    function renderConsum() {
+        const p = `${id('consumption-year-filter')?.value}-${String(id('consumption-month-filter')?.value).padStart(2,'0')}`;
+        const term = id('search-consumption')?.value.toLowerCase() || '';
+        let list = localMonthlyConsumption.filter(c => c.period === p);
+        if(term) list = list.filter(c => localInventory.find(i=>i.id===c.productId)?.name.toLowerCase().includes(term));
+        const tbody = id('consumption-table-body'); if(!tbody) return;
+        if(!list.length) return tbody.innerHTML = `<tr><td colspan="2" class="base-td text-center border-none py-10">Nada registrado.</td></tr>`;
+        tbody.innerHTML = list.map(c => `<tr class="base-tr"><td class="base-td text-white">${localInventory.find(i=>i.id===c.productId)?.name||'?'}</td><td class="base-td text-right font-bold text-ios-blue">${c.totalConsumed.toFixed(2)}</td></tr>`).join('');
+    }
+
+    // --- AJUSTES MANUAIS E BACKUP ---
+    addEvt('adjustment-form', 'submit', async e => {
+        e.preventDefault();
+        const bId = id('adjustment-batch')?.value; const newQtd = parseFloat(id('adjustment-new-quantity')?.value);
+        if(!bId || isNaN(newQtd)) return;
+        try {
+            const batch = await DB.get('batches', bId); batch.quantity = newQtd; await DB.update('batches', batch);
+            await DB.add('history', { productId: batch.productId, type: 'ajuste', quantity: newQtd, date: new Date().toISOString().split('T')[0], reason: id('adjustment-reason')?.value, responsible: id('adjustment-responsible')?.value });
+            showNotif('Lote ajustado com sucesso'); e.target.reset(); await refreshData();
+        } catch(err) { showNotif('Erro no ajuste', true); }
+    });
+
+    addEvt('btn-download-backup', 'click', async () => {
+        show(id('loading-overlay'));
+        const data = { inventory: await DB.getAll('inventory'), batches: await DB.getAll('batches'), history: await DB.getAll('history'), recipes: await DB.getAll('recipes'), productionOrders: await DB.getAll('productionOrders'), monthlyConsumption: await DB.getAll('monthlyConsumption') };
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+        a.download = `EstoqueOS_${new Date().toISOString().split('T')[0]}.json`;
+        a.click(); hide(id('loading-overlay')); showNotif('Salvo em Downloads');
+    });
+
+    addEvt('btn-upload-backup', 'click', () => id('backup-file-input')?.click());
+    addEvt('backup-file-input', 'change', e => {
+        const file = e.target.files[0]; if(!file) return; const reader = new FileReader();
+        reader.onload = async ev => {
+            try {
+                const data = JSON.parse(ev.target.result); const s = ['inventory', 'batches', 'history', 'recipes', 'productionOrders', 'monthlyConsumption'];
+                if(!s.some(k=>data[k])) return showNotif("Arquivo incompatível.", true);
+                showConfirmationModal('Restauração', 'Isso destruirá os dados atuais. Deseja aplicar o backup?', async () => {
+                    show(id('loading-overlay')); await DB.restoreBackup(data);
+                    const ds = new Date().toLocaleString('pt-BR'); localStorage.setItem('last_res', ds); 
+                    if(id('last-restore-date')) id('last-restore-date').innerText = ds;
+                    await refreshData(); hide(id('loading-overlay')); showNotif('Restaurado!');
+                });
+            } catch(e) { showNotif('Erro na leitura', true); } finally { if(id('backup-file-input')) id('backup-file-input').value=''; }
+        }; reader.readAsText(file);
+    });
+
+    addEvt('btn-reset-database', 'click', () => {
+        showConfirmationModal('Formatação', 'Apagar TUDO irreversivelmente?', async () => {
+            show(id('loading-overlay')); for(const s of ['inventory', 'batches', 'history', 'recipes', 'productionOrders', 'monthlyConsumption']) await DB.clear(s);
+            localStorage.removeItem('last_res'); 
+            if(id('last-restore-date')) id('last-restore-date').innerText = 'Nunca';
+            await refreshData(); hide(id('loading-overlay')); showNotif('Formatado!');
+        });
+    });
+
+</script>
 </body>
 </html>
