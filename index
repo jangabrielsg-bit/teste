@@ -111,7 +111,8 @@
             <h2 class="title-lg mb-2 text-white">Acesso Restrito</h2>
             <p class="text-ios-textMuted mb-8 text-sm">Faça login com sua conta Google para sincronizar com o banco de dados da fábrica (Firebase).</p>
             <button id="btn-login-google" class="btn-primary w-full py-4 text-lg font-bold"><i class="fa-brands fa-google mr-2"></i>Entrar com o Google</button>
-            <p id="mensagem-erro" class="text-ios-red mt-4 font-semibold text-sm"></p>
+            <button id="btn-bypass-login" class="btn-secondary w-full py-3 mt-4 text-sm"><i class="fa-solid fa-flask mr-2"></i>Testar sem Login (Visualização)</button>
+            <div id="mensagem-erro" class="text-ios-red mt-4 font-medium text-sm text-left bg-ios-red/10 p-3 rounded-lg hidden"></div>
         </div>
     </div>
 
@@ -786,11 +787,33 @@
     // --- LOGIN E SESSÃO ---
     addEvt('btn-login-google', 'click', () => {
         const msg = id('mensagem-erro');
-        if(msg) msg.innerText = "Abrindo pop-up do Google...";
+        if(msg) { msg.innerText = "Abrindo pop-up do Google..."; show(msg); }
         signInWithPopup(auth, provider).catch((error) => {
-            if(msg) msg.innerText = "Erro ao fazer login: " + error.message;
+            if(msg) {
+                if (error.code === 'auth/unauthorized-domain') {
+                    msg.innerHTML = "<i class='fa-solid fa-triangle-exclamation mr-1'></i> <b>Domínio não autorizado pelo Firebase.</b><br><br>Como você está testando num ambiente de visualização em nuvem, o Firebase bloqueou o pop-up por segurança.<br><br><b>Soluções:</b><br>1. Baixe este arquivo HTML e abra no seu computador (localhost é liberado por padrão).<br>2. Ou clique em 'Testar sem Login' abaixo.";
+                } else {
+                    msg.innerText = "Erro ao fazer login: " + error.message;
+                }
+                show(msg);
+            }
             console.error(error);
         });
+    });
+
+    addEvt('btn-bypass-login', 'click', () => {
+        hide(id('login-wrapper')); 
+        show(id('app-wrapper'));
+        const nu = id('nome-usuario');
+        if(nu) nu.innerText = 'Modo de Teste / Visualização';
+        
+        showNotif('Atenção: Sem o login, salvar dados no Firebase pode falhar caso o seu banco de dados exija autenticação nas Regras de Segurança.', true);
+        
+        const t = new Date().toISOString().split('T')[0];
+        if(id('receipt-date')) id('receipt-date').value = t; 
+        if(id('search-po-by-date')) id('search-po-by-date').value = t; 
+        if(id('mfg-date')) id('mfg-date').value = t;
+        navTo('dashboard');
     });
 
     addEvt('btn-sair', 'click', () => {
