@@ -1,0 +1,3642 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>IMAC Controle de Qualidade</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: { brand: { 50: '#fffcf2', 100: '#fff7e0', 200: '#ffebb3', 300: '#ffdb80', 400: '#facc15', 500: '#f5b915', 600: '#d99d0b', 700: '#b37a06', 800: '#8f5f0b', 900: '#754b0e' } },
+        fontFamily: { sans: ['Inter', 'sans-serif'] }
+      }
+    }
+  }
+</script>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --amarelo: #f5b915;
+    --amarelo-claro: #fff3d6;
+    --marrom: #6b4423;
+    --marrom-claro: #a78355;
+    --bg: #ffffff;
+    --card: #ffffff;
+    --border: #e8c667;
+    --border-suave: #f2ddab;
+    --success: #3d8b53;
+    --danger: #c0392b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; user-select: none; }
+  body { background: var(--bg); color: var(--marrom); padding-bottom: 20px; }
+  button, input { font-family: inherit; }
+
+  .app-shell { min-height: 100vh; }
+
+  .topbar { background: var(--card); border-bottom: 2px solid var(--border); padding: 16px 15px; display: flex; align-items: center; position: sticky; top: 0; z-index: 800; }
+  .topbar-titulo { flex: 1; text-align: center; font-weight: 800; color: var(--marrom); font-size: 1.05rem; }
+  .voltar-btn { background: none; border: none; color: var(--marrom-claro); font-weight: bold; font-size: 0.95rem; width: 70px; text-align: left; }
+
+  .container { padding: 15px; max-width: 640px; margin: 0 auto; }
+
+  /* Início */
+  .inicio-container { display: flex; flex-direction: column; align-items: center; padding: 15px; max-width: 500px; margin: 0 auto; }
+  .inicio-titulo { font-weight: 900; font-size: 1.6rem; color: var(--marrom); margin: 30px 0 25px; }
+  .inicio-grid { display: flex; flex-direction: column; gap: 14px; width: 100%; }
+  .menu-card { background: var(--card); border: 3px solid var(--amarelo); border-radius: 18px; padding: 22px 20px; text-align: left; box-shadow: 0 2px 8px rgba(107,68,35,0.06); }
+  .menu-card:active { background: var(--amarelo-claro); }
+  .menu-label { font-weight: 800; font-size: 1.25rem; color: var(--marrom); }
+  .menu-desc { font-size: 0.88rem; color: var(--marrom-claro); margin-top: 3px; }
+  .admin-link { margin-top: 30px; background: none; border: none; color: var(--marrom-claro); font-weight: bold; font-size: 0.85rem; padding: 10px; }
+
+  .cat-heading { font-size: 1rem; font-weight: 800; color: var(--marrom); margin: 20px 0 10px; padding-left: 10px; border-left: 4px solid var(--amarelo); }
+  .cat-heading:first-child { margin-top: 4px; }
+
+  .card { background: var(--card); border: 2px solid var(--border); border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(107,68,35,0.05); border-left: 6px solid var(--amarelo); }
+  .card.concluido { border-color: var(--success); border-left-color: var(--success); background: #f5faf6; }
+  .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .nome { font-weight: 800; font-size: 1.02rem; color: var(--marrom); }
+
+  .toolbar { background: var(--card); border: 2px solid var(--border); padding: 14px; border-radius: 16px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(107,68,35,0.04); display: flex; align-items: center; gap: 10px; }
+  .toolbar-data { position: relative; }
+  .toolbar-data-centro { flex: 1; text-align: center; position: relative; }
+  .input-data { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; }
+
+  .btn { border: 2px solid transparent; border-radius: 14px; font-weight: bold; padding: 14px 18px; font-size: 1rem; }
+  .btn-primary { background: var(--amarelo); color: var(--marrom); border-color: var(--amarelo); }
+  .btn-outline { background: var(--card); color: var(--marrom); border: 2px solid var(--amarelo); }
+  .btn-block { width: 100%; }
+  .btn:disabled { opacity: 0.5; }
+
+  .status-msg { text-align: center; padding: 40px 20px; color: var(--marrom-claro); font-weight: 500; line-height: 1.6; }
+
+  .reorder-row { display: flex; align-items: center; gap: 10px; }
+  .order-num { width: 30px; height: 30px; border-radius: 50%; background: var(--amarelo); color: var(--marrom); font-weight: 900; display: flex; align-items: center; justify-content: center; font-size: 0.85rem; flex-shrink: 0; }
+  .arrow-col { display: flex; flex-direction: column; gap: 4px; }
+  .arrow-btn { width: 40px; height: 34px; border-radius: 10px; border: 2px solid var(--border); background: var(--amarelo-claro); font-size: 1rem; font-weight: bold; color: var(--marrom); }
+  .arrow-btn:disabled { opacity: 0.25; }
+  .remover-btn { background: none; border: none; color: var(--danger); font-size: 1.2rem; font-weight: bold; padding: 6px 10px; }
+
+  .meta-stepper { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .meta-stepper button { min-width: 44px; height: 40px; border-radius: 10px; border: 2px solid var(--border); background: var(--amarelo-claro); font-size: 1rem; font-weight: bold; color: var(--marrom); padding: 0 8px; }
+  .meta-stepper .valor { font-weight: 800; font-size: 1.05rem; min-width: 90px; text-align: center; color: var(--marrom); }
+  .meta-quick { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+  .meta-quick button { flex: 1; height: 38px; border-radius: 10px; border: 2px solid var(--border); background: var(--card); font-size: 0.9rem; font-weight: bold; color: var(--marrom-claro); }
+  .meta-quick button:active { background: var(--amarelo-claro); color: var(--marrom); }
+
+  .contagem-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; }
+  .contagem-num { font-size: 1.6rem; font-weight: 900; color: var(--marrom); }
+  .contagem-num .meta { font-size: 1rem; color: var(--marrom-claro); font-weight: bold; }
+  .btn-mais { background: var(--amarelo); color: var(--marrom); border: 2px solid var(--amarelo); border-radius: 16px; width: 74px; height: 74px; font-size: 2rem; font-weight: 900; box-shadow: 0 3px 8px rgba(245,185,21,0.4); flex-shrink: 0; }
+  .btn-mais:active { transform: scale(0.94); }
+  .btn-mais:disabled { opacity: 0.4; box-shadow: none; }
+  .btn-menos { background: var(--card); color: var(--marrom-claro); border: 2px solid var(--border); border-radius: 16px; width: 54px; height: 74px; font-size: 1.3rem; font-weight: 900; flex-shrink: 0; }
+  .btn-menos:active { background: var(--amarelo-claro); color: var(--marrom); }
+  .btn-menos:disabled { opacity: 0.3; }
+  .cat-heading-concluidos { border-left-color: var(--success); margin-top: 30px; }
+  .btn-desfazer { background: none; border: none; color: var(--marrom-claro); font-size: 0.8rem; font-weight: bold; margin-top: 8px; padding: 6px; }
+  .progress-bar { background: var(--border-suave); border-radius: 20px; height: 10px; margin-top: 10px; overflow: hidden; }
+  .progress-fill { background: var(--success); height: 100%; transition: width 0.25s ease; }
+  .selo-ok { background: var(--success); color: white; font-size: 0.72rem; font-weight: bold; padding: 4px 10px; border-radius: 20px; }
+
+  .rel-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-suave); }
+  .rel-row:last-child { border-bottom: none; }
+  .rel-nome { font-weight: bold; font-size: 0.95rem; color: var(--marrom); }
+  .rel-sub { color: var(--marrom-claro); font-size: 0.78rem; }
+  .rel-vel { font-weight: 900; color: var(--marrom); text-align: right; font-size: 0.95rem; }
+
+  .input-texto { width: 100%; padding: 14px; border-radius: 12px; border: 2px solid var(--border); font-size: 1rem; background: var(--amarelo-claro); color: var(--marrom); }
+  .input-texto::placeholder { color: var(--marrom-claro); }
+
+  .modal-fundo { position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(107,68,35,0.5); z-index: 1000; display: flex; align-items: flex-end; }
+  .modal-caixa { background: var(--bg); width: 100%; max-height: 80vh; border-top-left-radius: 24px; border-top-right-radius: 24px; border-top: 3px solid var(--amarelo); display: flex; flex-direction: column; }
+  .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 18px; border-bottom: 2px solid var(--border); font-weight: 800; color: var(--marrom); font-size: 1.1rem; }
+  .fechar-btn { background: none; border: none; font-size: 1.4rem; color: var(--marrom-claro); }
+  .modal-scroll { overflow-y: auto; padding: 15px; }
+  .produto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 6px; }
+  .produto-btn { background: var(--card); border: 2px solid var(--amarelo-claro); border-radius: 12px; padding: 16px 10px; font-weight: 700; color: var(--marrom); text-align: center; }
+  .produto-btn:active { background: var(--amarelo-claro); }
+
+  .fechamento-resumo { font-size: 0.85rem; color: var(--marrom-claro); font-weight: bold; margin-bottom: 10px; }
+  .fechamento-linha { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-top: 1px solid var(--border-suave); font-size: 0.92rem; font-weight: 600; }
+  .valor-pill { background: var(--amarelo-claro); border: 2px solid var(--amarelo); border-radius: 20px; padding: 8px 16px; font-weight: 800; color: var(--marrom); font-size: 0.95rem; }
+  .valor-pill-vazio { background: var(--card); border-color: var(--border); color: var(--marrom-claro); font-weight: 700; }
+
+  .teclado-display { text-align: center; font-size: 2.2rem; font-weight: 900; color: var(--marrom); padding: 20px 15px 10px; }
+  .teclado-unidade { font-size: 1.1rem; color: var(--marrom-claro); font-weight: bold; }
+  .teclado-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0 15px; }
+  .teclado-btn { height: 58px; border-radius: 14px; border: 2px solid var(--border); background: var(--card); font-size: 1.4rem; font-weight: 800; color: var(--marrom); }
+  .teclado-btn:active { background: var(--amarelo-claro); }
+  .teclado-limpar { color: var(--danger); border-color: var(--danger); }
+  .teclado-acoes { display: flex; gap: 10px; padding: 15px; }
+
+  .livro-linha { font-size: 0.85rem; color: var(--marrom-claro); font-weight: 600; margin-top: 3px; }
+
+  .ops-linha { font-size: 0.78rem; color: var(--marrom-claro); font-weight: 700; margin-top: 2px; }
+  .card-conferida { border-left-color: var(--success); background: #f5faf6; opacity: 0.85; }
+  .order-num-ok { background: var(--success); color: #fff; }
+  .btn-conferir { width: 100%; margin-top: 12px; background: var(--card); border: 2px solid var(--success); color: var(--success); border-radius: 12px; padding: 12px; font-weight: 800; font-size: 0.92rem; }
+  .btn-conferir:active { background: #eaf7ee; }
+  .btn-desmarcar { width: 100%; margin-top: 12px; background: none; border: 2px solid var(--border); color: var(--marrom-claro); border-radius: 12px; padding: 10px; font-weight: 700; font-size: 0.85rem; }
+
+  /* ── PAINEL TV (monitoramento ao vivo) ── */
+  .menu-card-tv { border-color: var(--marrom); background: var(--marrom); }
+  .menu-card-tv .menu-label, .menu-card-tv .menu-desc { color: #fff2d6; }
+  .menu-card-tv .menu-desc { color: #d9bd90; }
+
+  .tv-shell { min-height: 100vh; background: #241608; color: #fff8ea; padding: 28px 40px; }
+  .tv-topo { display: flex; align-items: center; gap: 24px; margin-bottom: 24px; }
+  .tv-data { font-size: 1.6rem; font-weight: 800; text-transform: capitalize; }
+  .tv-relogio { font-size: 1.6rem; font-weight: 800; color: var(--amarelo); flex: 1; }
+  .tv-fs-btn { background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); color: #fff8ea; padding: 10px 18px; border-radius: 12px; font-weight: bold; font-size: 0.95rem; }
+
+  .tv-vazio { text-align: center; padding: 100px 20px; font-size: 2rem; color: #d9bd90; font-weight: 700; }
+
+  .tv-resumo { text-align: center; margin-bottom: 30px; }
+  .tv-resumo-num { font-size: 4rem; font-weight: 900; color: var(--amarelo); }
+  .tv-resumo-meta { font-size: 2rem; color: #d9bd90; }
+  .tv-resumo-label { font-size: 1.2rem; color: #d9bd90; font-weight: 600; margin-top: -6px; }
+  .tv-barra-geral { background: rgba(255,255,255,0.12); border-radius: 20px; height: 22px; max-width: 700px; margin: 14px auto 6px; overflow: hidden; }
+  .tv-barra-geral-fill { background: var(--amarelo); height: 100%; transition: width 0.4s ease; }
+  .tv-resumo-pct { font-size: 1.1rem; font-weight: 800; color: var(--amarelo); }
+
+  .tv-ativo { background: linear-gradient(135deg, #3a2410, #241608); border: 3px solid var(--amarelo); border-radius: 22px; padding: 26px 32px; margin-bottom: 30px; }
+  .tv-ativo-concluido { border-color: var(--success); text-align: center; padding: 40px; }
+  .tv-ativo-tag { font-size: 1rem; font-weight: 900; letter-spacing: 3px; color: var(--amarelo); margin-bottom: 8px; }
+  .tv-ativo-nome { font-size: 2.6rem; font-weight: 900; color: #fff8ea; }
+  .tv-ativo-setor { font-size: 1.2rem; color: #d9bd90; font-weight: 600; margin-top: 2px; }
+  .tv-ativo-linha { display: flex; align-items: center; gap: 40px; margin-top: 18px; flex-wrap: wrap; }
+  .tv-ativo-contagem { font-size: 2.4rem; font-weight: 900; color: var(--amarelo); }
+  .tv-ativo-contagem span { font-size: 1.3rem; color: #d9bd90; font-weight: 700; }
+  .tv-cronometro-label { font-size: 0.85rem; color: #d9bd90; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+  .tv-cronometro-valor { font-size: 1.8rem; font-weight: 900; color: #fff8ea; }
+  .tv-barra-ativo { margin-top: 18px; max-width: 100%; }
+
+  .tv-grid-setores { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+  .tv-setor-col { background: rgba(255,255,255,0.04); border-radius: 16px; padding: 16px 18px; }
+  .tv-setor-titulo { font-size: 1.1rem; font-weight: 900; color: var(--amarelo); margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid rgba(255,255,255,0.1); }
+  .tv-item-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 1.05rem; font-weight: 700; color: #d9bd90; }
+  .tv-item-status { width: 22px; text-align: center; font-size: 1.1rem; color: rgba(255,255,255,0.25); }
+  .tv-item-nome { flex: 1; }
+  .tv-item-contagem { color: #fff8ea; font-weight: 800; }
+  .tv-item-concluido { color: #7fdb96; }
+  .tv-item-concluido .tv-item-status { color: var(--success); }
+  .tv-item-ativo { color: #fff8ea; }
+  .tv-item-ativo .tv-item-status { color: var(--amarelo); }
+  .tv-item-ativo .tv-item-nome { font-weight: 900; }
+
+/* Ticker Global */
+.ticker-wrap {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  overflow: hidden;
+  height: 40px;
+  background-color: rgba(0, 0, 0, 0.85);
+  box-sizing: border-box;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  border-bottom: 2px solid var(--marrom-claro);
+}
+.ticker-wrap.emergencia {
+  background-color: #d32f2f;
+  border-bottom: 2px solid #b71c1c;
+}
+.ticker-wrap.emergencia .ticker-item {
+  color: #fff;
+  font-weight: bold;
+}
+.ticker {
+  display: inline-block;
+  height: 40px;
+  line-height: 40px;
+  white-space: nowrap;
+  box-sizing: content-box;
+  padding-left: 100%;
+  animation-iteration-count: infinite;
+  animation-timing-function: linear;
+  animation-name: ticker;
+  animation-duration: 30s;
+}
+@keyframes ticker {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-100%, 0, 0); }
+}
+.ticker-item {
+  display: inline-block;
+  padding: 0 2rem;
+  font-size: 1rem;
+  color: #f5b915;
+}
+
+.app-container { padding-top: 40px; }
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyBYriLi3N0Z4ktETeBep8SweiN2rVHRAvs",
+    authDomain: "rastreio-producao.firebaseapp.com",
+    projectId: "rastreio-producao",
+    storageBucket: "rastreio-producao.firebasestorage.app",
+    messagingSenderId: "706467121350",
+    appId: "1:706467121350:web:5193f6b64d8671b0c1afc7"
+  };
+  firebase.initializeApp(firebaseConfig);
+  window.db = firebase.firestore();
+  
+  // App do Estoque OS (Matéria Prima / Físico)
+  const appEstoqueConfig = {
+    apiKey: "AIzaSyDev8spgKoKZi2pOohmk0r9SFLtLMcePa8",
+    authDomain: "estoque-b50df.firebaseapp.com",
+    projectId: "estoque-b50df",
+    storageBucket: "estoque-b50df.firebasestorage.app",
+    messagingSenderId: "634756791567",
+    appId: "1:634756791567:web:993e61243b57b7e057d27a"
+  };
+  const appEstoque = firebase.initializeApp(appEstoqueConfig, "AppEstoque");
+  window.dbEstoqueOS = appEstoque.firestore();
+  window.authPronto = false;
+  firebase.auth().onAuthStateChanged(user => {
+    if (user) { window.authPronto = true; }
+  });
+  firebase.auth().signInAnonymously().catch(e => console.error('Erro no login anônimo:', e.message));
+  appEstoque.auth().signInAnonymously().catch(e => console.error('Erro no login anônimo estoque:', e.message));
+</script>
+
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+<script>
+const {
+  useState,
+  useEffect,
+  useCallback
+} = React;
+function paraISO(d) {
+  const ano = d.getFullYear(),
+    mes = String(d.getMonth() + 1).padStart(2, '0'),
+    dia = String(d.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+function amanhaISO() {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  return paraISO(d);
+}
+function hojeISO() {
+  return paraISO(new Date());
+}
+function formatarDataBR(iso) {
+  if (!iso || iso.indexOf('-') === -1) return iso;
+  const [a, m, d] = iso.split('-');
+  const data = new Date(a, parseInt(m, 10) - 1, d);
+  const dias = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
+  return `${d}/${m}/${a} (${dias[data.getDay()]})`;
+}
+function horaCurta(iso) {
+  return new Date(iso).toLocaleTimeString('pt-BR', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+function formatarKg(n) {
+  return (n || 0).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+function useFirebasePronto() {
+  const [pronto, setPronto] = useState(!!window.db && !!window.authPronto);
+  useEffect(() => {
+    if (window.db && window.authPronto) {
+      setPronto(true);
+      return;
+    }
+    const t = setInterval(() => {
+      if (window.db && window.authPronto) {
+        setPronto(true);
+        clearInterval(t);
+      }
+    }, 100);
+    return () => clearInterval(t);
+  }, []);
+  return pronto;
+}
+function useProdutos() {
+  const [produtos, setProdutos] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  useEffect(() => {
+    const unsub = window.db.collection('produtos').orderBy('categoria').onSnapshot(snap => {
+      const lista = [];
+      snap.forEach(d => lista.push({
+        id: d.id,
+        ...d.data()
+      }));
+      setProdutos(lista);
+      setCarregando(false);
+    });
+    return unsub;
+  }, []);
+  return {
+    produtos,
+    carregando
+  };
+}
+
+// ═══════════════════════ TECLADO NUMÉRICO TOUCH (kg) ═══════════════════════
+function ModalTeclado({
+  titulo,
+  valorInicial,
+  aoConfirmar,
+  aoFechar
+}) {
+  const [valor, setValor] = useState(valorInicial ? String(valorInicial).replace('.', ',') : '');
+  function digitar(d) {
+    if (d === ',') {
+      if (valor.includes(',')) return;
+      setValor(valor === '' ? '0,' : valor + ',');
+    } else if (d === '⌫') {
+      setValor(valor.slice(0, -1));
+    } else if (d === 'C') {
+      setValor('');
+    } else {
+      if (valor.length >= 8) return;
+      setValor(valor + d);
+    }
+  }
+  function confirmar() {
+    const num = parseFloat(valor.replace(',', '.')) || 0;
+    aoConfirmar(num);
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-fundo",
+    onClick: aoFechar
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-caixa",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-header"
+  }, /*#__PURE__*/React.createElement("span", null, titulo), /*#__PURE__*/React.createElement("button", {
+    className: "fechar-btn",
+    onClick: aoFechar
+  }, "✕")), /*#__PURE__*/React.createElement("div", {
+    className: "teclado-display"
+  }, valor === '' ? '0' : valor, " ", /*#__PURE__*/React.createElement("span", {
+    className: "teclado-unidade"
+  }, "kg")), /*#__PURE__*/React.createElement("div", {
+    className: "teclado-grid"
+  }, ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', ','].map(d => /*#__PURE__*/React.createElement("button", {
+    key: d,
+    className: "teclado-btn" + (d === 'C' ? ' teclado-limpar' : ''),
+    onClick: () => digitar(d)
+  }, d))), /*#__PURE__*/React.createElement("div", {
+    className: "teclado-acoes"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-outline btn-block",
+    onClick: () => digitar('⌫')
+  }, "⌫ Apagar"), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary btn-block",
+    onClick: confirmar
+  }, "Confirmar"))));
+}
+
+// ═══════════════════════ INÍCIO ═══════════════════════
+function TelaInicio({ ir }) {
+  const currentUser = JSON.parse(localStorage.getItem('imac_user')) || { setor: 'pcp' };
+  const s = currentUser.setor;
+  
+  // Define visibility rules based on sector
+  const show = {
+    lider: s === 'lider' || s === 'pcp',
+    operador: s === 'lider' || s === 'producao' || s === 'pcp',
+    relatorio: s === 'lider' || s === 'pcp',
+    fechamento: s === 'lider' || s === 'pcp',
+    livro: s === 'lider' || s === 'pcp',
+    produtos: s === 'pcp',
+    pcp: s === 'pcp',
+    expedicao: s === 'expedicao' || s === 'pcp',
+    embaladora: s === 'embaladora' || s === 'pcp'
+  };
+
+  return React.createElement("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4 max-w-5xl mx-auto" },
+    show.lider && React.createElement("button", { onClick: () => ir('lider'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-brand-50 text-brand-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-users text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Conferência de Receitas")
+    ),
+    show.operador && React.createElement("button", { onClick: () => ir('operador'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-orange-50 text-orange-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-cooking-pot text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Produção")
+    ),
+    show.embaladora && React.createElement("button", { onClick: () => ir('embaladora'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-pink-50 text-pink-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-package text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Embaladora")
+    ),
+    show.relatorio && React.createElement("button", { onClick: () => ir('relatorio'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-chart-line-up text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Relatório")
+    ),
+    show.fechamento && React.createElement("button", { onClick: () => ir('fechamento'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-green-50 text-green-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-check-circle text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Fechamento")
+    ),
+    show.livro && React.createElement("button", { onClick: () => ir('livro'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-purple-50 text-purple-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-book-open text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Livro de Produção")
+    ),
+    show.produtos && React.createElement("button", { onClick: () => ir('produtos'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-yellow-50 text-yellow-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-package text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Produtos")
+    ),
+    show.pcp && React.createElement("button", { onClick: () => ir('pcp'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-cyan-50 text-cyan-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-chart-bar text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Lançamentos PCP")
+    ),
+    show.pcp && React.createElement("button", { onClick: () => ir('resumo_pcp'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-indigo-50 text-indigo-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-monitor-play text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Painel TV (Resumos)")
+    ),
+    show.expedicao && React.createElement("button", { onClick: () => ir('expedicao'), className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-brand-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-snowflake text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "Expedição Câmaras")
+    ),
+    show.expedicao && React.createElement("button", { onClick: () => window.location.href = 'https://jangabrielsg-bit.github.io/expedicao/', className: "bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col items-center justify-center text-center hover:border-gray-400 hover:shadow-md transition-all group" },
+      React.createElement("div", { className: "w-16 h-16 rounded-full bg-gray-100 text-gray-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform" }, React.createElement("i", { className: "ph ph-truck text-3xl" })),
+      React.createElement("span", { className: "font-bold text-gray-800" }, "App Expedição / Estoque")
+    )
+  );
+}
+
+// ═══════════════════════ MODAL: ESCOLHER PRODUTO ═══════════════════════
+function ModalEscolherProduto({
+  produtos,
+  aoEscolher,
+  aoFechar
+}) {
+  const porCategoria = {};
+  produtos.forEach(p => {
+    const cat = p.categoria || 'Sem setor';
+    if (!porCategoria[cat]) porCategoria[cat] = [];
+    porCategoria[cat].push(p);
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "modal-fundo",
+    onClick: aoFechar
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-caixa",
+    onClick: e => e.stopPropagation()
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "modal-header"
+  }, /*#__PURE__*/React.createElement("span", null, "Escolha a receita"), /*#__PURE__*/React.createElement("button", {
+    className: "fechar-btn",
+    onClick: aoFechar
+  }, "✕")), /*#__PURE__*/React.createElement("div", {
+    className: "modal-scroll"
+  }, Object.keys(porCategoria).length === 0 && /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Nenhum produto cadastrado ainda. Vá em \"Produtos e Setores\" no início."), Object.keys(porCategoria).sort().map(cat => /*#__PURE__*/React.createElement("div", {
+    key: cat
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cat-heading"
+  }, cat), /*#__PURE__*/React.createElement("div", {
+    className: "produto-grid"
+  }, porCategoria[cat].map(p => /*#__PURE__*/React.createElement("button", {
+    key: p.id,
+    className: "produto-btn",
+    onClick: () => aoEscolher(p)
+  }, p.nome))))))));
+}
+
+// ═══════════════════════ TELA DO LÍDER ═══════════════════════
+function TelaLider() {
+  const [dataAlvo, setDataAlvo] = useState(amanhaISO());
+  const {
+    produtos,
+    carregando: carregandoProdutos
+  } = useProdutos();
+  const [itens, setItens] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [modalAberto, setModalAberto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const [importando, setImportando] = useState(false);
+  const [statusRascunho, setStatusRascunho] = useState(''); // '', 'salvando', 'salvo'
+  const pulaAutosaveRef = React.useRef(true); // evita salvar rascunho assim que os dados acabaram de carregar
+
+  useEffect(() => {
+    setCarregando(true);
+    pulaAutosaveRef.current = true;
+    (async () => {
+      // 1) Se já existe programação CONFIRMADA pra essa data, usa ela (inclui progresso do operador)
+      const refConfirmada = window.db.collection('producaoDiaria').doc(dataAlvo);
+      const snapConfirmada = await refConfirmada.get();
+      if (snapConfirmada.exists && snapConfirmada.data().itens && snapConfirmada.data().itens.length) {
+        setItens(snapConfirmada.data().itens.map(it => ({
+          ...it
+        })));
+        setCarregando(false);
+        return;
+      }
+      // 2) Senão, tenta um rascunho salvo automaticamente (importações/edições ainda não confirmadas)
+      const refRascunho = window.db.collection('producaoRascunho').doc(dataAlvo);
+      const snapRascunho = await refRascunho.get();
+      if (snapRascunho.exists && snapRascunho.data().itens) {
+        setItens(snapRascunho.data().itens.map(it => ({
+          ...it
+        })));
+      } else {
+        setItens([]);
+      }
+      setCarregando(false);
+    })();
+  }, [dataAlvo]);
+
+  // Autosave: qualquer mudança na lista (importar, ajustar, conferir, reordenar) salva sozinha como rascunho
+  useEffect(() => {
+    if (carregando) return;
+    if (pulaAutosaveRef.current) {
+      pulaAutosaveRef.current = false;
+      return;
+    }
+    setStatusRascunho('salvando');
+    const t = setTimeout(async () => {
+      try {
+        const ref = window.db.collection('producaoRascunho').doc(dataAlvo);
+        if (itens.length === 0) {
+          await ref.delete().catch(() => {});
+        } else {
+          await ref.set({
+            data: dataAlvo,
+            itens,
+            atualizadoEm: new Date().toISOString()
+          });
+        }
+        setStatusRascunho('salvo');
+      } catch (e) {
+        console.error('Erro ao salvar rascunho:', e.message);
+        setStatusRascunho('');
+      }
+    }, 700);
+    return () => clearTimeout(t);
+  }, [itens]);
+  
+  // === PARADA DE EMERGÊNCIA ===
+  const [parada, setParada] = useState(null);
+  useEffect(() => {
+    const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+    const unsub = refProd.onSnapshot(snap => {
+      if(snap.exists && snap.data().paradaEmergencia) {
+        setParada(snap.data().paradaEmergencia);
+      } else {
+        setParada({ ativa: false });
+      }
+    });
+    return unsub;
+  }, [dataAlvo]);
+
+  async function alternarParada() {
+    if (!parada || !parada.ativa) {
+       // Ativar Parada
+       const motivo = prompt("Motivo da parada de emergência?");
+       if (motivo === null) return;
+       await window.db.collection('producaoDiaria').doc(dataAlvo).set({
+         paradaEmergencia: { ativa: true, motivo: motivo, inicio: new Date().toISOString() }
+       }, { merge: true });
+    } else {
+       // Desativar Parada e recalcular tempos da Embaladora (Túnel)
+       if(!confirm("Deseja realmente RETOMAR a produção? Isso irá recalcular a fila do túnel.")) return;
+       
+       const fim = new Date();
+       const inicio = new Date(parada.inicio);
+       const minutosParados = Math.round((fim - inicio) / 60000);
+       
+       const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+       const snap = await refProd.get();
+       if(snap.exists) {
+          const d = snap.data();
+          let reg = d.tunelRegistros || [];
+          // Atrasar todos os registros que ainda não saíram do túnel
+          // Na prática, vamos atrasar a horaFim de quem tem horaFim configurada.
+          reg = reg.map(r => {
+             if(r.horaFim) {
+                const [hF, mF] = r.horaFim.split(':').map(Number);
+                const minutosAntigos = hF * 60 + mF;
+                const minAtuais = (new Date().getHours() * 60) + new Date().getMinutes();
+                // Apenas atrasa os itens que estão caindo ou que ainda vão cair
+                // Se o tempo previsto (horaFim + tempo) > tempoAtual, significa que ainda está na esteira/túnel
+                const queda = minutosAntigos + (r.tempo || 35);
+                if (queda >= (minAtuais - minutosParados)) { // Se ainda estava lá quando parou
+                   const novoMinutosFim = minutosAntigos + Math.max(1, minutosParados);
+                   const hh = Math.floor(novoMinutosFim/60)%24;
+                   const mm = novoMinutosFim%60;
+                   return { ...r, horaFim: `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}` };
+                }
+             }
+             return r;
+          });
+          
+          await refProd.update({
+             paradaEmergencia: { ativa: false, ultimoFim: fim.toISOString(), ultimoMinutos: minutosParados },
+             tunelRegistros: reg
+          });
+       }
+    }
+  }
+
+  // ==========================
+
+  function mudarDia(delta) {
+    const d = new Date(dataAlvo + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    setDataAlvo(paraISO(d));
+  }
+  function adicionarProduto(produto) {
+    setItens(prev => [...prev, {
+      codigo: produto.id,
+      produto: produto.nome,
+      categoria: produto.categoria || 'Sem setor',
+      metaLotes: 1,
+      ops: [],
+      conferido: false,
+      feitos: 0,
+      batidas: [],
+      massaPerdidaProd: 0,
+      massaPerdidaEmb: 0,
+      peDeMassa: 0,
+      rendimentoTeorico: 0,
+      finalizado: false
+    }]);
+    setModalAberto(false);
+  }
+  async function importarDoWinthor() {
+    setImportando(true);
+    try {
+      const ref = window.db.collection('winthorSugestoes').doc(dataAlvo);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        alert('Nenhuma sugestão do Winthor encontrada ainda para ' + formatarDataBR(dataAlvo) + '. O computador com o bridge_winthor.js precisa estar rodando e já ter sincronizado essa data.');
+        return;
+      }
+      const categorias = snap.data().categorias || {};
+      let qtdNovos = 0;
+      let qtdAtualizados = 0;
+      setItens(prev => {
+        const lista = [...prev];
+        const indicePorCodigo = new Map(lista.map((it, i) => [it.codigo, i]));
+        Object.keys(categorias).sort().forEach(cat => {
+          categorias[cat].forEach(sug => {
+            const idxExistente = indicePorCodigo.get(sug.codigo);
+            if (idxExistente != null) {
+              // Já está na lista — checa se a ordem/quantidade do Winthor mudou desde a última importação.
+              // Preserva conferido/feitos/batidas/fechamento, só atualiza quantidade e OPs.
+              const atual = lista[idxExistente];
+              const opsIguais = JSON.stringify(atual.ops || []) === JSON.stringify(sug.ops || []);
+              if (atual.metaLotes !== sug.metaLotes || !opsIguais || atual.rendimentoTeorico !== sug.rendimentoTeorico) {
+                lista[idxExistente] = {
+                  ...atual,
+                  metaLotes: sug.metaLotes,
+                  rendimentoTeorico: sug.rendimentoTeorico || 0,
+                  ops: sug.ops || []
+                };
+                qtdAtualizados++;
+              }
+            } else {
+              lista.push({
+                codigo: sug.codigo,
+                produto: sug.produto,
+                categoria: sug.categoria || cat,
+                metaLotes: sug.metaLotes,
+                ops: sug.ops || [],
+                conferido: false,
+                feitos: 0,
+                batidas: [],
+                massaPerdidaProd: 0,
+                massaPerdidaEmb: 0,
+                peDeMassa: 0,
+                rendimentoTeorico: sug.rendimentoTeorico || 0,
+                finalizado: false
+              });
+              indicePorCodigo.set(sug.codigo, lista.length - 1);
+              qtdNovos++;
+            }
+          });
+        });
+        return lista;
+      });
+      if (qtdNovos === 0 && qtdAtualizados === 0) {
+        alert('Nada novo — a lista já está igual ao que o Winthor tem pra essa data.');
+      } else {
+        alert(`${qtdNovos} receita(s) nova(s), ${qtdAtualizados} atualizada(s).`);
+      }
+    } catch (e) {
+      alert('Erro ao importar: ' + e.message);
+    } finally {
+      setImportando(false);
+    }
+  }
+  function removerItem(index) {
+    setItens(prev => prev.filter((_, i) => i !== index));
+  }
+  function moverReal(idxA, idxB) {
+    setItens(prev => {
+      if (idxA < 0 || idxB < 0 || idxA >= prev.length || idxB >= prev.length) return prev;
+      const nova = [...prev];
+      [nova[idxA], nova[idxB]] = [nova[idxB], nova[idxA]];
+      return nova;
+    });
+  }
+  function alternarConferido(index) {
+    setItens(prev => {
+      const item = prev[index];
+      if (!item.conferido) {
+        // Marca como conferida e move pro final da lista (fica na seção "Conferidas")
+        const semEle = prev.filter((_, i) => i !== index);
+        return [...semEle, {
+          ...item,
+          conferido: true
+        }];
+      }
+      const nova = [...prev];
+      nova[index] = {
+        ...nova[index],
+        conferido: false
+      };
+      return nova;
+    });
+  }
+  function ajustarMeta(index, delta) {
+    setItens(prev => {
+      const nova = [...prev];
+      nova[index] = {
+        ...nova[index],
+        metaLotes: Math.max(1, nova[index].metaLotes + delta)
+      };
+      return nova;
+    });
+  }
+  async function confirmarEProgramar() {
+    if (itens.length === 0) {
+      alert('Adicione pelo menos uma receita antes de confirmar.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      // Preserva o progresso já feito pelo operador (feitos, batidas, fechamento) —
+      // só a ordem é recalculada aqui; os demais campos vêm do que já estava salvo.
+      const itensFinal = itens.map((it, idx) => ({
+        ...it,
+        ordem: idx
+      }));
+      const ref = window.db.collection('producaoDiaria').doc(dataAlvo);
+      await ref.set({
+        data: dataAlvo,
+        confirmadoEm: new Date().toISOString(),
+        itens: itensFinal
+      });
+      await window.db.collection('producaoRascunho').doc(dataAlvo).delete().catch(() => {});
+      alert('Produção de ' + formatarDataBR(dataAlvo) + ' programada com sucesso!');
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+  if (carregando || carregandoProdutos) return /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando...");
+  return /*#__PURE__*/React.createElement("div", {
+    className: "container"
+  },
+
+
+/*#__PURE__*/React.createElement("div", {
+    className: "toolbar toolbar-data"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(-1)
+  }, "‹"), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar-data-centro"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800
+    }
+  }, formatarDataBR(dataAlvo)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.78rem',
+      color: 'var(--marrom-claro)'
+    }
+  }, itens.length, " receita(s) na lista", statusRascunho === 'salvando' && ' · salvando...', statusRascunho === 'salvo' && ' · rascunho salvo'), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    className: "input-data",
+    value: dataAlvo,
+    onChange: e => e.target.value && setDataAlvo(e.target.value)
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(1)
+  }, "›")), (() => {
+    const pendentes = [];
+    const conferidas = [];
+    itens.forEach((item, idx) => {
+      if (item.conferido) conferidas.push({
+        item,
+        idx
+      });else pendentes.push({
+        item,
+        idx
+      });
+    });
+    function renderCard({
+      item,
+      idx
+    }, posicaoNaSecao, totalNaSecao, real) {
+      return /*#__PURE__*/React.createElement("div", {
+        className: "card" + (item.conferido ? ' card-conferida' : ''),
+        key: idx
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "reorder-row"
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "order-num" + (item.conferido ? ' order-num-ok' : '')
+      }, item.conferido ? '✓' : posicaoNaSecao + 1), /*#__PURE__*/React.createElement("div", {
+        style: {
+          flex: 1
+        }
+      }, /*#__PURE__*/React.createElement("div", {
+        className: "nome"
+      }, item.produto), item.ops && item.ops.length > 0 && /*#__PURE__*/React.createElement("div", {
+        className: "ops-linha"
+      }, "OP", item.ops.length > 1 ? 's' : '', " Winthor: ", item.ops.join(', ')), /*#__PURE__*/React.createElement("div", {
+        className: "meta-stepper"
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => ajustarMeta(idx, -1)
+      }, "−1"), /*#__PURE__*/React.createElement("div", {
+        className: "valor"
+      }, item.metaLotes, " receita", item.metaLotes === 1 ? '' : 's'), /*#__PURE__*/React.createElement("button", {
+        onClick: () => ajustarMeta(idx, 1)
+      }, "+1")), /*#__PURE__*/React.createElement("div", {
+        className: "meta-quick"
+      }, /*#__PURE__*/React.createElement("button", {
+        onClick: () => ajustarMeta(idx, -10)
+      }, "−10"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => ajustarMeta(idx, 10)
+      }, "+10"), /*#__PURE__*/React.createElement("button", {
+        onClick: () => ajustarMeta(idx, 100)
+      }, "+100"))), real ? /*#__PURE__*/React.createElement("div", {
+        className: "arrow-col"
+      }, /*#__PURE__*/React.createElement("button", {
+        className: "arrow-btn",
+        disabled: posicaoNaSecao === 0,
+        onClick: () => moverReal(idx, pendentes[posicaoNaSecao - 1] && pendentes[posicaoNaSecao - 1].idx)
+      }, "↑"), /*#__PURE__*/React.createElement("button", {
+        className: "arrow-btn",
+        disabled: posicaoNaSecao === totalNaSecao - 1,
+        onClick: () => moverReal(idx, pendentes[posicaoNaSecao + 1] && pendentes[posicaoNaSecao + 1].idx)
+      }, "↓")) : null, /*#__PURE__*/React.createElement("button", {
+        className: "remover-btn",
+        onClick: () => removerItem(idx)
+      }, "✕")), /*#__PURE__*/React.createElement("button", {
+        className: item.conferido ? "btn-desmarcar" : "btn-conferir",
+        onClick: () => alternarConferido(idx)
+      }, item.conferido ? '↺ Desmarcar conferência' : '✓ Conferir (bate com o físico)'));
+    }
+    let categoriaAnterior = null;
+    return /*#__PURE__*/React.createElement(React.Fragment, null, pendentes.map((par, pos) => {
+      const mostrarCategoria = par.item.categoria !== categoriaAnterior;
+      categoriaAnterior = par.item.categoria;
+      return /*#__PURE__*/React.createElement(React.Fragment, {
+        key: par.idx
+      }, mostrarCategoria && /*#__PURE__*/React.createElement("div", {
+        className: "cat-heading"
+      }, par.item.categoria), renderCard(par, pos, pendentes.length, true));
+    }), pendentes.length === 0 && conferidas.length > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "status-msg"
+    }, "Todas as receitas foram conferidas."), conferidas.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      className: "cat-heading cat-heading-concluidos"
+    }, "Conferidas"), conferidas.map((par, pos) => renderCard(par, pos, conferidas.length, false))));
+  })(), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-outline btn-block",
+    disabled: importando,
+    onClick: importarDoWinthor,
+    style: {
+      marginTop: 14
+    }
+  }, importando ? 'Importando...' : '⇩ Importar do Winthor'), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-outline btn-block",
+    onClick: () => setModalAberto(true),
+    style: {
+      marginTop: 10
+    }
+  }, "+ Adicionar Receita"), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary btn-block",
+    disabled: salvando,
+    onClick: confirmarEProgramar,
+    style: {
+      marginTop: 14
+    }
+  }, salvando ? 'Salvando...' : 'Confirmar Programação'), modalAberto && /*#__PURE__*/React.createElement(ModalEscolherProduto, {
+    produtos: produtos,
+    aoEscolher: adicionarProduto,
+    aoFechar: () => setModalAberto(false)
+  }));
+}
+
+// ═══════════════════════ TELA DO OPERADOR ═══════════════════════
+function TelaOperador() {
+  const [dataAlvo, setDataAlvo] = useState(hojeISO());
+  const [carregando, setCarregando] = useState(true);
+  const [existe, setExiste] = useState(false);
+
+  const [tunelProd, setTunelProd] = useState('');
+  const [tunelTempo, setTunelTempo] = useState(35);
+  const [tunelHora, setTunelHora] = useState(() => {
+    const d = new Date();
+    return d.toTimeString().slice(0,5);
+  });
+  const [tunelHoraFim, setTunelHoraFim] = useState(() => {
+    const d = new Date();
+    d.setMinutes(d.getMinutes() + 35);
+    return d.toTimeString().slice(0,5);
+  });
+const [salvandoTunel, setSalvandoTunel] = useState(false);
+  const [confirmandoTunel, setConfirmandoTunel] = useState(false);
+  const [tunelLoteSugerido, setTunelLoteSugerido] = useState('');
+  const [tunelRegistrosDia, setTunelRegistrosDia] = useState([]);
+
+  function pedirConfirmacaoTunel() {
+    if (!tunelProd) { alert("Selecione um produto."); return; }
+    const jaExiste = tunelRegistrosDia.find(r => r.produto === tunelProd);
+    if (jaExiste) {
+      alert("Este produto já foi registrado no túnel hoje!");
+      return;
+    }
+    
+    // Validar trava de 6 minutos do termino do anterior para o inicio deste
+    if (tunelRegistrosDia.length > 0) {
+      let maxFim = 0;
+      tunelRegistrosDia.forEach(r => {
+        if (r.horaFim) {
+          const [h, m] = r.horaFim.split(':').map(Number);
+          const mins = h * 60 + m;
+          if (mins > maxFim) maxFim = mins;
+        }
+      });
+      const [hIni, mIni] = tunelHora.split(':').map(Number);
+      let minsIni = hIni * 60 + mIni;
+      // Tratar virada de dia (ex: maxFim = 23:55 e Inicio = 00:01)
+      if (minsIni < maxFim - 12 * 60) minsIni += 24 * 60;
+      
+      if (maxFim > 0 && minsIni < maxFim + 6) {
+        let blockTime = maxFim + 6;
+        const hh = Math.floor((blockTime) / 60) % 24;
+        const mm = (blockTime) % 60;
+        alert(`Atenção: Deve haver um intervalo mínimo de 6 minutos após o término do último produto. O próximo início deve ser a partir de ${hh.toString().padStart(2, '0')}:${mm.toString().padStart(2, '0')}.`);
+        return;
+      }
+    }
+
+    const itemPlan = itens.find(i => i.produto === tunelProd);
+    setTunelLoteSugerido(itemPlan && itemPlan.lote ? itemPlan.lote : '');
+    setConfirmandoTunel(true);
+  }
+
+  async function confirmarEntradaTunel() {
+    setSalvandoTunel(true);
+    try {
+      const registro = {
+        produto: tunelProd,
+        horaEntrada: tunelHora,
+        horaFim: tunelHoraFim,
+        tempo: parseInt(tunelTempo) || 35,
+        lote: tunelLoteSugerido,
+        timestamp: new Date().toISOString()
+      };
+      const ref = window.db.collection('producaoDiaria').doc(dataAlvo);
+      await ref.set({ tunelRegistros: firebase.firestore.FieldValue.arrayUnion(registro) }, { merge: true });
+      alert("Entrada no túnel registrada!");
+      setConfirmandoTunel(false);
+    } catch (e) {
+      alert("Erro ao registrar: " + e.message);
+    }
+    setSalvandoTunel(false);
+  }
+
+  const [itens, setItens] = useState([]);
+  
+  
+  // === PARADA DE EMERGÊNCIA ===
+  const [parada, setParada] = useState(null);
+  useEffect(() => {
+    const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+    const unsub = refProd.onSnapshot(snap => {
+      if(snap.exists && snap.data().paradaEmergencia) {
+        setParada(snap.data().paradaEmergencia);
+      } else {
+        setParada({ ativa: false });
+      }
+    });
+    return unsub;
+  }, [dataAlvo]);
+
+  async function alternarParada() {
+    if (!parada || !parada.ativa) {
+       // Ativar Parada
+       const motivo = prompt("Motivo da parada de emergência?");
+       if (motivo === null) return;
+       await window.db.collection('producaoDiaria').doc(dataAlvo).set({
+         paradaEmergencia: { ativa: true, motivo: motivo, inicio: new Date().toISOString() }
+       }, { merge: true });
+    } else {
+       // Desativar Parada e recalcular tempos da Embaladora (Túnel)
+       if(!confirm("Deseja realmente RETOMAR a produção? Isso irá recalcular a fila do túnel.")) return;
+       
+       const fim = new Date();
+       const inicio = new Date(parada.inicio);
+       const minutosParados = Math.round((fim - inicio) / 60000);
+       
+       const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+       const snap = await refProd.get();
+       if(snap.exists) {
+          const d = snap.data();
+          let reg = d.tunelRegistros || [];
+          // Atrasar todos os registros que ainda não saíram do túnel
+          // Na prática, vamos atrasar a horaFim de quem tem horaFim configurada.
+          reg = reg.map(r => {
+             if(r.horaFim) {
+                const [hF, mF] = r.horaFim.split(':').map(Number);
+                const minutosAntigos = hF * 60 + mF;
+                const minAtuais = (new Date().getHours() * 60) + new Date().getMinutes();
+                // Apenas atrasa os itens que estão caindo ou que ainda vão cair
+                // Se o tempo previsto (horaFim + tempo) > tempoAtual, significa que ainda está na esteira/túnel
+                const queda = minutosAntigos + (r.tempo || 35);
+                if (queda >= (minAtuais - minutosParados)) { // Se ainda estava lá quando parou
+                   const novoMinutosFim = minutosAntigos + Math.max(1, minutosParados);
+                   const hh = Math.floor(novoMinutosFim/60)%24;
+                   const mm = novoMinutosFim%60;
+                   return { ...r, horaFim: `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}` };
+                }
+             }
+             return r;
+          });
+          
+          await refProd.update({
+             paradaEmergencia: { ativa: false, ultimoFim: fim.toISOString(), ultimoMinutos: minutosParados },
+             tunelRegistros: reg
+          });
+       }
+    }
+  }
+
+  // ==========================
+
+  function mudarDia(delta) {
+    const d = new Date(dataAlvo + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    setDataAlvo(paraISO(d));
+  }
+  
+  useEffect(() => {
+    setCarregando(true);
+    const ref = window.db.collection('producaoDiaria').doc(dataAlvo);
+    const unsub = ref.onSnapshot(snap => {
+      setCarregando(false);
+      if (snap.exists) {
+        setExiste(true);
+        setItens(snap.data().itens || []);
+        setTunelRegistrosDia(snap.data().tunelRegistros || []);
+      } else {
+        setExiste(false);
+        setItens([]);
+        setTunelRegistrosDia([]);
+      }
+    });
+    return unsub;
+  }, [dataAlvo]);
+  
+  async function bater(index) {
+    const item = itens[index];
+    if (item.feitos >= item.metaLotes) return;
+    const nova = [...itens];
+    nova[index] = {
+      ...nova[index],
+      feitos: nova[index].feitos + 1,
+      batidas: [...(nova[index].batidas || []), new Date().toISOString()]
+    };
+    setItens(nova);
+    try {
+      await window.db.collection('producaoDiaria').doc(dataAlvo).update({
+        itens: nova
+      });
+    } catch (e) {
+      console.error('Erro ao salvar contagem:', e.message);
+    }
+  }
+  
+  async function desfazer(index) {
+    const item = itens[index];
+    if (item.feitos <= 0) return;
+    const nova = [...itens];
+    const batidas = [...(nova[index].batidas || [])];
+    batidas.pop();
+    nova[index] = {
+      ...nova[index],
+      feitos: Math.max(0, nova[index].feitos - 1),
+      batidas
+    };
+    setItens(nova);
+    try {
+      await window.db.collection('producaoDiaria').doc(dataAlvo).update({
+        itens: nova
+      });
+    } catch (e) {
+      console.error('Erro ao desfazer:', e.message);
+    }
+  }
+  
+  const ativos = [];
+  const concluidos = [];
+  itens.forEach((item, idx) => {
+    if (item.feitos >= item.metaLotes) concluidos.push({
+      item,
+      idx
+    });else ativos.push({
+      item,
+      idx
+    });
+  });
+  
+  function renderCard({
+    item,
+    idx
+  }) {
+    const concluido = item.feitos >= item.metaLotes;
+    const pct = item.metaLotes > 0 ? Math.min(100, Math.round(item.feitos / item.metaLotes * 100)) : 0;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "card" + (concluido ? ' concluido' : ''),
+      key: idx
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "card-top"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "nome"
+    }, item.produto), concluido && /*#__PURE__*/React.createElement("span", {
+      className: "selo-ok"
+    }, "Concluído")), /*#__PURE__*/React.createElement("div", {
+      className: "contagem-row"
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        flex: 1
+      }
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "contagem-num"
+    }, item.feitos, /*#__PURE__*/React.createElement("span", {
+      className: "meta"
+    }, " / ", item.metaLotes)), /*#__PURE__*/React.createElement("div", {
+      className: "progress-bar"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "progress-fill",
+      style: {
+        width: pct + '%'
+      }
+    }))), /*#__PURE__*/React.createElement("button", {
+      className: "btn-menos",
+      disabled: item.feitos <= 0,
+      onClick: () => desfazer(idx)
+    }, "−1"), /*#__PURE__*/React.createElement("button", {
+      className: "btn-mais",
+      disabled: concluido,
+      onClick: () => bater(idx)
+    }, "+1")));
+  }
+  let categoriaAnterior = null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "container"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "toolbar toolbar-data"
+  }, 
+    /*#__PURE__*/React.createElement("button", {
+      className: `btn ${parada && parada.ativa ? 'bg-red-600 text-white animate-pulse' : 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'}`,
+      onClick: alternarParada,
+      title: parada && parada.ativa ? 'Retomar Produção' : 'Parada de Emergência',
+      style: { padding: '6px 12px', fontSize: '0.85rem', fontWeight: 'bold', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '6px' }
+    }, /*#__PURE__*/React.createElement("i", { className: "ph ph-warning-octagon text-lg" }), parada && parada.ativa ? 'RETOMAR PRODUÇÃO' : 'EMERGÊNCIA'),
+
+  /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(-1)
+  }, "‹"), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar-data-centro"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800
+    }
+  }, formatarDataBR(dataAlvo)), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: '0.78rem',
+      color: 'var(--marrom-claro)'
+    }
+  }, "Progresso de Produção"), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    className: "input-data",
+    value: dataAlvo,
+    onChange: e => e.target.value && setDataAlvo(e.target.value)
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(1)
+  }, "›")), 
+  carregando ? /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando produção...") : 
+  !existe ? /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Nenhuma produção programada para esta data ainda.", /*#__PURE__*/React.createElement("br", null), "Fale com o líder de produção.") : 
+  /*#__PURE__*/React.createElement(React.Fragment, null, 
+    
+    /*#__PURE__*/React.createElement("div", { className: "bg-white p-4 rounded-xl shadow-sm border border-blue-200 mb-6" },
+      /*#__PURE__*/React.createElement("h3", { className: "font-bold text-blue-800 mb-2 flex items-center" }, 
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-thermometer-cold text-xl mr-2" }), "Registro Manual do Túnel Helicoidal"
+      ),
+      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-3" },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-xs font-bold text-gray-600 mb-1" }, "Produto"),
+          /*#__PURE__*/React.createElement("select", { className: "w-full p-2 border border-gray-300 rounded focus:border-blue-500 text-sm", value: tunelProd, onChange: e => setTunelProd(e.target.value) },
+            /*#__PURE__*/React.createElement("option", { value: "" }, "Selecione o produto..."),
+            itens.map((it, i) => React.createElement("option", { key: i, value: it.produto }, it.produto))
+          )
+        ),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-xs font-bold text-gray-600 mb-1" }, "Hora de Entrada"),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-xs font-bold text-gray-600 mb-1" }, "Término da Entrada"),
+          /*#__PURE__*/React.createElement("input", { type: "time", className: "w-full p-2 border border-gray-300 rounded focus:border-blue-500 text-sm", value: tunelHoraFim, onChange: e => setTunelHoraFim(e.target.value) })
+        ),
+        
+          /*#__PURE__*/React.createElement("input", { type: "time", className: "w-full p-2 border border-gray-300 rounded focus:border-blue-500 text-sm", value: tunelHora, onChange: e => setTunelHora(e.target.value) })
+        ),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-xs font-bold text-gray-600 mb-1" }, "Tempo de Congelamento (min)"),
+          /*#__PURE__*/React.createElement("input", { type: "number", className: "w-full p-2 border border-gray-300 rounded focus:border-blue-500 text-sm", value: tunelTempo, onChange: e => setTunelTempo(e.target.value) })
+        )
+      ),
+      /*#__PURE__*/React.createElement("button", { className: "w-full mt-3 bg-blue-600 text-white font-bold py-2 rounded shadow-sm hover:bg-blue-700 disabled:opacity-50", onClick: pedirConfirmacaoTunel, disabled: salvandoTunel || !tunelProd }, salvandoTunel ? "Registrando..." : "Registrar Entrada no Túnel"),
+
+confirmandoTunel && React.createElement('div', { className: 'modal-overlay', style: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' } },
+      React.createElement('div', { className: 'bg-[#5C3A21] p-6 rounded-2xl max-w-md w-full border border-[#734A2A] shadow-2xl text-white' },
+        React.createElement('h3', { className: 'text-2xl font-bold mb-4 text-[#F6BE00]' }, 'Confirmar Entrada'),
+        React.createElement('div', { className: 'mb-4 text-[#D0B29E]' },
+           React.createElement('div', null, 'Produto: ', React.createElement('strong', { className: 'text-white' }, tunelProd)),
+           React.createElement('div', null, 'Entrada: ', React.createElement('strong', { className: 'text-white' }, tunelHora)),
+           React.createElement('div', null, 'Término da Entrada: ', React.createElement('strong', { className: 'text-white' }, tunelHoraFim)),
+           React.createElement('div', null, 'Congelamento: ', React.createElement('strong', { className: 'text-white' }, tunelTempo, ' min'))
+        ),
+        React.createElement('button', { onClick: confirmarEntradaTunel, className: 'w-full bg-[#F6BE00] text-[#3D2515] font-bold py-3 rounded-lg hover:bg-yellow-400 transition mb-3' }, salvandoTunel ? 'Salvando...' : 'Confirmar e Salvar'),
+        React.createElement('button', { onClick: () => setConfirmandoTunel(false), className: 'w-full bg-[#4A2E1A] text-white font-bold py-3 rounded-lg hover:bg-[#734A2A] transition' }, 'Cancelar')
+      )
+    )
+
+    ),
+ativos.map(({
+      item,
+      idx
+    }) => {
+      const mostrarCategoria = item.categoria !== categoriaAnterior;
+      categoriaAnterior = item.categoria;
+      return /*#__PURE__*/React.createElement(React.Fragment, {
+        key: idx
+      }, mostrarCategoria && /*#__PURE__*/React.createElement("div", {
+        className: "cat-heading"
+      }, item.categoria), renderCard({
+        item,
+        idx
+      }));
+    }), 
+    ativos.length === 0 && concluidos.length > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "status-msg"
+    }, "Todas as receitas desta data foram concluídas."), 
+    concluidos.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+      className: "cat-heading cat-heading-concluidos"
+    }, "Concluídos"), concluidos.map(par => renderCard(par)))
+  ));
+}
+
+// ═══════════════════════ PAINEL TV (monitoramento ao vivo — PCP) ═══════════════════════
+function TelaPainelTV({
+  sair
+}) {
+  const dataHoje = hojeISO();
+  const [itens, setItens] = useState([]);
+  const [existe, setExiste] = useState(false);
+  const [carregando, setCarregando] = useState(true);
+  const [agora, setAgora] = useState(new Date());
+  const [emTelaCheia, setEmTelaCheia] = useState(false);
+  const [mostrarPesagens, setMostrarPesagens] = useState(false);
+  const [pesagens, setPesagens] = useState([]);
+
+  useEffect(() => {
+    if (!mostrarPesagens) return;
+    const refExp = window.db.collection('expedicaoDiaria').doc(dataHoje);
+    const unsubExp = refExp.onSnapshot(snap => {
+      if (snap.exists && snap.data().lancamentos) {
+        setPesagens([...snap.data().lancamentos].reverse());
+      } else {
+        setPesagens([]);
+      }
+    });
+    return unsubExp;
+  }, [dataHoje, mostrarPesagens]);
+
+  useEffect(() => {
+    const ref = window.db.collection('producaoDiaria').doc(dataHoje);
+    const unsub = ref.onSnapshot(snap => {
+      setCarregando(false);
+      if (snap.exists) {
+        setExiste(true);
+        setItens(snap.data().itens || []);
+        setTunelRegistrosDia(snap.data().tunelRegistros || []);
+      
+        setExiste(false);
+        setItens([]);
+        setTunelRegistrosDia([]);
+      }
+    });
+    return unsub;
+  }, [dataHoje]);
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  function alternarTelaCheia() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+      setEmTelaCheia(true);
+    } else {
+      document.exitFullscreen().catch(() => {});
+      setEmTelaCheia(false);
+    }
+  }
+  function tempoDecorrido(desdeIso) {
+    if (!desdeIso) return null;
+    const ms = agora.getTime() - new Date(desdeIso).getTime();
+    const totalSeg = Math.max(0, Math.floor(ms / 1000));
+    const min = Math.floor(totalSeg / 60);
+    const seg = totalSeg % 60;
+    return `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}`;
+  }
+  function velocidadeMedia(item) {
+    const b = item.batidas || [];
+    if (b.length < 2) return null;
+    const primeiro = new Date(b[0]).getTime();
+    const ultimo = new Date(b[b.length - 1]).getTime();
+    return (ultimo - primeiro) / 60000 / (b.length - 1);
+  }
+  const totalProgramado = itens.reduce((s, it) => s + (it.metaLotes || 0), 0);
+  const totalFeito = itens.reduce((s, it) => s + (it.feitos || 0), 0);
+  const pctGeral = totalProgramado > 0 ? Math.round(totalFeito / totalProgramado * 100) : 0;
+
+  // Item ativo = primeiro na ordem que ainda não bateu a meta
+  const ordenados = [...itens].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
+  const ativoIdx = ordenados.findIndex(it => it.feitos < it.metaLotes);
+  const itemAtivo = ativoIdx >= 0 ? ordenados[ativoIdx] : null;
+  const porCategoria = {};
+  ordenados.forEach(it => {
+    const cat = it.categoria || 'Sem setor';
+    if (!porCategoria[cat]) porCategoria[cat] = [];
+    porCategoria[cat].push(it);
+  });
+  
+  if (mostrarPesagens) {
+    return /*#__PURE__*/React.createElement("div", {
+      className: "tv-shell", style: { backgroundColor: '#1a1a1a' }
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "tv-topo"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "tv-data"
+    }, formatarDataBR(dataHoje)), /*#__PURE__*/React.createElement("div", {
+      className: "tv-relogio"
+    }, agora.toLocaleTimeString('pt-BR')), /*#__PURE__*/React.createElement("button", {
+      className: "tv-fs-btn",
+      onClick: alternarTelaCheia
+    }, emTelaCheia ? 'Sair da Tela Cheia' : 'Tela Cheia'), /*#__PURE__*/React.createElement("button", {
+      className: "tv-fs-btn",
+      style: { marginLeft: '10px' },
+      onClick: () => setMostrarPesagens(false)
+    }, "Voltar ao Painel")), /*#__PURE__*/React.createElement("div", {
+      style: { padding: '40px', color: '#fff', fontSize: '24px', flex: 1, overflowY: 'auto' }
+    }, /*#__PURE__*/React.createElement("h2", {
+      style: { color: '#f5b915', marginBottom: '30px', fontSize: '32px' }
+    }, "Últimas Pesagens (Expedição Câmaras)"), pesagens.length === 0 ? /*#__PURE__*/React.createElement("div", null, "Nenhuma pesagem realizada hoje.") : /*#__PURE__*/React.createElement("table", {
+      style: { width: '100%', borderCollapse: 'collapse' }
+    }, /*#__PURE__*/React.createElement("thead", null, /*#__PURE__*/React.createElement("tr", {
+      style: { borderBottom: '2px solid rgba(255,255,255,0.1)', color: '#aaa', textAlign: 'left' }
+    }, /*#__PURE__*/React.createElement("th", {
+      style: { padding: '15px' }
+    }, "Horário"), /*#__PURE__*/React.createElement("th", null, "Produto"), /*#__PURE__*/React.createElement("th", null, "Lote"), /*#__PURE__*/React.createElement("th", null, "Operador"), /*#__PURE__*/React.createElement("th", {
+      style: { textAlign: 'right', padding: '15px' }
+    }, "Peso"))), /*#__PURE__*/React.createElement("tbody", null, pesagens.map((p, i) => /*#__PURE__*/React.createElement("tr", {
+      key: i,
+      style: { borderBottom: '1px solid rgba(255,255,255,0.05)' }
+    }, /*#__PURE__*/React.createElement("td", {
+      style: { padding: '20px 15px', color: '#aaa' }
+    }, new Date(p.dataEntrada || p.data || new Date()).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })), /*#__PURE__*/React.createElement("td", {
+      style: { fontWeight: 'bold' }
+    }, p.nome), /*#__PURE__*/React.createElement("td", null, p.lote), /*#__PURE__*/React.createElement("td", { style: { color: '#aaa' } }, p.operador || '-'), /*#__PURE__*/React.createElement("td", {
+      style: { textAlign: 'right', padding: '15px', color: '#f5b915', fontWeight: 'bold' }
+    }, window.fmtQtd ? window.fmtQtd(p.qtd) : p.qtd, " ", p.und)))))));
+  }
+
+  return /*#__PURE__*/React.createElement("div", {
+    className: "tv-shell"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-topo"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-data"
+  }, formatarDataBR(dataHoje)), /*#__PURE__*/React.createElement("div", {
+    className: "tv-relogio"
+  }, agora.toLocaleTimeString('pt-BR')), /*#__PURE__*/React.createElement("button", {
+    className: "tv-fs-btn",
+    onClick: alternarTelaCheia
+  }, emTelaCheia ? 'Sair da Tela Cheia' : 'Tela Cheia'), /*#__PURE__*/React.createElement("button", {
+    className: "tv-fs-btn",
+    style: { marginLeft: '10px' },
+    onClick: () => setMostrarPesagens(true)
+  }, "Ver Pesagens"), sair && /*#__PURE__*/React.createElement("button", {
+    className: "tv-fs-btn",
+    style: { marginLeft: '10px' },
+    onClick: sair
+  }, "Voltar")), carregando && /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando painel..."), !carregando && !existe && /*#__PURE__*/React.createElement("div", {
+    className: "tv-vazio"
+  }, "Nenhuma produção programada para hoje."), !carregando && existe && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
+    className: "tv-resumo"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-resumo-num"
+  }, totalFeito, /*#__PURE__*/React.createElement("span", {
+    className: "tv-resumo-meta"
+  }, " / ", totalProgramado)), /*#__PURE__*/React.createElement("div", {
+    className: "tv-resumo-label"
+  }, "receitas produzidas hoje"), /*#__PURE__*/React.createElement("div", {
+    className: "tv-barra-geral"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-barra-geral-fill",
+    style: {
+      width: pctGeral + '%'
+    }
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "tv-resumo-pct"
+  }, pctGeral, "%")), itemAtivo && /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-tag"
+  }, "PRODUZINDO AGORA"), /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-nome"
+  }, itemAtivo.produto), /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-setor"
+  }, itemAtivo.categoria), /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-linha"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-contagem"
+  }, itemAtivo.feitos, " ", /*#__PURE__*/React.createElement("span", null, "/ ", itemAtivo.metaLotes, " receitas")), itemAtivo.batidas && itemAtivo.batidas.length > 0 && /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-cronometro"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-cronometro-label"
+  }, "tempo desde a última"), /*#__PURE__*/React.createElement("div", {
+    className: "tv-cronometro-valor"
+  }, tempoDecorrido(itemAtivo.batidas[itemAtivo.batidas.length - 1]))), velocidadeMedia(itemAtivo) != null && /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-velocidade"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-cronometro-label"
+  }, "velocidade média"), /*#__PURE__*/React.createElement("div", {
+    className: "tv-cronometro-valor"
+  }, velocidadeMedia(itemAtivo).toFixed(1), " min"))), /*#__PURE__*/React.createElement("div", {
+    className: "tv-barra-geral tv-barra-ativo"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-barra-geral-fill",
+    style: {
+      width: Math.min(100, Math.round(itemAtivo.feitos / itemAtivo.metaLotes * 100)) + '%'
+    }
+  }))), !itemAtivo && /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo tv-ativo-concluido"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-tag"
+  }, "TUDO CONCLUÍDO"), /*#__PURE__*/React.createElement("div", {
+    className: "tv-ativo-nome"
+  }, "Programação de hoje finalizada 🎉")), /*#__PURE__*/React.createElement("div", {
+    className: "tv-grid-setores"
+  }, Object.keys(porCategoria).sort().map(cat => /*#__PURE__*/React.createElement("div", {
+    className: "tv-setor-col",
+    key: cat
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "tv-setor-titulo"
+  }, cat), porCategoria[cat].map((it, i) => {
+    const concluido = it.feitos >= it.metaLotes;
+    const ativo = itemAtivo && it === itemAtivo;
+    return /*#__PURE__*/React.createElement("div", {
+      className: "tv-item-row" + (concluido ? ' tv-item-concluido' : '') + (ativo ? ' tv-item-ativo' : ''),
+      key: i
+    }, /*#__PURE__*/React.createElement("span", {
+      className: "tv-item-status"
+    }, concluido ? '✔' : ativo ? '●' : '—'), /*#__PURE__*/React.createElement("span", {
+      className: "tv-item-nome"
+    }, it.produto), /*#__PURE__*/React.createElement("span", {
+      className: "tv-item-contagem"
+    }, it.feitos, "/", it.metaLotes));
+  }))))));
+}
+
+// ═══════════════════════ TELA DO PCP (Lançamentos Winthor) ═══════════════════════
+function TelaPCP() {
+  const dataHoje = hojeISO();
+  const [carregando, setCarregando] = useState(true);
+  const [registros, setRegistros] = useState([]);
+  const [producao, setProducao] = useState({});
+
+  useEffect(() => {
+    const unsubExp = window.db.collection('expedicaoDiaria').doc(dataHoje).onSnapshot(snap => {
+      if (snap.exists && snap.data().registros) setRegistros(snap.data().registros);
+      else setRegistros([]);
+      setCarregando(false);
+    });
+
+    const unsubProd = window.db.collection('producaoDiaria').doc(dataHoje).onSnapshot(snap => {
+      if (snap.exists && snap.data().itens) {
+        const prodMap = {};
+        snap.data().itens.forEach(it => {
+          prodMap[it.codigo] = (it.rendimentoTeorico || 0) * (it.feitos || 0);
+        });
+        setProducao(prodMap);
+      } else {
+        setProducao({});
+      }
+    });
+
+    return () => { unsubExp(); unsubProd(); };
+  }, [dataHoje]);
+
+  if (carregando) return /*#__PURE__*/React.createElement("div", { className: "status-msg" }, "Buscando dados da c\xE2mara...");
+
+  const agrupado = {};
+  registros.forEach(r => {
+    const key = r.codigoProduto + '_' + r.lote;
+    if (!agrupado[key]) agrupado[key] = { codigoProduto: r.codigoProduto, produto: r.produto, lote: r.lote, ops: r.ops || [], pesoTotal: 0, patinhas: 0 };
+    agrupado[key].pesoTotal += r.peso;
+    agrupado[key].patinhas += 1;
+  });
+
+  const lista = Object.values(agrupado);
+
+  return /*#__PURE__*/React.createElement("div", { className: "container" },
+    /*#__PURE__*/React.createElement("div", { className: "cat-heading" }, `Entradas Consolidadas (${formatarDataBR(dataHoje)})`),
+    lista.length === 0 && /*#__PURE__*/React.createElement("div", { className: "status-msg" }, "Nenhuma entrada na c\xE2mara hoje."),
+    lista.map((item, idx) => {
+      const teorico = producao[item.codigoProduto] || 0;
+      let divergenciaPct = 0;
+      if (teorico > 0) divergenciaPct = ((item.pesoTotal - teorico) / teorico) * 100;
+      
+      const corDivergencia = divergenciaPct >= 0 ? 'var(--success)' : 'var(--danger)';
+      const pctFormatado = divergenciaPct > 0 ? '+' + divergenciaPct.toFixed(2) + '%' : divergenciaPct.toFixed(2) + '%';
+
+      return /*#__PURE__*/React.createElement("div", { className: "card", key: idx },
+        /*#__PURE__*/React.createElement("div", { className: "nome", style: { color: 'var(--marrom)', marginBottom: 8 } }, item.produto),
+        /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: 4 } },
+          /*#__PURE__*/React.createElement("span", { style: { color: 'var(--marrom-claro)', fontWeight: 'bold' } }, "OP Winthor:"),
+          /*#__PURE__*/React.createElement("span", null, item.ops.length > 0 ? item.ops.join(', ') : 'N/A')
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', marginBottom: 4 } },
+          /*#__PURE__*/React.createElement("span", { style: { color: 'var(--marrom-claro)', fontWeight: 'bold' } }, "Lote F\xEDsico:"),
+          /*#__PURE__*/React.createElement("span", null, item.lote)
+        ),
+        /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-suave)' } },
+          /*#__PURE__*/React.createElement("span", { style: { color: 'var(--marrom)', fontWeight: 800 } }, `PESO TOTAL (${item.patinhas} carros):`),
+          /*#__PURE__*/React.createElement("span", { style: { color: 'var(--success)', fontWeight: 900, fontSize: '1.2rem' } }, formatarKg(item.pesoTotal), " kg")
+        ),
+        teorico > 0 && /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingTop: 4 } },
+          /*#__PURE__*/React.createElement("span", { style: { color: 'var(--marrom-claro)', fontWeight: 'bold' } }, "Rendimento Te\u00f3rico:"),
+          /*#__PURE__*/React.createElement("span", { style: { fontWeight: 'bold', color: 'var(--marrom)' } }, formatarKg(teorico), " kg")
+        ),
+        teorico > 0 && /*#__PURE__*/React.createElement("div", { style: { display: 'flex', justifyContent: 'space-between', marginTop: 4, paddingTop: 4 } },
+          /*#__PURE__*/React.createElement("span", { style: { color: 'var(--marrom-claro)', fontWeight: 'bold' } }, "Diverg\u00eancia:"),
+          /*#__PURE__*/React.createElement("span", { style: { color: corDivergencia, fontWeight: 'bold' } }, pctFormatado)
+        )
+      );
+    })
+  );
+}
+
+// ═══════════════════════ TELA DE FECHAMENTO ═══════════════════════
+function TelaFechamento() {
+  const [dataAlvo, setDataAlvo] = useState(hojeISO());
+  const [carregando, setCarregando] = useState(true);
+  const [existe, setExiste] = useState(false);
+  const [itens, setItens] = useState([]);
+  const [salvando, setSalvando] = useState(false);
+  const [teclado, setTeclado] = useState(null); // { index, campo, titulo, valorInicial }
+
+  // Estoque OS Integration
+  const [estoque, setEstoque] = useState({ recipes: [], inventory: [], batches: [] });
+  const [loadingEstoque, setLoadingEstoque] = useState(false);
+  const [mostrarBuscaReceita, setMostrarBuscaReceita] = useState(null); // idx
+  const [termoBuscaReceita, setTermoBuscaReceita] = useState('');
+
+  // Auxiliares de conciliação
+  function normalizarTexto(t) {
+    if(!t) return '';
+    return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  }
+
+  function buscarReceita(nomeWinthor) {
+    if (!estoque.recipes.length) return null;
+    const n = normalizarTexto(nomeWinthor);
+    // exata
+    let m = estoque.recipes.find(r => normalizarTexto(r.name) === n);
+    if(m) return m;
+    // parcial
+    m = estoque.recipes.find(r => {
+      const rn = normalizarTexto(r.name);
+      return rn.includes(n) || n.includes(rn);
+    });
+    return m || null;
+  }
+
+  useEffect(() => {
+    setCarregando(true);
+    (async () => {
+      // 1. Load OP
+      const ref = window.db.collection('producaoDiaria').doc(dataAlvo);
+      const snap = await ref.get();
+      if (snap.exists && snap.data().itens) {
+        setItens(snap.data().itens.map(it => ({
+          massaPerdidaProd: 0,
+          massaPerdidaEmb: 0,
+          peDeMassa: 0,
+          finalizado: false,
+          insumosConsumidos: [], // para o novo registro
+          receitaIdOverride: null, // caso selecione manualmente
+          ...it
+        })));
+        setExiste(true);
+      } else {
+        setItens([]);
+        setExiste(false);
+      }
+      setCarregando(false);
+
+      // 2. Load Estoque OS
+      setLoadingEstoque(true);
+      try {
+        const pDoc = await window.db.collection('global_settings').doc('company_db').get();
+        if (pDoc.exists && pDoc.data().masterUid) {
+          const mUid = pDoc.data().masterUid;
+          const [recS, invS, batS] = await Promise.all([
+            window.db.collection('users').doc(mUid).collection('recipes').get(),
+            window.db.collection('users').doc(mUid).collection('inventory').get(),
+            window.db.collection('users').doc(mUid).collection('batches').where('quantity', '>', 0).get()
+          ]);
+          
+          const recipes = recS.docs.map(d => ({id: d.id, ...d.data()}));
+          const inventory = invS.docs.map(d => ({id: d.id, ...d.data()}));
+          const batches = batS.docs.map(d => ({id: d.id, ...d.data()}))
+                                  .sort((a,b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+          setEstoque({ recipes, inventory, batches });
+        }
+      } catch (e) {
+        console.error('Erro ao carregar Estoque OS', e);
+      }
+      setLoadingEstoque(false);
+    })();
+  }, [dataAlvo]);
+  
+  // === PARADA DE EMERGÊNCIA ===
+  const [parada, setParada] = useState(null);
+  useEffect(() => {
+    const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+    const unsub = refProd.onSnapshot(snap => {
+      if(snap.exists && snap.data().paradaEmergencia) {
+        setParada(snap.data().paradaEmergencia);
+      } else {
+        setParada({ ativa: false });
+      }
+    });
+    return unsub;
+  }, [dataAlvo]);
+
+  async function alternarParada() {
+    if (!parada || !parada.ativa) {
+       // Ativar Parada
+       const motivo = prompt("Motivo da parada de emergência?");
+       if (motivo === null) return;
+       await window.db.collection('producaoDiaria').doc(dataAlvo).set({
+         paradaEmergencia: { ativa: true, motivo: motivo, inicio: new Date().toISOString() }
+       }, { merge: true });
+    } else {
+       // Desativar Parada e recalcular tempos da Embaladora (Túnel)
+       if(!confirm("Deseja realmente RETOMAR a produção? Isso irá recalcular a fila do túnel.")) return;
+       
+       const fim = new Date();
+       const inicio = new Date(parada.inicio);
+       const minutosParados = Math.round((fim - inicio) / 60000);
+       
+       const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+       const snap = await refProd.get();
+       if(snap.exists) {
+          const d = snap.data();
+          let reg = d.tunelRegistros || [];
+          // Atrasar todos os registros que ainda não saíram do túnel
+          // Na prática, vamos atrasar a horaFim de quem tem horaFim configurada.
+          reg = reg.map(r => {
+             if(r.horaFim) {
+                const [hF, mF] = r.horaFim.split(':').map(Number);
+                const minutosAntigos = hF * 60 + mF;
+                const minAtuais = (new Date().getHours() * 60) + new Date().getMinutes();
+                // Apenas atrasa os itens que estão caindo ou que ainda vão cair
+                // Se o tempo previsto (horaFim + tempo) > tempoAtual, significa que ainda está na esteira/túnel
+                const queda = minutosAntigos + (r.tempo || 35);
+                if (queda >= (minAtuais - minutosParados)) { // Se ainda estava lá quando parou
+                   const novoMinutosFim = minutosAntigos + Math.max(1, minutosParados);
+                   const hh = Math.floor(novoMinutosFim/60)%24;
+                   const mm = novoMinutosFim%60;
+                   return { ...r, horaFim: `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}` };
+                }
+             }
+             return r;
+          });
+          
+          await refProd.update({
+             paradaEmergencia: { ativa: false, ultimoFim: fim.toISOString(), ultimoMinutos: minutosParados },
+             tunelRegistros: reg
+          });
+       }
+    }
+  }
+
+  // ==========================
+
+  function mudarDia(delta) {
+    const d = new Date(dataAlvo + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    setDataAlvo(paraISO(d));
+  }
+  function abrirTeclado(index, campo, titulo) {
+    setTeclado({
+      index,
+      campo,
+      titulo,
+      valorInicial: itens[index][campo]
+    });
+  }
+  function confirmarTeclado(valor) {
+    setItens(prev => {
+      const nova = [...prev];
+      nova[teclado.index] = {
+        ...nova[teclado.index],
+        [teclado.campo]: valor
+      };
+      return nova;
+    });
+    setTeclado(null);
+  }
+  function alternarPeDeMassa(index) {
+    setItens(prev => {
+      const nova = [...prev];
+      const usou = nova[index].peDeMassa > 0 || nova[index].usouPeDeMassa;
+      nova[index] = {
+        ...nova[index],
+        usouPeDeMassa: !usou,
+        peDeMassa: !usou ? nova[index].peDeMassa : 0
+      };
+      return nova;
+    });
+  }
+  async function salvarFechamento() {
+    setSalvando(true);
+    try {
+      const itensFinal = itens.map(it => ({
+        ...it,
+        finalizado: true
+      }));
+      const ref = window.db.collection('producaoDiaria').doc(dataAlvo);
+      await ref.update({
+        itens: itensFinal
+      });
+      alert('Fechamento de ' + formatarDataBR(dataAlvo) + ' salvo com sucesso!');
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+  if (carregando) return /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando...");
+  function renderEstoqueOS(item, idx) {
+    if(!estoque || !estoque.recipes.length) return React.createElement('div', {className: 'fechamento-linha', style: {fontSize:'0.8rem', color:'#888'}}, 'Carregando banco de dados do Estoque OS...');
+
+    // Receita selecionada ou assimilada
+    let receita = null;
+    if (item.receitaIdOverride) {
+      receita = estoque.recipes.find(r => r.id === item.receitaIdOverride);
+    } else {
+      receita = buscarReceita(item.produto);
+    }
+
+    if (!receita) {
+      return React.createElement('div', {style: {marginTop: 10, padding: 10, border: '1px solid #facc15', borderRadius: 8, backgroundColor: '#fffcf2'}}, 
+        React.createElement('div', {style: {color: '#d99d0b', fontWeight: 'bold', marginBottom: 5}}, '⚠️ Receita não encontrada no Estoque OS'),
+        React.createElement('select', {
+          className: 'input-data',
+          style: {width: '100%'},
+          value: '',
+          onChange: (e) => {
+            if(e.target.value) {
+              const nova = [...itens];
+              nova[idx].receitaIdOverride = e.target.value;
+              setItens(nova);
+            }
+          }
+        }, 
+          React.createElement('option', {value: ''}, 'Selecione a ficha técnica...'),
+          estoque.recipes.map(r => React.createElement('option', {key: r.id, value: r.id}, r.name))
+        )
+      );
+    }
+
+    // Calcula os insumos que deveriam ser consumidos
+    const opsProduzidas = item.feitos || 0;
+
+    const preencherAutomatico = () => {
+      const consumidos = [];
+      receita.ingredients.forEach(ing => {
+        const invItem = estoque.inventory.find(i => i.id === ing.productId);
+        if(!invItem) return;
+        let qtdNecessaria = ing.quantity * opsProduzidas;
+        
+        const lotesProd = estoque.batches.filter(b => b.productId === ing.productId).sort((a,b) => new Date(a.expiryDate) - new Date(b.expiryDate));
+        
+        lotesProd.forEach(lote => {
+          if(qtdNecessaria <= 0) return;
+          const aUsar = Math.min(qtdNecessaria, lote.quantity);
+          consumidos.push({
+            productId: ing.productId,
+            productName: invItem.name,
+            batchId: lote.id,
+            batchNumber: lote.batchNumber,
+            expiryDate: lote.expiryDate,
+            quantity: Number(aUsar.toFixed(4))
+          });
+          qtdNecessaria -= aUsar;
+        });
+        
+        if (qtdNecessaria > 0) {
+           consumidos.push({
+            productId: ing.productId,
+            productName: invItem.name,
+            batchId: 'SEM_LOTE',
+            batchNumber: 'Falta no Sist.',
+            expiryDate: '',
+            quantity: Number(qtdNecessaria.toFixed(4))
+          });
+        }
+      });
+      
+      const nova = [...itens];
+      nova[idx].insumosConsumidos = consumidos;
+      setItens(nova);
+    };
+
+    return React.createElement('div', {style: {marginTop: 15, padding: 10, border: '1px solid var(--border-suave)', borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.02)'}},
+      React.createElement('div', {style: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10}},
+        React.createElement('div', {style: {fontWeight: 'bold', color: 'var(--marrom)', fontSize: '0.9rem'}}, '📦 Ficha Técnica: ' + receita.name),
+        !item.finalizado && React.createElement('button', {
+          onClick: () => { const nova = [...itens]; nova[idx].receitaIdOverride = null; setItens(nova); },
+          style: {fontSize: '0.75rem', color: '#666', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer'}
+        }, 'Trocar')
+      ),
+      (!item.insumosConsumidos || item.insumosConsumidos.length === 0) ? (
+        opsProduzidas > 0 ? 
+        React.createElement('button', {
+          onClick: preencherAutomatico,
+          className: 'btn btn-primary',
+          style: {width: '100%', fontSize: '0.8rem', padding: '6px'}
+        }, 'Carregar Lotes e Validades (PVPS)') : React.createElement('div', {style: {fontSize: '0.8rem', color: '#888'}}, 'Apontamento zerado. Nada a consumir.')
+      ) : (
+        React.createElement('div', null, 
+          item.insumosConsumidos.map((ins, iIns) => {
+            return React.createElement('div', {key: iIns, style: {display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', borderBottom: '1px solid #eee', padding: '4px 0'}},
+              React.createElement('div', null, 
+                React.createElement('strong', null, ins.productName), 
+                React.createElement('br'),
+                React.createElement('span', {style: {color: '#888', fontSize: '0.7rem'}}, 'Lote: ' + ins.batchNumber)
+              ),
+              React.createElement('div', {style: {display: 'flex', alignItems: 'center', gap: '5px'}},
+                item.finalizado ? React.createElement('span', {style:{fontWeight: 'bold'}}, formatarKg(ins.quantity) + ' kg') :
+                React.createElement('input', {
+                  type: 'number',
+                  style: {width: '60px', padding: '2px', textAlign: 'right', border: '1px solid #ccc', borderRadius: '4px'},
+                  value: ins.quantity,
+                  onChange: (e) => {
+                    const nova = [...itens];
+                    nova[idx].insumosConsumidos[iIns].quantity = parseFloat(e.target.value) || 0;
+                    setItens(nova);
+                  }
+                }),
+                !item.finalizado && React.createElement('span', null, 'kg')
+              )
+            );
+          }),
+          !item.finalizado && React.createElement('div', {style: {marginTop: '8px', textAlign: 'right'}},
+            React.createElement('button', {
+              onClick: preencherAutomatico,
+              style: {fontSize: '0.75rem', background: 'none', border: 'none', color: 'var(--brand-600)', cursor: 'pointer', textDecoration: 'underline'}
+            }, 'Recalcular Sugestão')
+          )
+        )
+      )
+    );
+  }
+
+  let categoriaAnterior = null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "container"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "toolbar toolbar-data"
+  }, 
+
+  /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(-1)
+  }, "‹"), /*#__PURE__*/React.createElement("div", {
+    className: "toolbar-data-centro"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800
+    }
+  }, formatarDataBR(dataAlvo)), /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    className: "input-data",
+    value: dataAlvo,
+    onChange: e => e.target.value && setDataAlvo(e.target.value)
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(1)
+  }, "›")), !existe && /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Nenhuma produção programada nesse dia."), existe && itens.map((item, idx) => {
+    const mostrarCategoria = item.categoria !== categoriaAnterior;
+    categoriaAnterior = item.categoria;
+    const usaPeDeMassa = item.usouPeDeMassa || item.peDeMassa > 0;
+    return /*#__PURE__*/React.createElement(React.Fragment, {
+      key: idx
+    }, mostrarCategoria && /*#__PURE__*/React.createElement("div", {
+      className: "cat-heading"
+    }, item.categoria), /*#__PURE__*/React.createElement("div", {
+      className: "card" + (item.finalizado ? ' concluido' : '')
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "card-top"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "nome"
+    }, idx + 1, ". ", item.produto), item.finalizado && /*#__PURE__*/React.createElement("span", {
+      className: "selo-ok"
+    }, "Salvo")), item.ops && item.ops.length > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "ops-linha"
+    }, "OP", item.ops.length > 1 ? 's' : '', " Winthor: ", item.ops.join(', ')), /*#__PURE__*/React.createElement("div", {
+      className: "fechamento-resumo"
+    }, "Programadas: ", /*#__PURE__*/React.createElement("strong", null, item.metaLotes), " · Realizadas: ", /*#__PURE__*/React.createElement("strong", null, item.feitos)), /*#__PURE__*/React.createElement("div", {
+      className: "fechamento-linha"
+    }, /*#__PURE__*/React.createElement("span", null, "Massa perdida (produção)"), /*#__PURE__*/React.createElement("button", {
+      className: "valor-pill",
+      onClick: () => abrirTeclado(idx, 'massaPerdidaProd', 'Massa perdida — Produção')
+    }, formatarKg(item.massaPerdidaProd), " kg")), /*#__PURE__*/React.createElement("div", {
+      className: "fechamento-linha"
+    }, /*#__PURE__*/React.createElement("span", null, "Massa perdida (embalagem)"), /*#__PURE__*/React.createElement("button", {
+      className: "valor-pill",
+      onClick: () => abrirTeclado(idx, 'massaPerdidaEmb', 'Massa perdida — Embalagem')
+    }, formatarKg(item.massaPerdidaEmb), " kg")), /*#__PURE__*/React.createElement("div", {
+      className: "fechamento-linha"
+    }, /*#__PURE__*/React.createElement("span", null, "Pé de massa utilizado"), usaPeDeMassa ? /*#__PURE__*/React.createElement("button", {
+      className: "valor-pill",
+      onClick: () => abrirTeclado(idx, 'peDeMassa', 'Pé de massa utilizado')
+    }, formatarKg(item.peDeMassa), " kg") : /*#__PURE__*/React.createElement("button", {
+      className: "valor-pill valor-pill-vazio",
+      onClick: () => alternarPeDeMassa(idx)
+    }, "Não utilizado")), usaPeDeMassa && /*#__PURE__*/React.createElement("button", {
+      className: "btn-desfazer",
+      onClick: () => alternarPeDeMassa(idx)
+    }, "Marcar como não utilizado"),
+    renderEstoqueOS(item, idx)
+    ));
+  }), existe && /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary btn-block",
+    disabled: salvando,
+    onClick: salvarFechamento,
+    style: {
+      marginTop: 14
+    }
+  }, salvando ? 'Salvando...' : 'Salvar Fechamento'), teclado && /*#__PURE__*/React.createElement(ModalTeclado, {
+    titulo: teclado.titulo,
+    valorInicial: teclado.valorInicial,
+    aoConfirmar: confirmarTeclado,
+    aoFechar: () => setTeclado(null)
+  }));
+}
+
+// ═══════════════════════ TELA DE RELATÓRIO ═══════════════════════
+function TelaRelatorio() {
+  const [data, setData] = useState(hojeISO());
+  const [carregando, setCarregando] = useState(true);
+  const [itens, setItens] = useState([]);
+  const [existe, setExiste] = useState(false);
+  useEffect(() => {
+    setCarregando(true);
+    (async () => {
+      const ref = window.db.collection('producaoDiaria').doc(data);
+      const snap = await ref.get();
+      if (snap.exists && snap.data().itens) {
+        setItens(snap.data().itens);
+        setExiste(true);
+      } else {
+        setItens([]);
+        setExiste(false);
+      }
+      setCarregando(false);
+    })();
+  }, [data]);
+  function velocidade(item) {
+    const b = item.batidas || [];
+    if (b.length < 2) return null;
+    const primeiro = new Date(b[0]).getTime();
+    const ultimo = new Date(b[b.length - 1]).getTime();
+    return (ultimo - primeiro) / 60000 / (b.length - 1);
+  }
+  
+  // === PARADA DE EMERGÊNCIA ===
+  const [parada, setParada] = useState(null);
+  useEffect(() => {
+    const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+    const unsub = refProd.onSnapshot(snap => {
+      if(snap.exists && snap.data().paradaEmergencia) {
+        setParada(snap.data().paradaEmergencia);
+      } else {
+        setParada({ ativa: false });
+      }
+    });
+    return unsub;
+  }, [dataAlvo]);
+
+  async function alternarParada() {
+    if (!parada || !parada.ativa) {
+       // Ativar Parada
+       const motivo = prompt("Motivo da parada de emergência?");
+       if (motivo === null) return;
+       await window.db.collection('producaoDiaria').doc(dataAlvo).set({
+         paradaEmergencia: { ativa: true, motivo: motivo, inicio: new Date().toISOString() }
+       }, { merge: true });
+    } else {
+       // Desativar Parada e recalcular tempos da Embaladora (Túnel)
+       if(!confirm("Deseja realmente RETOMAR a produção? Isso irá recalcular a fila do túnel.")) return;
+       
+       const fim = new Date();
+       const inicio = new Date(parada.inicio);
+       const minutosParados = Math.round((fim - inicio) / 60000);
+       
+       const refProd = window.db.collection('producaoDiaria').doc(dataAlvo);
+       const snap = await refProd.get();
+       if(snap.exists) {
+          const d = snap.data();
+          let reg = d.tunelRegistros || [];
+          // Atrasar todos os registros que ainda não saíram do túnel
+          // Na prática, vamos atrasar a horaFim de quem tem horaFim configurada.
+          reg = reg.map(r => {
+             if(r.horaFim) {
+                const [hF, mF] = r.horaFim.split(':').map(Number);
+                const minutosAntigos = hF * 60 + mF;
+                const minAtuais = (new Date().getHours() * 60) + new Date().getMinutes();
+                // Apenas atrasa os itens que estão caindo ou que ainda vão cair
+                // Se o tempo previsto (horaFim + tempo) > tempoAtual, significa que ainda está na esteira/túnel
+                const queda = minutosAntigos + (r.tempo || 35);
+                if (queda >= (minAtuais - minutosParados)) { // Se ainda estava lá quando parou
+                   const novoMinutosFim = minutosAntigos + Math.max(1, minutosParados);
+                   const hh = Math.floor(novoMinutosFim/60)%24;
+                   const mm = novoMinutosFim%60;
+                   return { ...r, horaFim: `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}` };
+                }
+             }
+             return r;
+          });
+          
+          await refProd.update({
+             paradaEmergencia: { ativa: false, ultimoFim: fim.toISOString(), ultimoMinutos: minutosParados },
+             tunelRegistros: reg
+          });
+       }
+    }
+  }
+
+  // ==========================
+
+  function mudarDia(delta) {
+    const d = new Date(data + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    setData(paraISO(d));
+  }
+  return /*#__PURE__*/React.createElement("div", {
+    className: "container"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "toolbar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(-1)
+  }, "‹"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontWeight: 800,
+      flex: 1,
+      textAlign: 'center'
+    }
+  }, formatarDataBR(data)), /*#__PURE__*/React.createElement("button", {
+    className: "arrow-btn",
+    onClick: () => mudarDia(1)
+  }, "›")), carregando && /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando relatório..."), !carregando && !existe && /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Nenhuma produção registrada nesse dia."), !carregando && existe && /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, itens.map((item, idx) => {
+    const vel = velocidade(item);
+    const b = item.batidas || [];
+    return /*#__PURE__*/React.createElement("div", {
+      className: "rel-row",
+      key: idx
+    }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+      className: "rel-nome"
+    }, item.produto), /*#__PURE__*/React.createElement("div", {
+      className: "rel-sub"
+    }, item.feitos, "/", item.metaLotes, " receitas", b.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, " · ", horaCurta(b[0]), " → ", horaCurta(b[b.length - 1])))), /*#__PURE__*/React.createElement("div", {
+      className: "rel-vel"
+    }, vel != null ? /*#__PURE__*/React.createElement(React.Fragment, null, vel.toFixed(1), /*#__PURE__*/React.createElement("span", {
+      style: {
+        fontSize: '0.7rem',
+        fontWeight: 'normal'
+      }
+    }, " min/receita")) : '—'));
+  })));
+}
+
+// ═══════════════════════ LIVRO DE PRODUÇÃO ═══════════════════════
+function TelaLivroDeProducao() {
+  const [carregando, setCarregando] = useState(true);
+  const [linhas, setLinhas] = useState([]);
+  const [exportando, setExportando] = useState(false);
+  useEffect(() => {
+    (async () => {
+      const snap = await window.db.collection('producaoDiaria').orderBy('data', 'desc').limit(60).get();
+      const todasLinhas = [];
+      snap.forEach(doc => {
+        const d = doc.data();
+        (d.itens || []).forEach(it => {
+          todasLinhas.push({
+            data: d.data,
+            ordem: (it.ordem != null ? it.ordem : 0) + 1,
+            codigo: it.codigo,
+            produto: it.produto,
+            categoria: it.categoria,
+            metaLotes: it.metaLotes,
+            feitos: it.feitos,
+            ops: it.ops || [],
+            massaPerdidaProd: it.massaPerdidaProd || 0,
+            massaPerdidaEmb: it.massaPerdidaEmb || 0,
+            peDeMassa: it.peDeMassa || 0,
+            finalizado: !!it.finalizado
+          });
+        });
+      });
+      setLinhas(todasLinhas);
+      setCarregando(false);
+    })();
+  }, []);
+  function exportarExcel() {
+    setExportando(true);
+    try {
+      const dadosPlanilha = linhas.map(l => ({
+        'Data': formatarDataBR(l.data),
+        'Ordem': l.ordem,
+        'Código': l.codigo,
+        'OPs Winthor': (l.ops || []).join(', '),
+        'Produto': l.produto,
+        'Setor': l.categoria,
+        'Receitas Programadas': l.metaLotes,
+        'Receitas Realizadas': l.feitos,
+        'Massa Perdida Produção (kg)': l.massaPerdidaProd,
+        'Massa Perdida Embalagem (kg)': l.massaPerdidaEmb,
+        'Pé de Massa Utilizado (kg)': l.peDeMassa,
+        'Fechamento Confirmado': l.finalizado ? 'Sim' : 'Não'
+      }));
+      const ws = XLSX.utils.json_to_sheet(dadosPlanilha);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Livro de Produção');
+      XLSX.writeFile(wb, 'livro_producao_imac.xlsx');
+    } catch (e) {
+      alert('Erro ao exportar: ' + e.message);
+    } finally {
+      setExportando(false);
+    }
+  }
+  if (carregando) return /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando histórico...");
+  if (linhas.length === 0) return /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Nenhum registro de produção encontrado ainda.");
+  let dataAnterior = null;
+  return /*#__PURE__*/React.createElement("div", {
+    className: "container"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary btn-block",
+    disabled: exportando,
+    onClick: exportarExcel,
+    style: {
+      marginBottom: 16
+    }
+  }, exportando ? 'Exportando...' : 'Exportar Excel'), linhas.map((l, idx) => {
+    const mostrarData = l.data !== dataAnterior;
+    dataAnterior = l.data;
+    return /*#__PURE__*/React.createElement(React.Fragment, {
+      key: idx
+    }, mostrarData && /*#__PURE__*/React.createElement("div", {
+      className: "cat-heading"
+    }, formatarDataBR(l.data)), /*#__PURE__*/React.createElement("div", {
+      className: "card"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "card-top"
+    }, /*#__PURE__*/React.createElement("div", {
+      className: "nome"
+    }, l.ordem, ". ", l.produto), l.finalizado && /*#__PURE__*/React.createElement("span", {
+      className: "selo-ok"
+    }, "Fechado")), /*#__PURE__*/React.createElement("div", {
+      className: "livro-linha"
+    }, "Setor: ", l.categoria), /*#__PURE__*/React.createElement("div", {
+      className: "livro-linha"
+    }, "Programadas: ", l.metaLotes, " · Realizadas: ", l.feitos), /*#__PURE__*/React.createElement("div", {
+      className: "livro-linha"
+    }, "Perda produção: ", formatarKg(l.massaPerdidaProd), " kg · Perda embalagem: ", formatarKg(l.massaPerdidaEmb), " kg"), l.peDeMassa > 0 && /*#__PURE__*/React.createElement("div", {
+      className: "livro-linha"
+    }, "Pé de massa: ", formatarKg(l.peDeMassa), " kg")));
+  }));
+}
+
+// ═══════════════════════ TELA DE PRODUTOS (ADMIN) ═══════════════════════
+function TelaProdutos() {
+  const {
+    produtos,
+    carregando
+  } = useProdutos();
+  const [nome, setNome] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [salvando, setSalvando] = useState(false);
+  const categoriasExistentes = Array.from(new Set(produtos.map(p => p.categoria).filter(Boolean))).sort();
+  async function adicionar() {
+    if (!nome.trim() || !categoria.trim()) {
+      alert('Preencha o nome e o setor.');
+      return;
+    }
+    setSalvando(true);
+    try {
+      await window.db.collection('produtos').add({
+        nome: nome.trim(),
+        categoria: categoria.trim()
+      });
+      setNome('');
+      setCategoria('');
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+  async function remover(id) {
+    if (!confirm('Remover este produto?')) return;
+    await window.db.collection('produtos').doc(id).delete();
+  }
+  const porCategoria = {};
+  produtos.forEach(p => {
+    const cat = p.categoria || 'Sem setor';
+    if (!porCategoria[cat]) porCategoria[cat] = [];
+    porCategoria[cat].push(p);
+  });
+  return /*#__PURE__*/React.createElement("div", {
+    className: "container"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "card"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "nome",
+    style: {
+      marginBottom: 10
+    }
+  }, "Novo produto"), /*#__PURE__*/React.createElement("input", {
+    className: "input-texto",
+    placeholder: "Nome do produto (ex: Coxinha de Frango)",
+    value: nome,
+    onChange: e => setNome(e.target.value)
+  }), /*#__PURE__*/React.createElement("input", {
+    className: "input-texto",
+    placeholder: "Setor (ex: Massas, Recheios, Empanados)",
+    value: categoria,
+    onChange: e => setCategoria(e.target.value),
+    list: "lista-setores",
+    style: {
+      marginTop: 8
+    }
+  }), /*#__PURE__*/React.createElement("datalist", {
+    id: "lista-setores"
+  }, categoriasExistentes.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c,
+    value: c
+  }))), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary btn-block",
+    disabled: salvando,
+    onClick: adicionar,
+    style: {
+      marginTop: 10
+    }
+  }, salvando ? 'Salvando...' : '+ Adicionar Produto')), carregando && /*#__PURE__*/React.createElement("div", {
+    className: "status-msg"
+  }, "Carregando produtos..."), Object.keys(porCategoria).sort().map(cat => /*#__PURE__*/React.createElement("div", {
+    key: cat
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "cat-heading"
+  }, cat), porCategoria[cat].map(p => /*#__PURE__*/React.createElement("div", {
+    className: "card",
+    key: p.id,
+    style: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "nome"
+  }, p.nome), /*#__PURE__*/React.createElement("button", {
+    className: "remover-btn",
+    onClick: () => remover(p.id)
+  }, "✕"))))));
+}
+
+// ═══════════════════════ TELA EXPEDIÇÃO CÂMARAS (Patinhas) ═══════════════════════
+function TelaExpedicao({ currentUser }) {
+  const dataHoje = hojeISO();
+  const [producaoHoje, setProducaoHoje] = useState([]);
+  const [tunelHoje, setTunelHoje] = useState([]);
+  const [carregando, setCarregando] = useState(true);
+  const [listaEntrada, setListaEntrada] = useState([]);
+  const [salvando, setSalvando] = useState(false);
+  
+  const [produtoIdx, setProdutoIdx] = useState('');
+  const [dataPesagem, setDataPesagem] = useState(dataHoje);
+  const [lote, setLote] = useState('');
+  const [qtd, setQtd] = useState('');
+  const [und, setUnd] = useState('kg');
+  const [validade, setValidade] = useState('');
+  const [nomeOperador, setNomeOperador] = useState(localStorage.getItem('nomeOperador') || '');
+  const [tecladoAberto, setTecladoAberto] = useState(false);
+  
+  const [aba, setAba] = useState(0); // 0=Pesagem, 1=Conferir, 2=Estoque
+  const [estoqueAtual, setEstoqueAtual] = useState([]);
+  const [termoBuscaEstoque, setTermoBuscaEstoque] = useState('');
+  const [modalLotesProduto, setModalLotesProduto] = useState(null);
+  const [subAbaEstoque, setSubAbaEstoque] = useState('acabado'); // acabado, mp
+  const [estoqueMP, setEstoqueMP] = useState([]);
+  const [estoqueWinthor, setEstoqueWinthor] = useState({});
+  const [carregandoMP, setCarregandoMP] = useState(false);
+  
+  // Efeito para carregar Matéria Prima (Físico e Sistema) apenas quando entrar na subAba
+  useEffect(() => {
+    if (aba === 2 && subAbaEstoque === 'mp') {
+      const loadMP = async () => {
+        setCarregandoMP(true);
+        try {
+          // 1. Puxar Winthor Sistema
+          const winRef = await window.db.collection('winthorEstoqueSistema').get();
+          const winthorData = {};
+          winRef.docs.forEach(d => {
+            winthorData[d.id] = d.data().saldoWinthor || 0;
+          });
+          setEstoqueWinthor(winthorData);
+
+          // 2. Puxar Físico do Estoque OS
+          const cDoc = await window.dbEstoqueOS.collection('global_settings').doc('company_db').get();
+          if (cDoc.exists && cDoc.data().masterUid) {
+            const mUid = cDoc.data().masterUid;
+            const [invS, batS] = await Promise.all([
+              window.dbEstoqueOS.collection('users').doc(mUid).collection('inventory').get(),
+              window.dbEstoqueOS.collection('users').doc(mUid).collection('batches').where('quantity', '>', 0).get()
+            ]);
+            
+            const batMap = {};
+            batS.docs.forEach(b => {
+              const bd = b.data();
+              const pid = bd.productId || bd.item_id; // Suporte aos dois
+              if(!batMap[pid]) batMap[pid] = [];
+              batMap[pid].push({ id: b.id, ...bd });
+            });
+            
+            const mpList = [];
+            invS.docs.forEach(doc => {
+              const inv = doc.data();
+              // Adicionamos as matérias primas
+              mpList.push({
+                id: doc.id,
+                codigo: inv.code || doc.id,
+                nome: inv.name,
+                und: inv.unit || 'kg',
+                lotes: batMap[doc.id] || [],
+                totalFisico: (batMap[doc.id] || []).reduce((acc, l) => acc + (parseFloat(l.quantity)||0), 0)
+              });
+            });
+            
+            setEstoqueMP(mpList.sort((a,b) => a.nome.localeCompare(b.nome)));
+          }
+        } catch(e) {
+          console.error("Erro ao carregar MP:", e);
+        }
+        setCarregandoMP(false);
+      };
+      loadMP();
+    }
+  }, [aba, subAbaEstoque]);
+
+
+  useEffect(() => {
+    const unsub = window.db.collection('producaoDiaria').doc(dataHoje).onSnapshot(snap => {
+      if (snap.exists) {
+        setProducaoHoje(snap.data().itens || []);
+        setTunelHoje(snap.data().tunelRegistros || []);
+      } else {
+        setProducaoHoje([]);
+        setTunelHoje([]);
+      }
+      setCarregando(false);
+    });
+    return unsub;
+  }, [dataHoje]);
+
+  // Fetch from tunel
+  useEffect(() => {
+    if(produtoIdx !== '') {
+        const itemProg = producaoHoje[produtoIdx];
+        if(itemProg) {
+            const tunelItem = tunelHoje.slice().reverse().find(t => t.produto === itemProg.produto && t.lote);
+            if (tunelItem) {
+                setLote(tunelItem.lote || '');
+                setValidade(tunelItem.validade || '');
+            } else {
+                setLote('');
+                setValidade('');
+            }
+        }
+    }
+  }, [produtoIdx, producaoHoje, tunelHoje]);
+
+  useEffect(() => {
+      if(aba === 2) {
+          const unsub = window.db.collection('estoque').onSnapshot(snap => {
+              const est = [];
+              snap.forEach(d => est.push({...d.data(), id: d.id}));
+              setEstoqueAtual(est);
+          });
+          return unsub;
+      }
+  }, [aba]);
+
+  function adicionarPatinha() {
+    if (produtoIdx === '') return alert('Selecione um produto!');
+    if (!qtd || qtd <= 0) return alert('Insira um peso válido!');
+    if (!lote.trim()) return alert('Insira o lote físico!');
+    if (!nomeOperador.trim()) return alert('Informe o nome do responsável pela pesagem!');
+
+    localStorage.setItem('nomeOperador', nomeOperador.trim());
+
+    const itemProg = producaoHoje[produtoIdx];
+    setListaEntrada(prev => [...prev, {
+      operador: nomeOperador.trim(),
+      nome: itemProg.produto,
+      codigo: itemProg.codigo,
+      ops: itemProg.ops || [],
+      setor: itemProg.categoria || 'Câmara',
+      dataEntrada: dataPesagem,
+      lote: lote.trim(),
+      qtd: parseFloat(qtd),
+      und: und,
+      validade: validade
+    }]);
+    setQtd('');
+    alert('Patinha adicionada para conferência!');
+  }
+
+  function removerPatinha(idx) {
+    setListaEntrada(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  async function salvarEntradas() {
+    if (listaEntrada.length === 0) return;
+    setSalvando(true);
+    try {
+      const batch = window.db.batch();
+      const timestamp = new Date().toISOString();
+      const nomeOp = "Expedição (App)";
+
+      listaEntrada.forEach(item => {
+        const refEstoque = window.db.collection('estoque').doc();
+        batch.set(refEstoque, { nome: item.nome, setor: item.setor, lote: item.lote, qtd: item.qtd, und: item.und, validade: item.validade, dataEntrada: item.dataEntrada, isTeste: false });
+        
+        const refMovimento = window.db.collection('movimentos').doc();
+        batch.set(refMovimento, { tipo: 'ENTRADA', nome: item.nome, lote: item.lote, qtd: item.qtd, und: item.und, data: timestamp, usuario: nomeOp });
+
+        const refExpedicao = window.db.collection('expedicaoDiaria').doc(dataHoje);
+        
+        const agoraStr = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+        const regExp = { id: Date.now().toString() + Math.random(), codigoProduto: item.codigo, produto: item.nome, ops: item.ops, lote: item.lote, pesoTotal: item.qtd, qtCaixas: 1, horario: agoraStr, timestamp: new Date().toISOString() };
+
+        batch.set(refExpedicao, { data: dataHoje, registros: firebase.firestore.FieldValue.arrayUnion(regExp) }, { merge: true });
+      });
+
+      await batch.commit();
+      alert(`${listaEntrada.length} patinhas registradas e comunicadas à TV!`);
+      setListaEntrada([]);
+      setQtd('');
+      setAba(2); // Vai pro estoque apos salvar
+    } catch(e) {
+      alert(e.message);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  if (carregando) return /*#__PURE__*/React.createElement("div", { className: "status-msg" }, "Buscando produção de hoje...");
+
+  return /*#__PURE__*/React.createElement("div", { className: "p-4 md:p-8 w-full max-w-5xl mx-auto" },
+    /*#__PURE__*/React.createElement("div", { className: "flex justify-between items-center mb-6 border-b border-[#734A2A] pb-4" },
+        /*#__PURE__*/React.createElement("h2", { className: "text-2xl font-black flex items-center gap-2" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-snowflake text-3xl text-brand-600" }), "Expedição / Câmaras")
+    ),
+    /*#__PURE__*/React.createElement('div', { className: 'flex space-x-4 mb-6 overflow-x-auto pb-2 custom-scroll' },
+      /*#__PURE__*/React.createElement('button', { onClick: () => setAba(0), className: `px-6 py-2 rounded-full font-bold transition whitespace-nowrap ${aba === 0 ? 'bg-brand-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}` }, 'Pesagem'),
+      /*#__PURE__*/React.createElement('button', { onClick: () => setAba(1), className: `px-6 py-2 rounded-full font-bold transition whitespace-nowrap ${aba === 1 ? 'bg-brand-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}` }, `Conferência (${listaEntrada.length})`),
+      /*#__PURE__*/React.createElement('button', { onClick: () => setAba(2), className: `px-6 py-2 rounded-full font-bold transition whitespace-nowrap ${aba === 2 ? 'bg-brand-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}` }, 'Estoque Atual')
+    ),
+
+    aba === 0 && /*#__PURE__*/React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-xl border border-gray-200" },
+      /*#__PURE__*/React.createElement("div", { className: "mb-4" },
+        /*#__PURE__*/React.createElement("label", { className: "block text-sm font-bold text-gray-700 mb-1" }, "Responsável pela Pesagem"),
+        /*#__PURE__*/React.createElement("input", { className: "w-full p-3 border border-gray-300 rounded-lg", value: nomeOperador, onChange: e => setNomeOperador(e.target.value), placeholder: "Digite seu nome (Ex: João)" })
+      ),
+      /*#__PURE__*/React.createElement("div", { className: "mb-4" },
+        /*#__PURE__*/React.createElement("label", { className: "block text-sm font-bold text-gray-700 mb-1" }, "Produto Programado (Hoje)"),
+        /*#__PURE__*/React.createElement("select", { className: "w-full p-3 border border-gray-300 rounded-lg bg-gray-50", value: produtoIdx, onChange: e => setProdutoIdx(e.target.value) },
+          /*#__PURE__*/React.createElement("option", { value: "" }, "Selecione o produto..."),
+          producaoHoje.map((it, i) => /*#__PURE__*/React.createElement("option", { key: i, value: i }, it.produto))
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-4 mb-4" },
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-sm font-bold text-gray-700 mb-1" }, "Lote Físico"),
+          /*#__PURE__*/React.createElement("input", { className: "w-full p-3 border border-gray-300 rounded-lg", value: lote, onChange: e => setLote(e.target.value), placeholder: "Ex: L-0307" })
+        ),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-sm font-bold text-gray-700 mb-1" }, "Validade"),
+          /*#__PURE__*/React.createElement("input", { type: "date", className: "w-full p-3 border border-gray-300 rounded-lg", value: validade, onChange: e => setValidade(e.target.value) })
+        )
+      ),
+      /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-3 gap-4 mb-6" },
+        /*#__PURE__*/React.createElement("div", { className: "col-span-2" },
+          /*#__PURE__*/React.createElement("label", { className: "block text-sm font-bold text-brand-600 mb-1" }, "Peso da Patinha"),
+          /*#__PURE__*/React.createElement("button", { className: "w-full p-4 border-2 border-brand-400 bg-brand-50 rounded-xl text-left font-black text-xl text-brand-700", onClick: () => setTecladoAberto(true) }, qtd ? `${formatarKg(qtd)} ${und}` : "Tocar para digitar peso...")
+        ),
+        /*#__PURE__*/React.createElement("div", null,
+          /*#__PURE__*/React.createElement("label", { className: "block text-sm font-bold text-gray-700 mb-1" }, "Unidade"),
+          /*#__PURE__*/React.createElement("select", { className: "w-full p-4 border border-gray-300 rounded-xl bg-gray-50", value: und, onChange: e => setUnd(e.target.value) },
+            /*#__PURE__*/React.createElement("option", { value: "kg" }, "kg"),
+            /*#__PURE__*/React.createElement("option", { value: "und" }, "und")
+          )
+        )
+      ),
+      /*#__PURE__*/React.createElement("button", { className: "w-full bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-brand-700 transition-colors flex items-center justify-center gap-2", onClick: adicionarPatinha }, /*#__PURE__*/React.createElement("i", { className:"ph ph-plus-circle text-xl" }), "Adicionar à Conferência")
+    ),
+
+    aba === 1 && /*#__PURE__*/React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-xl border border-gray-200" },
+      /*#__PURE__*/React.createElement("div", { className: "flex justify-between items-center mb-6" },
+         /*#__PURE__*/React.createElement("h3", { className: "font-bold text-xl text-gray-800" }, "Conferência de Patinhas"),
+         /*#__PURE__*/React.createElement("div", { className: "bg-brand-100 text-brand-800 px-4 py-2 rounded-lg font-black" }, 
+            "Total: ", listaEntrada.reduce((acc, item) => acc + (item.und === 'kg' ? item.qtd : 0), 0).toFixed(2), " kg"
+         )
+      ),
+      listaEntrada.length === 0 ? /*#__PURE__*/React.createElement("div", { className: "text-center text-gray-500 py-8" }, "Nenhuma patinha na lista.") :
+      /*#__PURE__*/React.createElement("div", { className: "space-y-3 mb-6" },
+        listaEntrada.map((item, idx) => /*#__PURE__*/React.createElement("div", { key: idx, className: "flex justify-between items-center p-4 bg-gray-50 border border-gray-200 rounded-xl" },
+          /*#__PURE__*/React.createElement("div", null,
+            /*#__PURE__*/React.createElement("div", { className: "font-bold text-gray-800" }, item.nome),
+            /*#__PURE__*/React.createElement("div", { className: "text-sm text-gray-500" }, `Lote: ${item.lote} | Val: ${item.validade}`)
+          ),
+          /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-4" },
+            /*#__PURE__*/React.createElement("div", { className: "font-black text-brand-600 text-lg" }, `${formatarKg(item.qtd)} ${item.und}`),
+            /*#__PURE__*/React.createElement("button", { className: "w-10 h-10 flex items-center justify-center rounded-full bg-red-100 text-red-600 hover:bg-red-200", onClick: () => removerPatinha(idx) }, /*#__PURE__*/React.createElement("i", { className: "ph ph-trash" }))
+          )
+        ))
+      ),
+      listaEntrada.length > 0 && /*#__PURE__*/React.createElement("button", { className: "w-full bg-green-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2", onClick: salvarEntradas, disabled: salvando }, salvando ? "Salvando..." : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("i", { className:"ph ph-check-circle text-xl" }), "Confirmar Entrada na Câmara"))
+    ),
+
+    aba === 2 && (() => {
+      const isPcp = currentUser && currentUser.setor === 'pcp';
+      
+      const gruposAcabado = {};
+      estoqueAtual.forEach(it => {
+        if(!gruposAcabado[it.nome]) gruposAcabado[it.nome] = { nome: it.nome, totalKg: 0, totalUnd: 0, lotes: [], und: it.und };
+        if(it.und === 'kg') gruposAcabado[it.nome].totalKg += parseFloat(it.qtd || 0);
+        else gruposAcabado[it.nome].totalUnd += parseFloat(it.qtd || 0);
+        gruposAcabado[it.nome].lotes.push(it);
+      });
+      let listaAcabado = Object.values(gruposAcabado);
+      
+      let mpFiltrado = estoqueMP;
+      
+      if (termoBuscaEstoque) {
+        const t = termoBuscaEstoque.toLowerCase();
+        listaAcabado = listaAcabado.filter(g => g.nome.toLowerCase().includes(t));
+        mpFiltrado = estoqueMP.filter(g => g.nome.toLowerCase().includes(t) || (g.codigo && g.codigo.toLowerCase().includes(t)));
+      }
+      
+      return /*#__PURE__*/React.createElement("div", { className: "bg-white p-6 rounded-2xl shadow-xl border border-gray-200" },
+        /*#__PURE__*/React.createElement("div", { className: "flex justify-between items-center mb-6" },
+          /*#__PURE__*/React.createElement("h3", { className: "font-bold text-xl text-gray-800" }, "Painel de Estoque"),
+          isPcp && /*#__PURE__*/React.createElement("div", { className: "flex bg-gray-100 rounded-lg p-1" },
+            /*#__PURE__*/React.createElement("button", {
+              className: `px-4 py-2 text-sm font-bold rounded-md transition-colors ${subAbaEstoque === 'acabado' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`,
+              onClick: () => setSubAbaEstoque('acabado')
+            }, "🧊 Produto Acabado"),
+            /*#__PURE__*/React.createElement("button", {
+              className: `px-4 py-2 text-sm font-bold rounded-md transition-colors ${subAbaEstoque === 'mp' ? 'bg-white text-gray-800 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`,
+              onClick: () => setSubAbaEstoque('mp')
+            }, "📦 Matéria Prima")
+          )
+        ),
+        
+        /*#__PURE__*/React.createElement("div", { className: "mb-6" },
+          /*#__PURE__*/React.createElement("div", { className: "relative" },
+            /*#__PURE__*/React.createElement("i", { className: "ph ph-magnifying-glass absolute left-4 top-3.5 text-gray-400 text-xl" }),
+            /*#__PURE__*/React.createElement("input", {
+              type: "text",
+              placeholder: "Buscar por nome ou código...",
+              className: "w-full pl-12 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none transition-all",
+              value: termoBuscaEstoque,
+              onChange: e => setTermoBuscaEstoque(e.target.value)
+            })
+          )
+        ),
+        
+        subAbaEstoque === 'acabado' && (
+          listaAcabado.length === 0 ? /*#__PURE__*/React.createElement("div", { className: "text-center text-gray-500 py-8" }, "Nenhum produto encontrado.") :
+          /*#__PURE__*/React.createElement("div", { className: "flex flex-col gap-3" },
+            listaAcabado.map((grp, gIdx) => /*#__PURE__*/React.createElement("div", { key: gIdx, className: "border border-gray-200 rounded-xl overflow-hidden" },
+              /*#__PURE__*/React.createElement("div", {
+                className: "bg-white p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors",
+                onClick: () => setModalLotesProduto(grp)
+              },
+                /*#__PURE__*/React.createElement("div", { className: "font-bold text-lg text-gray-800 flex items-center gap-3" }, 
+                  /*#__PURE__*/React.createElement("div", { className: "w-10 h-10 rounded-full bg-brand-50 text-brand-600 flex items-center justify-center" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-package text-xl" })),
+                  grp.nome
+                ),
+                /*#__PURE__*/React.createElement("div", { className: "flex gap-3 items-center" },
+                  grp.totalKg > 0 && /*#__PURE__*/React.createElement("span", { className: "bg-brand-100 text-brand-800 px-3 py-1 rounded-full font-black text-sm" }, grp.totalKg.toFixed(2), " kg"),
+                  grp.totalUnd > 0 && /*#__PURE__*/React.createElement("span", { className: "bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-black text-sm" }, grp.totalUnd, " und"),
+                  /*#__PURE__*/React.createElement("i", { className: "ph ph-list-magnifying-glass text-gray-400 text-xl" })
+                )
+              )
+            ))
+          )
+        ),
+        
+        subAbaEstoque === 'mp' && isPcp && (
+          carregandoMP ? /*#__PURE__*/React.createElement("div", { className: "text-center text-gray-500 py-8 font-bold animate-pulse" }, "Carregando conciliação...") :
+          mpFiltrado.length === 0 ? /*#__PURE__*/React.createElement("div", { className: "text-center text-gray-500 py-8" }, "Nenhum item físico encontrado.") :
+          /*#__PURE__*/React.createElement("div", { className: "flex flex-col gap-3" },
+            mpFiltrado.map((grp, gIdx) => {
+              const sysQtd = estoqueWinthor[grp.codigo] || 0;
+              const dif = grp.totalFisico - sysQtd;
+              
+              let corStatus = "bg-green-100 text-green-800";
+              let difStr = "Bateu";
+              if (dif > 0) {
+                 corStatus = "bg-yellow-100 text-yellow-800";
+                 difStr = `Físico > Sys (+${dif.toFixed(2)})`;
+              } else if (dif < 0) {
+                 corStatus = "bg-red-100 text-red-800";
+                 difStr = `Físico < Sys (${dif.toFixed(2)})`;
+              }
+              
+              return /*#__PURE__*/React.createElement("div", { key: gIdx, className: "border border-gray-200 rounded-xl overflow-hidden" },
+                /*#__PURE__*/React.createElement("div", {
+                  className: "bg-white p-4 flex justify-between items-center cursor-pointer hover:bg-gray-50 transition-colors",
+                  onClick: () => setModalLotesProduto(grp)
+                },
+                  /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-3 w-1/3" }, 
+                    /*#__PURE__*/React.createElement("div", { className: "w-10 h-10 rounded-full bg-orange-50 text-orange-600 flex items-center justify-center" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-box-arrow-down text-xl" })),
+                    /*#__PURE__*/React.createElement("div", null,
+                       /*#__PURE__*/React.createElement("div", { className: "font-bold text-gray-800" }, grp.nome),
+                       /*#__PURE__*/React.createElement("div", { className: "text-xs text-gray-500 font-mono" }, "CÓD: ", grp.codigo)
+                    )
+                  ),
+                  /*#__PURE__*/React.createElement("div", { className: "flex items-center gap-6 text-sm" },
+                    /*#__PURE__*/React.createElement("div", { className: "text-center" },
+                      /*#__PURE__*/React.createElement("div", { className: "text-gray-500 text-xs uppercase" }, "Físico OS"),
+                      /*#__PURE__*/React.createElement("div", { className: "font-bold text-gray-800" }, grp.totalFisico.toFixed(2), " ", grp.und)
+                    ),
+                    /*#__PURE__*/React.createElement("div", { className: "text-center" },
+                      /*#__PURE__*/React.createElement("div", { className: "text-gray-500 text-xs uppercase" }, "Winthor"),
+                      /*#__PURE__*/React.createElement("div", { className: "font-bold text-gray-800" }, sysQtd.toFixed(2), " ", grp.und)
+                    ),
+                    /*#__PURE__*/React.createElement("div", { className: "text-center w-32" },
+                      /*#__PURE__*/React.createElement("span", { className: `px-2 py-1 rounded-full text-xs font-bold ${corStatus}` }, difStr)
+                    ),
+                    /*#__PURE__*/React.createElement("i", { className: "ph ph-list-magnifying-glass text-gray-400 text-xl" })
+                  )
+                )
+              );
+            })
+          )
+        ),
+        
+        modalLotesProduto && /*#__PURE__*/React.createElement("div", { className: "fixed inset-0 bg-gray-900/60 flex items-center justify-center z-[100] backdrop-blur-sm p-4", onClick: () => setModalLotesProduto(null) },
+          /*#__PURE__*/React.createElement("div", { className: "bg-white rounded-3xl w-full max-w-md overflow-hidden shadow-2xl transform transition-all", onClick: e => e.stopPropagation() },
+            /*#__PURE__*/React.createElement("div", { className: "p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50" },
+              /*#__PURE__*/React.createElement("div", null,
+                /*#__PURE__*/React.createElement("h2", { className: "text-2xl font-black text-gray-800 tracking-tight" }, modalLotesProduto.nome),
+                /*#__PURE__*/React.createElement("div", { className: "text-xs font-bold text-gray-400 mt-1 uppercase tracking-wider" }, "CÓD: ", modalLotesProduto.codigo || 'N/A')
+              ),
+              /*#__PURE__*/React.createElement("button", { className: "w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 text-gray-500 hover:bg-red-50 hover:text-red-500 transition-colors", onClick: () => setModalLotesProduto(null) },
+                /*#__PURE__*/React.createElement("i", { className: "ph ph-x text-xl" })
+              )
+            ),
+            /*#__PURE__*/React.createElement("div", { className: "p-2 max-h-[60vh] overflow-y-auto" },
+              modalLotesProduto.lotes.length === 0 ? 
+                /*#__PURE__*/React.createElement("div", { className: "p-8 text-center text-gray-400 font-bold" }, "Nenhum lote físico encontrado.") :
+                /*#__PURE__*/React.createElement("div", { className: "flex flex-col gap-2" },
+                  modalLotesProduto.lotes.map((lote, lIdx) => /*#__PURE__*/React.createElement("div", { key: lIdx, className: "flex justify-between items-center p-4 rounded-2xl hover:bg-gray-50 border border-transparent hover:border-gray-100 transition-all" },
+                    /*#__PURE__*/React.createElement("div", null,
+                      /*#__PURE__*/React.createElement("div", { className: "font-bold text-gray-800 flex items-center gap-2" }, 
+                        /*#__PURE__*/React.createElement("i", { className: "ph ph-tag text-brand-500" }),
+                        (lote.lote || lote.loteFisico || lote.batch_number) ? (lote.lote || lote.loteFisico || lote.batch_number) : /*#__PURE__*/React.createElement("span", { className: "text-gray-400 italic" }, "S/N")
+                      ),
+                      /*#__PURE__*/React.createElement("div", { className: "text-xs text-gray-500 mt-1 flex items-center gap-1" },
+                        /*#__PURE__*/React.createElement("i", { className: "ph ph-calendar-blank" }),
+                        (lote.validade || lote.expiry_date) ? new Date(lote.validade || lote.expiry_date).toLocaleDateString('pt-BR') : 'Sem validade'
+                      )
+                    ),
+                    /*#__PURE__*/React.createElement("div", { className: "text-right" },
+                      /*#__PURE__*/React.createElement("div", { className: "font-black text-xl text-gray-900" }, parseFloat(lote.qtd || lote.quantity || 0).toFixed(2)),
+                      /*#__PURE__*/React.createElement("div", { className: "text-xs font-bold text-gray-400" }, modalLotesProduto.und || lote.und || 'kg')
+                    )
+                  ))
+                )
+            ),
+            /*#__PURE__*/React.createElement("div", { className: "p-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center" },
+              /*#__PURE__*/React.createElement("div", { className: "text-sm font-bold text-gray-500" }, "Total Físico"),
+              /*#__PURE__*/React.createElement("div", { className: "text-xl font-black text-brand-600" }, 
+                 (modalLotesProduto.totalKg > 0 ? modalLotesProduto.totalKg.toFixed(2) : modalLotesProduto.totalUnd > 0 ? modalLotesProduto.totalUnd : (modalLotesProduto.totalFisico || 0).toFixed(2)),
+                 " ", /*#__PURE__*/React.createElement("span", { className: "text-sm" }, modalLotesProduto.und || 'kg')
+              )
+            )
+          )
+        )
+      );
+    })(),
+
+    tecladoAberto && /*#__PURE__*/React.createElement(ModalTeclado, { titulo: "Peso da Patinha", valorInicial: qtd, aoConfirmar: v => { setQtd(v); setTecladoAberto(false); }, aoFechar: () => setTecladoAberto(false) })
+  );
+}
+// ==================== AUTENTICAÇÃO E LOGIN ====================
+function gerarSenhaAleatoria() {
+  return Math.random().toString(36).slice(-6).toUpperCase();
+}
+
+function TelaLogin({ onLogin }) {
+  const [usuario, setUsuario] = useState('');
+  const [senha, setSenha] = useState('');
+  const [erro, setErro] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const USUARIOS_FIXOS = {
+    'lider': { senhaPadrao: 'lider123', setor: 'lider' },
+    'producao': { senhaPadrao: 'producao123', setor: 'producao' },
+    'embaladora': { senhaPadrao: 'embaladora123', setor: 'embaladora' },
+    'expedicao': { senhaPadrao: 'expedicao123', setor: 'expedicao' },
+    'pcp': { senhaPadrao: 'pcp123', setor: 'pcp' }
+  };
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    setErro('');
+    setLoading(true);
+    
+    // Simula tempo de rede
+    await new Promise(r => setTimeout(r, 500));
+    
+    const userKey = usuario.toLowerCase().trim();
+    const dados = USUARIOS_FIXOS[userKey];
+    
+    if (!dados) {
+      setErro('Usuário não encontrado.');
+    } else {
+      const senhaValida = localStorage.getItem('imac_pwd_' + userKey) || dados.senhaPadrao;
+      if (senhaValida === senha) {
+        onLogin({ id: userKey, setor: dados.setor });
+      } else {
+        setErro('Senha incorreta.');
+      }
+    }
+    setLoading(false);
+  }
+
+  return React.createElement('div', { className: 'flex h-screen w-full items-center justify-center bg-gray-100 p-4' },
+    React.createElement('div', { className: 'bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm' },
+      React.createElement('div', { className: 'text-center mb-8' },
+        React.createElement('i', { className: 'ph ph-user-circle text-6xl text-brand-500 mb-2' }),
+        React.createElement('h1', { className: 'text-2xl font-bold text-gray-800' }, 'Acesso ao Sistema'),
+        React.createElement('p', { className: 'text-sm text-gray-500 mt-1' }, 'Insira suas credenciais')
+      ),
+      erro && React.createElement('div', { className: 'bg-red-50 text-red-600 p-3 rounded-lg mb-4 text-sm text-center' }, erro),
+      React.createElement('form', { onSubmit: handleLogin, className: 'space-y-4' },
+        React.createElement('div', null,
+          React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Usuário'),
+          React.createElement('input', {
+            type: 'text',
+            className: 'w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500',
+            value: usuario,
+            onChange: e => setUsuario(e.target.value),
+            required: true
+          })
+        ),
+        React.createElement('div', null,
+          React.createElement('label', { className: 'block text-sm font-medium text-gray-700 mb-1' }, 'Senha'),
+          React.createElement('input', {
+            type: 'password',
+            className: 'w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand-500 focus:border-brand-500',
+            value: senha,
+            onChange: e => setSenha(e.target.value),
+            required: true
+          })
+        ),
+        React.createElement('button', {
+          type: 'submit',
+          disabled: loading,
+          className: 'w-full bg-brand-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-brand-700 transition-colors mt-2'
+        }, loading ? 'Entrando...' : 'Entrar')
+      )
+    )
+  );
+}
+function ModalTrocarSenha({ usuarioId, aoFechar }) {
+  const [senhaAntiga, setSenhaAntiga] = useState('');
+  const [senhaNova, setSenhaNova] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  const USUARIOS_FIXOS = {
+    'lider': 'lider123',
+    'producao': 'producao123',
+    'embaladora': 'embaladora123',
+    'expedicao': 'expedicao123',
+    'pcp': 'pcp123'
+  };
+
+  async function salvar(e) {
+    e.preventDefault();
+    setSalvando(true);
+    
+    await new Promise(r => setTimeout(r, 500)); // simula rede
+    
+    const senhaAtualValida = localStorage.getItem('imac_pwd_' + usuarioId) || USUARIOS_FIXOS[usuarioId];
+    
+    if (senhaAtualValida !== senhaAntiga) {
+      alert('Senha antiga incorreta!');
+    } else {
+      localStorage.setItem('imac_pwd_' + usuarioId, senhaNova);
+      alert('Senha alterada com sucesso! (Salva neste dispositivo)');
+      aoFechar();
+    }
+    setSalvando(false);
+  }
+
+  return React.createElement('div', { className: 'modal-fundo', onClick: aoFechar },
+    React.createElement('div', { className: 'modal-caixa', onClick: e => e.stopPropagation() },
+      React.createElement('div', { className: 'modal-header' },
+        React.createElement('span', null, 'Alterar Senha'),
+        React.createElement('button', { className: 'fechar-btn', onClick: aoFechar }, '✕')
+      ),
+      React.createElement('div', { className: 'modal-body' },
+        React.createElement('form', { onSubmit: salvar, className: 'space-y-4' },
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm text-gray-700 mb-1' }, 'Senha Atual'),
+            React.createElement('input', { type: 'password', className: 'input-data w-full', value: senhaAntiga, onChange: e => setSenhaAntiga(e.target.value), required: true })
+          ),
+          React.createElement('div', null,
+            React.createElement('label', { className: 'block text-sm text-gray-700 mb-1' }, 'Nova Senha'),
+            React.createElement('input', { type: 'text', className: 'input-data w-full', value: senhaNova, onChange: e => setSenhaNova(e.target.value), required: true })
+          ),
+          React.createElement('button', { type: 'submit', disabled: salvando, className: 'btn btn-primary btn-block' }, salvando ? 'Salvando...' : 'Salvar Nova Senha')
+        )
+      )
+    )
+  );
+}
+
+// ==================== TELA EMBALADORA ====================
+function TelaEmbaladora() {
+  const sugerirValidade = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 60);
+    return d.toISOString().split('T')[0];
+  };
+  const [dataAlvo, setDataAlvo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [tunel, setTunel] = useState([]);
+  const [aba, setAba] = useState(0); // 0 = Timeline, 1 = Gestao
+  
+  const [editando, setEditando] = useState(null);
+  const [formLote, setFormLote] = useState('');
+  const [formValidade, setFormValidade] = useState('');
+  
+  useEffect(() => {
+    const ref = window.db.collection('producaoDiaria').doc(dataAlvo);
+    const unsub = ref.onSnapshot(snap => {
+      if (snap.exists && snap.data().tunelRegistros) {
+        setTunel(snap.data().tunelRegistros);
+      } else {
+        setTunel([]);
+      }
+    });
+    return unsub;
+  }, [dataAlvo]);
+
+  const agora = new Date();
+  const tempoAtual = agora.getHours() * 60 + agora.getMinutes();
+
+  const registrosProcessados = tunel.map((t, idx) => {
+    const [h, m] = t.horaEntrada.split(':').map(Number);
+    const inicio = h * 60 + m;
+    const fim = inicio + (t.tempo || 35);
+    const horaFim = `${(Math.floor(fim/60)%24).toString().padStart(2,'0')}:${(fim%60).toString().padStart(2,'0')}`;
+    
+    // Status: 0 = Aguardando, 1 = Embalando (caindo), 2 = Concluido
+    let status = 0;
+    if (tempoAtual >= fim) status = 1; // Se ja passou da hora de queda, esta embalando ou concluido (assumimos embalando se for o atual)
+    // Para simplificar, consideramos "EMBALANDO AGORA" o item que ja passou da horaFim e eh o ultimo. Mas a regra pedida eh: quem ta nos ultimos 5 min ou ja passou, eh destacado.
+    // Vamos marcar os que ja passaram ou faltam menos de 5 min como 1.
+    if (fim - tempoAtual <= 5) status = 1;
+    
+    return { ...t, inicioMin: inicio, fimMin: fim, horaFim, status, originalIndex: idx };
+  }).sort((a, b) => a.inicioMin - b.inicioMin);
+  
+  // Apenas 1 embalando por vez (o mais proximo que bateu o tempo)
+  let embalandoIndex = -1;
+  for(let i = registrosProcessados.length - 1; i >= 0; i--) {
+     if(registrosProcessados[i].status === 1) {
+       embalandoIndex = i;
+       break;
+     }
+  }
+
+  async function salvarEdicaoLote(idxOriginal) {
+     const novaLista = [...tunel];
+     novaLista[idxOriginal].lote = formLote;
+     novaLista[idxOriginal].validade = formValidade;
+     await window.db.collection('producaoDiaria').doc(dataAlvo).update({
+       tunelRegistros: novaLista
+     });
+     setEditando(null);
+  }
+
+  return React.createElement('div', { className: 'p-4 md:p-8 w-full max-w-5xl mx-auto' },
+    React.createElement('div', { className: 'flex justify-between items-center mb-6 border-b border-[#734A2A] pb-4' },
+      React.createElement('h2', { className: 'text-2xl font-black flex items-center gap-2' }, 
+        React.createElement('i', { className: 'ph ph-package text-3xl' }), 'Embaladora'
+      ),
+      React.createElement('div', { className: 'flex items-center space-x-4' },
+        React.createElement('input', { 
+          type: 'date', 
+          className: 'bg-white text-[#5C3A21] border border-gray-300 rounded-lg px-3 py-2 outline-none', 
+          value: dataAlvo, 
+          onChange: e => setDataAlvo(e.target.value) 
+        })
+      )
+    ),
+    
+    React.createElement('div', { className: 'flex space-x-4 mb-6' },
+      React.createElement('button', { onClick: () => setAba(0), className: `px-6 py-2 rounded-full font-bold transition ${aba === 0 ? 'bg-[#5C3A21] text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}` }, 'Painel (Timeline)'),
+      React.createElement('button', { onClick: () => setAba(1), className: `px-6 py-2 rounded-full font-bold transition ${aba === 1 ? 'bg-[#5C3A21] text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}` }, 'Gestão de Lotes')
+    ),
+
+    aba === 0 && React.createElement('div', { className: 'bg-[#151A22] rounded-3xl p-8 min-h-[60vh] shadow-2xl relative' },
+      React.createElement('h3', { className: 'text-[#F6BE00] font-black text-xl mb-2 flex items-center gap-2 uppercase tracking-wide' }, 
+         React.createElement('i', { className: 'ph ph-monitor-play text-2xl' }), 'Painel do Túnel Helicoidal'
+      ),
+      React.createElement('p', { className: 'text-gray-400 mb-10' }, 'Sequência preditiva do que está vindo da masseira e passando pelo túnel.'),
+      
+      tunel.length === 0 && React.createElement('div', { className: 'text-gray-500 text-center py-10' }, 'Nenhum produto no túnel hoje.'),
+
+      React.createElement('div', { className: 'relative pl-8 space-y-8' },
+        React.createElement('div', { className: 'absolute left-0 top-4 bottom-4 w-[2px] bg-gray-700' }), // Linha do tempo central
+        
+        registrosProcessados.map((item, i) => {
+          const isEmbalando = (i === embalandoIndex);
+          const isNext = (i > embalandoIndex);
+          const dotColor = isEmbalando ? 'bg-[#F6BE00] shadow-[0_0_10px_#F6BE00]' : (isNext ? 'bg-gray-500' : 'bg-gray-700');
+          const borderColor = isEmbalando ? 'border-[#F6BE00]' : 'border-gray-700';
+          const tagBg = isEmbalando ? 'bg-[#F6BE00] text-[#151A22]' : 'bg-gray-700 text-gray-300';
+          const tagText = isEmbalando ? 'EMBALANDO AGORA' : (isNext ? 'PRÓXIMO LOTE' : 'JÁ PASSOU');
+
+          return React.createElement('div', { key: i, className: 'relative' },
+            // Ponto na timeline
+            React.createElement('div', { className: `absolute -left-[37px] top-8 w-4 h-4 rounded-full z-10 ${dotColor}` }),
+            
+            // Card
+            React.createElement('div', { className: `bg-[#1D2530] rounded-2xl p-6 border ${borderColor} transition-all` },
+               React.createElement('div', { className: `inline-block px-3 py-1 rounded font-black text-xs mb-4 uppercase ${tagBg}` }, tagText),
+               React.createElement('div', { className: 'flex items-center gap-4 mb-4' },
+                 React.createElement('h4', { className: 'text-2xl font-black text-white' }, item.produto),
+                 item.lote && React.createElement('div', { className: 'bg-black text-[#F6BE00] px-3 py-1 rounded font-bold text-sm border border-gray-700' }, 'Lote ', item.lote)
+               ),
+               
+               React.createElement('div', { className: 'flex flex-col gap-2 mt-4' },
+                 React.createElement('div', { className: 'inline-flex items-center gap-2 bg-[#151A22] border border-gray-700 rounded-lg px-4 py-2 w-max' },
+                   React.createElement('i', { className: 'ph ph-clock text-[#F6BE00]' }),
+                   React.createElement('span', { className: 'text-gray-300 font-mono text-sm' }, `Início: ${item.horaEntrada} — Fim: ${item.horaFim}`)
+                 ),
+                 isEmbalando ? React.createElement('div', { className: 'inline-flex items-center gap-2 bg-[#5C3A21] border border-[#F6BE00] rounded-lg px-4 py-2 w-max' },
+                   React.createElement('i', { className: 'ph ph-hourglass-high text-[#F6BE00] animate-pulse' }),
+                   React.createElement('span', { className: 'text-[#F6BE00] font-bold' }, `Termina de cair em ${Math.max(0, item.fimMin - tempoAtual)} min`)
+                 ) : (isNext ? React.createElement('div', { className: 'inline-flex items-center gap-2 bg-[#1D2530] border border-gray-600 rounded-lg px-4 py-2 w-max' },
+                   React.createElement('i', { className: 'ph ph-hourglass-low text-gray-400' }),
+                   React.createElement('span', { className: 'text-gray-300 font-bold' }, `Começa a cair em ${Math.max(0, item.inicioMin - tempoAtual + (item.tempo||35))} min`)
+                 ) : null)
+               )
+
+            )
+          )
+        })
+      )
+    ),
+
+    aba === 1 && React.createElement('div', { className: 'bg-white rounded-2xl p-6 shadow-xl border border-gray-200' },
+       React.createElement('h3', { className: 'text-xl font-bold mb-4 flex items-center gap-2' }, React.createElement('i', { className: 'ph ph-list-numbers text-[#5C3A21]' }), 'Gestão de Lotes e Validade'),
+       React.createElement('div', { className: 'overflow-x-auto' },
+         React.createElement('table', { className: 'w-full text-left border-collapse' },
+           React.createElement('thead', { className: 'bg-[#5C3A21] text-white' },
+             React.createElement('tr', null,
+               React.createElement('th', { className: 'p-3 rounded-tl-lg' }, 'Horário'),
+               React.createElement('th', { className: 'p-3' }, 'Produto'),
+               React.createElement('th', { className: 'p-3' }, 'Lote'),
+               React.createElement('th', { className: 'p-3' }, 'Validade'),
+               React.createElement('th', { className: 'p-3 rounded-tr-lg text-center' }, 'Ações')
+             )
+           ),
+           React.createElement('tbody', { className: 'divide-y divide-gray-200' },
+             tunel.map((t, idx) => React.createElement('tr', { key: idx, className: 'hover:bg-gray-50' },
+                React.createElement('td', { className: 'p-3 font-mono text-gray-600' }, t.horaEntrada),
+                React.createElement('td', { className: 'p-3 font-bold text-[#5C3A21]' }, t.produto),
+                React.createElement('td', { className: 'p-3' }, 
+                   editando === idx ? React.createElement('input', { className: 'border p-1 w-full rounded', value: formLote, onChange: e => setFormLote(e.target.value) }) : React.createElement('span', { className: 'bg-gray-200 px-2 py-1 rounded font-bold' }, t.lote || 'N/A')
+                ),
+                React.createElement('td', { className: 'p-3' },
+                   editando === idx ? React.createElement('input', { type: 'date', className: 'border p-1 w-full rounded', value: formValidade, onChange: e => setFormValidade(e.target.value) }) : (t.validade || '-')
+                ),
+                React.createElement('td', { className: 'p-3 text-center' },
+                   editando === idx ? 
+                     React.createElement('button', { onClick: () => salvarEdicaoLote(idx), className: 'bg-green-600 text-white px-3 py-1 rounded font-bold hover:bg-green-700' }, 'Salvar')
+                   :
+                     React.createElement('button', { onClick: () => { setEditando(idx); setFormLote(t.lote||''); setFormValidade(t.validade||sugerirValidade()); }, className: 'bg-[#F6BE00] text-[#5C3A21] px-3 py-1 rounded font-bold hover:bg-yellow-500' }, 'Editar')
+                )
+             ))
+           )
+         )
+       )
+    )
+  );
+}
+
+// ==================== TELA RESUMO PCP (TV) ====================
+function TelaResumoPCP({ sair }) {
+  const [abaAtual, setAbaAtual] = useState(0); 
+  const [dataAlvo, setDataAlvo] = useState(() => new Date().toISOString().split('T')[0]);
+  
+  const [prodDiaria, setProdDiaria] = useState([]);
+  const [tunel, setTunel] = useState([]);
+  const [expedicao, setExpedicao] = useState([]);
+  const [ultimoHorario, setUltimoHorario] = useState(null);
+  
+  const painelRef = React.useRef(null);
+
+  useEffect(() => {
+    const unsubProd = window.db.collection('producaoDiaria').doc(dataAlvo).onSnapshot(s => {
+      if(s.exists) {
+        const d = s.data();
+        if(d.itens) setProdDiaria(d.itens); else setProdDiaria([]);
+        if(d.tunelRegistros) setTunel(d.tunelRegistros); else setTunel([]);
+      } else {
+        setProdDiaria([]);
+        setTunel([]);
+      }
+    });
+    const unsubExp = window.db.collection('expedicaoDiaria').doc(dataAlvo).onSnapshot(s => {
+      if(s.exists && s.data().registros) setExpedicao(s.data().registros);
+      else setExpedicao([]);
+    });
+    return () => { unsubProd(); unsubExp(); };
+  }, [dataAlvo]);
+
+  // Atualizar contadores a cada 30 segundos
+  const [agora, setAgora] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setAgora(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+
+
+  function toggleFullScreen() {
+    if (!document.fullscreenElement) {
+      if(painelRef.current) painelRef.current.requestFullscreen().catch(err => console.log(err));
+    } else {
+      document.exitFullscreen();
+    }
+  }
+
+  // === CALCULOS METRICAS MASSEIRA ===
+  const totalKilos = prodDiaria.reduce((acc, item) => acc + ((item.feitos || 0) * (item.rendimentoTeorico || 0)), 0);
+  const totalReceitas = prodDiaria.reduce((acc, item) => acc + (item.feitos || 0), 0);
+  
+  let todasBatidas = [];
+  prodDiaria.forEach(item => {
+    if(item.batidas && Array.isArray(item.batidas)) {
+      item.batidas.forEach(b => todasBatidas.push(typeof b === 'string' ? b : (b.horario || '')));
+    } else {
+      for(let i=0; i<(item.feitos||0); i++) {
+         todasBatidas.push(new Date().toISOString()); // fallback
+      }
+    }
+  });
+
+  todasBatidas = todasBatidas.filter(b => b).sort((a,b) => a.localeCompare(b));
+
+  let minDesdeUltima = null;
+  let recPorMinuto = "0,00";
+
+  if(todasBatidas.length > 0) {
+       const ultimaBatida = new Date(todasBatidas[todasBatidas.length - 1]);
+       minDesdeUltima = Math.floor((new Date() - ultimaBatida) / 60000);
+       
+       if(todasBatidas.length > 1) {
+           const primeiraBatida = new Date(todasBatidas[0]);
+           let spanMinutos = (ultimaBatida - primeiraBatida) / 60000;
+           if(spanMinutos > 0) {
+               recPorMinuto = (todasBatidas.length / spanMinutos).toFixed(2).replace('.', ',');
+           }
+       }
+  }
+
+  return /*#__PURE__*/React.createElement(
+    "div",
+    { className: "flex flex-col h-screen bg-[#3D2515] text-[#D0B29E] font-sans overflow-hidden" },
+    
+    // Header
+    /*#__PURE__*/React.createElement(
+      "header",
+      { className: "h-20 bg-[#2A170A] flex items-center justify-between px-8 shadow-md shrink-0 border-b border-[#5C3A21]" },
+      /*#__PURE__*/React.createElement(
+        "div",
+        { className: "flex items-center gap-4" },
+        /*#__PURE__*/React.createElement("img", { src: "https://imac.ind.br/wp-content/uploads/2023/11/logo.png", alt: "Imac", className: "h-10" }),
+        /*#__PURE__*/React.createElement("h1", { className: "text-2xl font-black text-[#F6BE00] tracking-wider uppercase" }, "Painel Industrial")
+      ),
+      /*#__PURE__*/React.createElement(
+        "div",
+        { className: "flex items-center gap-4" },
+
+        // Botoes de Navegacao
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "flex items-center gap-2 mr-4 bg-[#3D2515] p-1 rounded-lg border border-[#734A2A]" },
+          /*#__PURE__*/React.createElement("button", { onClick: () => setAbaAtual(0), className: `px-4 py-2 rounded font-bold transition-colors ${abaAtual === 0 ? 'bg-[#F6BE00] text-[#2A170A]' : 'text-[#D0B29E] hover:bg-[#4A2E1A]'}` }, "Masseira"),
+          /*#__PURE__*/React.createElement("button", { onClick: () => setAbaAtual(1), className: `px-4 py-2 rounded font-bold transition-colors ${abaAtual === 1 ? 'bg-[#F6BE00] text-[#2A170A]' : 'text-[#D0B29E] hover:bg-[#4A2E1A]'}` }, "Embaladora"),
+          /*#__PURE__*/React.createElement("button", { onClick: () => setAbaAtual(2), className: `px-4 py-2 rounded font-bold transition-colors ${abaAtual === 2 ? 'bg-[#F6BE00] text-[#2A170A]' : 'text-[#D0B29E] hover:bg-[#4A2E1A]'}` }, "Câmaras")
+        ),
+
+        /*#__PURE__*/React.createElement("input", { type: "date", className: "bg-[#4A2E1A] text-[#F6BE00] p-2 rounded border border-[#734A2A] font-bold", value: dataAlvo, onChange: e => setDataAlvo(e.target.value) }),
+        /*#__PURE__*/React.createElement(
+          "button",
+          { onClick: toggleFullScreen, className: "bg-[#F6BE00] text-[#2A170A] px-4 py-2 rounded font-bold hover:bg-[#E5B100] transition-colors" },
+          /*#__PURE__*/React.createElement("i", { className: "ph ph-corners-out" })
+        ),
+        /*#__PURE__*/React.createElement(
+          "button",
+          { onClick: sair, className: "bg-[#4A2E1A] text-white px-4 py-2 rounded font-bold hover:bg-[#5C3A21] border border-[#734A2A] transition-colors" },
+          "Voltar"
+        )
+      )
+    ),
+
+    // Main Content
+    /*#__PURE__*/React.createElement(
+      "main",
+      { ref: painelRef, className: "flex-1 p-8 overflow-y-auto bg-[#3D2515]" },
+      
+      abaAtual === 0 && /*#__PURE__*/React.createElement(
+        "div",
+        { className: "animate-fadeIn" },
+        /*#__PURE__*/React.createElement("h3", { className: "text-2xl font-bold mb-6 text-center text-white flex items-center justify-center gap-3" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-bowl-food text-3xl text-[#F6BE00]" }), "Produção Masseira"),
+        
+        // Cards Topo
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "grid grid-cols-1 md:grid-cols-3 gap-6 mb-8" },
+          /*#__PURE__*/React.createElement(
+            "div",
+            { className: "bg-[#4A2E1A] p-6 rounded-2xl shadow-xl flex flex-col items-center justify-center border border-[#734A2A]" },
+            /*#__PURE__*/React.createElement("span", { className: "text-sm text-[#D0B29E] font-bold uppercase mb-2" }, "Velocidade"),
+            /*#__PURE__*/React.createElement(
+              "div",
+              { className: "text-4xl font-black text-white" },
+              recPorMinuto,
+              /*#__PURE__*/React.createElement("span", { className: "text-lg text-[#D0B29E] ml-1" }, "rec/m")
+            )
+          ),
+          /*#__PURE__*/React.createElement(
+            "div",
+            { className: "bg-[#4A2E1A] p-6 rounded-2xl shadow-xl flex flex-col items-center justify-center border border-[#734A2A]" },
+            /*#__PURE__*/React.createElement("span", { className: "text-sm text-[#D0B29E] font-bold uppercase mb-2" }, "Última Batida"),
+            /*#__PURE__*/React.createElement(
+              "div",
+              { className: "text-4xl font-black text-white" },
+              minDesdeUltima !== null ? minDesdeUltima : "-",
+              /*#__PURE__*/React.createElement("span", { className: "text-lg text-[#D0B29E] ml-1" }, "min")
+            )
+          ),
+
+        ),
+        
+        // Progressos e a fazer
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "grid grid-cols-1 md:grid-cols-2 gap-8" },
+          /*#__PURE__*/React.createElement(
+            "div",
+            null,
+            /*#__PURE__*/React.createElement("h3", { className: "text-xl font-bold mb-4 text-[#F6BE00] flex items-center gap-2" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-chart-bar text-2xl" }), "Progresso das Receitas"),
+            /*#__PURE__*/React.createElement(
+              "div",
+              { className: "space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scroll" },
+              prodDiaria.map((item, idx) => {
+                const perc = item.metaLotes ? Math.min(100, Math.round(((item.feitos || 0) / item.metaLotes) * 100)) : 0;
+                return /*#__PURE__*/React.createElement(
+                  "div",
+                  { key: idx, className: "bg-[#4A2E1A] rounded-xl p-4 border border-[#734A2A]" },
+                  /*#__PURE__*/React.createElement(
+                    "div",
+                    { className: "flex justify-between items-end mb-2" },
+                    /*#__PURE__*/React.createElement("div", { className: "font-bold text-white text-lg" }, item.produto),
+                    /*#__PURE__*/React.createElement("div", { className: "font-mono text-[#D0B29E]" }, /*#__PURE__*/React.createElement("span", { className: "text-2xl font-black text-[#F6BE00]" }, item.feitos || 0), " / ", item.metaLotes)
+                  ),
+                  /*#__PURE__*/React.createElement(
+                    "div",
+                    { className: "w-full bg-[#3D2515] rounded-full h-3 mb-1 overflow-hidden" },
+                    /*#__PURE__*/React.createElement("div", { className: "bg-[#F6BE00] h-3 rounded-full transition-all duration-1000", style: { width: `${perc}%` } })
+                  )
+                );
+              })
+            )
+          ),
+          /*#__PURE__*/React.createElement(
+            "div",
+            null,
+            /*#__PURE__*/React.createElement("h3", { className: "text-xl font-bold mb-4 text-[#F6BE00] flex items-center gap-2" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-clock-counter-clockwise text-2xl" }), "Próximas Produções / A Fazer"),
+            /*#__PURE__*/React.createElement(
+              "div",
+              { className: "bg-[#4A2E1A] rounded-xl overflow-hidden border border-[#734A2A] shadow-xl" },
+              /*#__PURE__*/React.createElement(
+                "table",
+                { className: "w-full text-left" },
+                /*#__PURE__*/React.createElement(
+                  "thead",
+                  { className: "bg-[#3D2515] text-[#D0B29E]" },
+                  /*#__PURE__*/React.createElement(
+                    "tr",
+                    null,
+                    /*#__PURE__*/React.createElement("th", { className: "p-4 font-bold" }, "Produto"),
+                    /*#__PURE__*/React.createElement("th", { className: "p-4 font-bold text-right" }, "Faltam")
+                  )
+                ),
+                /*#__PURE__*/React.createElement(
+                  "tbody",
+                  { className: "divide-y divide-[#734A2A]" },
+                  prodDiaria.filter(p => (p.metaLotes - (p.feitos||0)) > 0).map((p, i) => /*#__PURE__*/React.createElement(
+                    "tr",
+                    { key: i, className: "hover:bg-[#5C3A21]" },
+                    /*#__PURE__*/React.createElement("td", { className: "p-4 font-bold text-white" }, p.produto),
+                    /*#__PURE__*/React.createElement("td", { className: "p-4 text-right font-black text-[#F6BE00] text-xl" }, (p.metaLotes - (p.feitos||0)))
+                  ))
+                )
+              )
+            )
+          )
+        )
+      ),
+
+      abaAtual === 1 && /*#__PURE__*/React.createElement(
+        "div",
+        { className: "animate-fadeIn" },
+        /*#__PURE__*/React.createElement("h3", { className: "text-2xl font-bold mb-6 text-center text-white flex items-center justify-center gap-3" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-package text-3xl text-[#F6BE00]" }), "Fila do Túnel (Embaladora)"),
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "grid gap-6 md:grid-cols-2 lg:grid-cols-3" },
+          tunel.map((t, idx) => {
+            const [h, m] = t.horaEntrada.split(':').map(Number);
+            const totalMin = h * 60 + m + (t.tempo || 35);
+            const horaQueda = `${(Math.floor(totalMin/60)%24).toString().padStart(2,'0')}:${(totalMin%60).toString().padStart(2,'0')}`;
+            const caindo = Math.abs((agora.getHours()*60 + agora.getMinutes()) - totalMin) <= 5;
+            return /*#__PURE__*/React.createElement(
+              "div",
+              { key: idx, className: `bg-[#4A2E1A] rounded-2xl p-6 border-l-4 ${caindo ? 'border-red-500 shadow-[0_0_15px_rgba(239,68,68,0.5)]' : 'border-[#F6BE00]'} flex flex-col` },
+              /*#__PURE__*/React.createElement("span", { className: "text-sm text-[#D0B29E] mb-1" }, "Produto"),
+              /*#__PURE__*/React.createElement("span", { className: "text-xl font-bold text-white mb-4" }, t.produto),
+              /*#__PURE__*/React.createElement(
+                "div",
+                { className: "flex justify-between mt-auto bg-[#3D2515] p-3 rounded-xl border border-[#734A2A]" },
+                /*#__PURE__*/React.createElement(
+                  "div",
+                  null,
+                  /*#__PURE__*/React.createElement("div", { className: "text-xs text-[#D0B29E] uppercase" }, "Entrada"),
+                  /*#__PURE__*/React.createElement("div", { className: "font-mono text-white" }, t.horaEntrada)
+                ),
+                /*#__PURE__*/React.createElement(
+                  "div",
+                  { className: "text-right" },
+                  /*#__PURE__*/React.createElement("div", { className: "text-xs text-[#F6BE00] uppercase font-bold" }, "Queda Prevista"),
+                  /*#__PURE__*/React.createElement("div", { className: "font-mono text-xl font-bold text-white" }, horaQueda)
+                )
+              )
+            );
+          })
+        )
+      ),
+
+      abaAtual === 2 && /*#__PURE__*/React.createElement(
+        "div",
+        { className: "animate-fadeIn flex flex-col h-full" },
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "flex justify-between items-center mb-6" },
+          /*#__PURE__*/React.createElement("div", { className: "w-1/3" }), // Spacer
+          /*#__PURE__*/React.createElement("h3", { className: "text-2xl font-bold text-center text-white flex items-center justify-center gap-3 flex-1" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-snowflake text-3xl text-[#F6BE00]" }), "Últimas Entradas nas Câmaras"),
+          /*#__PURE__*/React.createElement(
+            "div",
+            { className: "w-1/3 flex justify-end" },
+            /*#__PURE__*/React.createElement(
+              "div",
+              { className: "bg-[#4A2E1A] px-6 py-3 rounded-2xl border border-[#734A2A] shadow-xl text-center" },
+              /*#__PURE__*/React.createElement("span", { className: "text-xs text-[#D0B29E] font-bold uppercase" }, "Peso Total do Dia"),
+              /*#__PURE__*/React.createElement("div", { className: "text-2xl font-black text-[#F6BE00]" }, expedicao.reduce((acc, e) => acc + (parseFloat(e.pesoTotal) || parseFloat(e.qtd) || 0), 0).toFixed(2).replace('.', ','), /*#__PURE__*/React.createElement("span", { className: "text-sm text-[#D0B29E] ml-1" }, "kg"))
+            )
+          )
+        ),
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "bg-[#4A2E1A] rounded-2xl overflow-hidden border border-[#734A2A] shadow-xl" },
+          /*#__PURE__*/React.createElement(
+            "table",
+            { className: "w-full text-left" },
+            /*#__PURE__*/React.createElement(
+              "thead",
+              { className: "bg-[#3D2515] text-[#D0B29E]" },
+              /*#__PURE__*/React.createElement(
+                "tr",
+                null,
+                /*#__PURE__*/React.createElement("th", { className: "p-4 font-bold" }, "Horário"),
+                /*#__PURE__*/React.createElement("th", { className: "p-4 font-bold" }, "Produto / Lote"),
+                /*#__PURE__*/React.createElement("th", { className: "p-4 font-bold text-right" }, "Peso / Cxs")
+              )
+            ),
+            /*#__PURE__*/React.createElement(
+              "tbody",
+              { className: "divide-y divide-[#734A2A]" },
+              expedicao.slice(-10).reverse().map((e, idx) => /*#__PURE__*/React.createElement(
+                "tr",
+                { key: idx, className: "hover:bg-[#5C3A21]" },
+                /*#__PURE__*/React.createElement("td", { className: "p-4 text-[#F6BE00] font-mono" }, e.horario),
+                /*#__PURE__*/React.createElement(
+                  "td",
+                  { className: "p-4" },
+                  /*#__PURE__*/React.createElement("div", { className: "font-bold text-white" }, e.produto),
+                  /*#__PURE__*/React.createElement("div", { className: "text-sm text-[#D0B29E]" }, "Lote: ", e.lote)
+                ),
+                /*#__PURE__*/React.createElement(
+                  "td",
+                  { className: "p-4 text-right" },
+                  /*#__PURE__*/React.createElement("div", { className: "font-bold text-white" }, e.pesoTotal, " kg"),
+                  /*#__PURE__*/React.createElement("div", { className: "text-sm text-[#D0B29E]" }, e.qtCaixas, " cx")
+                )
+              ))
+            )
+          )
+        )
+      )
+    )
+  );
+}
+
+      /* MODAL DETALHES MATERIA PRIMA */
+
+function GlobalTicker() {
+  const [msg, setMsg] = useState("");
+  const [parada, setParada] = useState(null);
+  const [dataHoje, setDataHoje] = useState(hojeISO());
+  
+  useEffect(() => {
+    // Escuta a parada de emergência do dia atual
+    const unsubProd = window.db.collection('producaoDiaria').doc(hojeISO()).onSnapshot(snap => {
+      if(snap.exists) {
+        const d = snap.data();
+        if(d.paradaEmergencia && d.paradaEmergencia.ativa) {
+          setParada(d.paradaEmergencia);
+        } else {
+          setParada(null);
+        }
+      }
+    });
+    return () => unsubProd();
+  }, []);
+
+  if (!parada) return null;
+  return /*#__PURE__*/React.createElement("div", { className: "w-full bg-red-600 text-white font-black uppercase text-xl py-2 overflow-hidden flex items-center shadow-[0_0_15px_rgba(220,38,38,0.6)] animate-pulse border-y-4 border-red-800 z-50 fixed bottom-0 left-0" },
+    /*#__PURE__*/React.createElement("div", { className: "whitespace-nowrap flex animate-[marquee_15s_linear_infinite]" },
+      /*#__PURE__*/React.createElement("span", { className: "mx-8" }, "⚠️ ALERTA: ", parada.motivo || "PRODUÇÃO PARADA", " ⚠️"),
+      /*#__PURE__*/React.createElement("span", { className: "mx-8" }, "⚠️ ALERTA: ", parada.motivo || "PRODUÇÃO PARADA", " ⚠️"),
+      /*#__PURE__*/React.createElement("span", { className: "mx-8" }, "⚠️ ALERTA: ", parada.motivo || "PRODUÇÃO PARADA", " ⚠️")
+    )
+  );
+}
+
+function App() {
+  const [currentUser, setCurrentUser] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('imac_user')); } catch(e) { return null; }
+  });
+  const [mostrarTrocaSenha, setMostrarTrocaSenha] = useState(false);
+
+  const handleLoginSuccess = (user) => {
+    localStorage.setItem('imac_user', JSON.stringify(user));
+    setCurrentUser(user);
+    if(user.setor === 'embaladora') setTela('embaladora');
+    else if(user.setor === 'expedicao') setTela('expedicao');
+    else if(user.setor === 'producao') setTela('operador');
+    else setTela('inicio');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('imac_user');
+    setCurrentUser(null);
+  };
+
+  const [tela, setTela] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('tv') === '1' ? 'painel' : 'inicio';
+    } catch (e) {
+      return 'inicio';
+    }
+  });
+  const fbPronto = useFirebasePronto();
+  if (!fbPronto) {
+    return /*#__PURE__*/React.createElement("div", {
+    className: "app-container"
+  }, /*#__PURE__*/React.createElement(GlobalTicker, null),
+      /*#__PURE__*/React.createElement("div", { className: "flex h-screen w-full items-center justify-center text-gray-500 bg-gray-50 font-bold" }, "Conectando ao banco de dados...")
+    );
+  }
+  
+  if (!currentUser) {
+    return React.createElement(TelaLogin, { onLogin: handleLoginSuccess });
+  }
+
+  if (tela === 'painel') {
+    return /*#__PURE__*/React.createElement(TelaPainelTV, {
+      sair: () => setTela('inicio')
+    });
+  }
+
+  const nomesTelas = {
+    'lider': 'Conferência de Receitas',
+    'operador': 'Painel de Produção',
+    'embaladora': 'Embaladora',
+    'resumo_pcp': 'Painel TV (Resumos)',
+    'relatorio': 'Relatório',
+    'fechamento': 'Fechamento de Produção',
+    'livro': 'Livro de Produção',
+    'produtos': 'Produtos e Setores',
+    'pcp': 'Lançamentos PCP Winthor',
+    'expedicao': 'Expedição Câmaras'
+  };
+
+  return /*#__PURE__*/React.createElement(
+    "div",
+    { className: "flex-1 flex flex-col h-screen w-full relative pb-16 bg-gray-50 text-gray-800 font-sans" },
+    /*#__PURE__*/React.createElement(GlobalTicker, null),
+    /*#__PURE__*/React.createElement(
+      "main",
+      { className: "flex-1 flex flex-col h-full overflow-hidden" },
+      /*#__PURE__*/React.createElement(
+        "header",
+        { className: "h-16 bg-white flex items-center justify-between px-6 shadow-sm z-10 shrink-0" },
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "flex items-center" },
+          tela !== 'inicio' && /*#__PURE__*/React.createElement(
+            "button",
+            { onClick: () => setTela('inicio'), className: "mr-4 text-gray-500 hover:text-brand-600 transition-colors" },
+            /*#__PURE__*/React.createElement("i", { className: "ph ph-arrow-left text-2xl" })
+          ),
+          /*#__PURE__*/React.createElement(
+            "h2",
+            { className: "text-xl font-bold text-gray-800" },
+            tela === 'inicio' ? 'Fábrica / PCP' : (nomesTelas[tela] || 'Painel')
+          )
+        ),
+        /*#__PURE__*/React.createElement(
+          "div",
+          { className: "flex items-center text-sm" },
+          /*#__PURE__*/React.createElement("p", { className: "font-bold text-gray-800 mr-2 truncate max-w-[100px]", style: {textTransform:"capitalize"} }, currentUser.setor),
+          /*#__PURE__*/React.createElement("button", { onClick: () => setMostrarTrocaSenha(true), className: "mr-3 text-gray-400 hover:text-brand-500 text-xs flex flex-col items-center" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-key text-xl" }), "Senha"), /*#__PURE__*/React.createElement("button", { onClick: handleLogout, className: "text-gray-400 hover:text-red-500 text-xs flex flex-col items-center" }, /*#__PURE__*/React.createElement("i", { className: "ph ph-sign-out text-xl" }), "Sair")
+        )
+      ),
+      /*#__PURE__*/React.createElement(
+        "div",
+        { className: "flex-1 overflow-y-auto p-4 md:p-8", id: "main-container" },
+        tela === 'inicio' && /*#__PURE__*/React.createElement(TelaInicio, { ir: setTela }),
+        tela === 'lider' && /*#__PURE__*/React.createElement(TelaLider, null),
+        tela === 'operador' && /*#__PURE__*/React.createElement(TelaOperador, null),
+        tela === 'relatorio' && /*#__PURE__*/React.createElement(TelaRelatorio, null),
+        tela === 'fechamento' && /*#__PURE__*/React.createElement(TelaFechamento, null),
+        tela === 'livro' && /*#__PURE__*/React.createElement(TelaLivroDeProducao, null),
+        tela === 'produtos' && /*#__PURE__*/React.createElement(TelaProdutos, null),
+        tela === 'pcp' && /*#__PURE__*/React.createElement(TelaPCP, null),
+        tela === 'expedicao' && /*#__PURE__*/React.createElement(TelaExpedicao, null),
+        tela === 'embaladora' && /*#__PURE__*/React.createElement(TelaEmbaladora, null),
+        tela === 'resumo_pcp' && /*#__PURE__*/React.createElement(TelaResumoPCP, { sair: () => setTela('inicio') })
+      )
+    ),
+    /*#__PURE__*/React.createElement(
+      "nav",
+      { className: "fixed bottom-0 left-0 w-full h-16 bg-white border-t border-gray-200 flex justify-around items-center z-40 text-xs font-medium text-gray-500 shadow-[0_-2px_10px_rgba(0,0,0,0.05)] pb-safe" },
+      /*#__PURE__*/React.createElement(
+        "button",
+        { onClick: () => setTela('inicio'), className: `flex flex-col items-center justify-center w-full h-full hover:text-brand-600 transition-colors ${tela === 'inicio' ? 'text-brand-600' : ''}` },
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-squares-four text-2xl mb-1" }),
+        "Início"
+      ),
+      (currentUser.setor === 'pcp' || currentUser.setor === 'lider') && /*#__PURE__*/React.createElement(
+        "button",
+        { onClick: () => setTela('lider'), className: `flex flex-col items-center justify-center w-full h-full hover:text-brand-600 transition-colors ${tela === 'lider' ? 'text-brand-600' : ''}` },
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-users text-2xl mb-1" }),
+        "Líder"
+      ),
+      (currentUser.setor === 'pcp' || currentUser.setor === 'producao' || currentUser.setor === 'lider') && /*#__PURE__*/React.createElement(
+        "button",
+        { onClick: () => setTela('operador'), className: `flex flex-col items-center justify-center w-full h-full hover:text-brand-600 transition-colors ${tela === 'operador' ? 'text-brand-600' : ''}` },
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-cooking-pot text-2xl mb-1" }),
+        "Produção"
+      ),
+      (currentUser.setor === 'embaladora') && /*#__PURE__*/React.createElement(
+        "button",
+        { onClick: () => setTela('embaladora'), className: `flex flex-col items-center justify-center w-full h-full hover:text-brand-600 transition-colors ${tela === 'embaladora' ? 'text-brand-600' : ''}` },
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-package text-2xl mb-1" }),
+        "Embaladora"
+      ),
+      (currentUser.setor === 'expedicao') && /*#__PURE__*/React.createElement(
+        "button",
+        { onClick: () => setTela('expedicao'), className: `flex flex-col items-center justify-center w-full h-full hover:text-brand-600 transition-colors ${tela === 'expedicao' ? 'text-brand-600' : ''}` },
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-snowflake text-2xl mb-1" }),
+        "Expedição"
+      ),
+      (currentUser.setor === 'pcp') && /*#__PURE__*/React.createElement(
+        "button",
+        { onClick: () => setTela('pcp'), className: `flex flex-col items-center justify-center w-full h-full hover:text-brand-600 transition-colors ${tela === 'pcp' ? 'text-brand-600' : ''}` },
+        /*#__PURE__*/React.createElement("i", { className: "ph ph-chart-bar text-2xl mb-1" }),
+        "PCP"
+      )
+    ),
+    mostrarTrocaSenha && /*#__PURE__*/React.createElement(ModalTrocaSenha, { fechar: () => setMostrarTrocaSenha(false), user: currentUser })
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(/*#__PURE__*/React.createElement(App, null));
+</script>
+</body>
+</html>

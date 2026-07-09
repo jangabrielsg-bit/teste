@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Treinamento do Sistema de Produção - INDÚSTRIA DE MASSAS CONGELADAS</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <style>
+    :root {
+      --amarelo: #f5b915;
+      --amarelo-claro: #fff3d6;
+      --marrom: #6b4423;
+      --marrom-claro: #a78355;
+    }
+    
+    @media print {
+      body {
+        background: white !important;
+        color: black !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .slide-page {
+        page-break-after: always;
+        height: 100vh !important;
+        border: none !important;
+        box-shadow: none !important;
+        margin: 0 !important;
+        padding: 1.5rem !important;
+        display: flex !important;
+      }
+    }
+
+    /* Presentation container and slide layout */
+    .presentation-container {
+      width: 100%;
+      max-width: 1100px;
+      margin: 0 auto;
+      position: relative;
+      transition: all 0.3s ease;
+    }
+
+    .slide-page {
+      width: 100%;
+      max-width: 1100px;
+      aspect-ratio: 16/9;
+      background: white;
+      border: 2px solid #e8c667;
+      box-shadow: 0 15px 35px -5px rgba(0, 0, 0, 0.15), 0 10px 15px -6px rgba(0, 0, 0, 0.1);
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: all 0.2s ease;
+    }
+
+    /* Hidden by default in slide mode */
+    .slide-mode .slide-page {
+      display: none;
+    }
+    .slide-mode .slide-page.active-slide {
+      display: flex;
+    }
+
+    /* Fullscreen specifications to fill the entire viewport */
+    .presentation-container:fullscreen {
+      max-width: 100vw !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      background-color: #111 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .presentation-container:fullscreen .slide-page {
+      max-width: 100vw !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      aspect-ratio: auto !important;
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+      padding: 2.5rem !important;
+    }
+
+    /* Webkit vendor support for Safari/Chrome */
+    .presentation-container:-webkit-full-screen {
+      max-width: 100vw !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      background-color: #111 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+    }
+
+    .presentation-container:-webkit-full-screen .slide-page {
+      max-width: 100vw !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      aspect-ratio: auto !important;
+      border: none !important;
+      box-shadow: none !important;
+      margin: 0 !important;
+      padding: 2.5rem !important;
+    }
+
+    .legend-indicator {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 22px;
+      height: 22px;
+      background-color: #dc2626;
+      color: white;
+      font-weight: 950;
+      border-radius: 9999px;
+      font-size: 11px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.25);
+      border: 1px solid white;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800 pb-24 slide-mode">
+
+  <!-- Print & Presenter Bar (no-print) -->
+  <div class="no-print bg-white shadow-md p-4 sticky top-0 z-50 flex justify-between items-center max-w-5xl mx-auto rounded-b-xl mb-6">
+    <div class="flex items-center gap-3">
+      <img src="logo.png" alt="IMAC Logo" class="h-10">
+      <div>
+        <h1 class="font-bold text-gray-800">Indústria de Massas Congeladas - IMAC</h1>
+        <p class="text-xs text-gray-500">Manual de Treinamento e Teste Prático</p>
+      </div>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="toggleModoApresentacao()" id="btn-modo" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded-lg shadow text-xs flex items-center gap-1.5 transition">
+        <i class="ph ph-projector-screen text-lg"></i>
+        <span>Modo Rolagem</span>
+      </button>
+      <button onclick="entrarTelaCheia()" class="bg-stone-850 hover:bg-stone-900 text-white font-bold py-2 px-4 rounded-lg shadow text-xs flex items-center gap-1.5 transition border border-stone-700">
+        <i class="ph ph-arrows-out text-lg"></i>
+        Tela Cheia
+      </button>
+      <button onclick="window.print()" class="bg-gray-100 hover:bg-gray-200 text-stone-800 font-bold py-2 px-4 rounded-lg shadow text-xs flex items-center gap-1.5 transition border border-gray-300">
+        <i class="ph ph-printer text-lg"></i>
+        Imprimir
+      </button>
+    </div>
+  </div>
+
+  <!-- Slides Container -->
+  <div class="presentation-container" id="presentation-area">
+
+    <!-- SLIDE 1: CAPA -->
+    <div id="slide-1" class="slide-page p-10 bg-stone-900 border-none relative flex flex-col justify-between active-slide" style="background: linear-gradient(135deg, #3d2512 0%, #1e1208 100%);">
+      <div class="flex justify-between items-start">
+        <img src="logo.png" alt="IMAC Logo" class="h-20 bg-white p-2 rounded-xl">
+        <div class="text-right text-amber-500 font-mono text-sm">Treinamento Interativo de Operação</div>
+      </div>
+      
+      <div class="my-auto">
+        <div class="h-2 w-24 bg-amber-500 mb-6"></div>
+        <h1 class="text-5xl font-black text-white leading-tight">
+          Treinamento Prático Completo:<br>
+          <span class="text-amber-400">Fluxo Operacional de Produção</span>
+        </h1>
+        <p class="text-lg text-gray-300 mt-4 max-w-2xl font-light">
+          Treinamento operacional com simulação prática de apontamentos, controle de túnel de congelamento helicoidal, fechamento de produção com perdas e pé de massa, acompanhamento de timeline da embaladora e conferência de desvio de rendimento de pesagem nas câmaras frias.
+        </p>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-stone-800 pt-6">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-3 py-1 rounded text-xs">SLIDE 1</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 2: TELA DE LOGIN & PERFIS -->
+    <div id="slide-2" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-shield-check text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Acesso ao Sistema e Perfis Específicos</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <!-- Simulated Login Screen -->
+        <div class="col-span-3 bg-gray-50 p-6 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-md max-w-sm mx-auto space-y-4">
+            <div class="text-center border-b pb-2">
+              <i class="ph ph-user-circle text-5xl text-amber-600 mb-1"></i>
+              <h4 class="font-bold text-stone-850">Acesso ao Sistema IMAC</h4>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2 text-[11px]">
+              <button onclick="selecionarPerfil('Líder', 'Acesso completo de programação, perdas, sobras, pé de massa e observações.')" class="p-2 border rounded hover:border-amber-500 font-bold text-left bg-gray-50">Líder (PCP)</button>
+              <button onclick="selecionarPerfil('Produção', 'Masseiros apontam batidas e início/término do túnel helicoidal.')" class="p-2 border rounded hover:border-amber-500 font-bold text-left bg-gray-50">Produção (Masseira)</button>
+              <button onclick="selecionarPerfil('Embaladora', 'Acompanha a timeline do túnel helicoidal e identifica lotes das caixas.')" class="p-2 border rounded hover:border-amber-500 font-bold text-left bg-gray-50">Embaladora</button>
+              <button onclick="selecionarPerfil('Expedição', 'Registra pesagens individuais de patinhas e valida com PCP.')" class="p-2 border rounded hover:border-amber-500 font-bold text-left bg-gray-50">Expedição</button>
+            </div>
+            
+            <div class="text-xs bg-amber-50 p-3 rounded-lg border border-amber-200">
+              <div class="font-bold text-amber-900">Perfil Ativo: <span id="login-perfil-nome">Líder</span></div>
+              <div class="text-amber-800 mt-1" id="login-perfil-desc">Acesso completo de programação, perdas, sobras, pé de massa e observações.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-2 space-y-4 font-sans">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
+            <h4 class="font-bold text-amber-900 text-sm">Controle de Segurança</h4>
+            <p class="text-xs text-amber-800 mt-1 leading-relaxed">
+              Cada colaborador acessa a sua função correspondente. Lembre-se: o número da OP gerado pelo PCP segue com a produção até a consolidação de estoque.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-3 py-1 rounded text-xs">SLIDE 2</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 3: FLUXOGRAMA DE ETAPAS -->
+    <div id="slide-3" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-git-fork text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Fluxograma de Informações e Etapas de Produção</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+      
+      <div class="grid grid-cols-6 gap-2 my-auto text-center items-stretch font-sans">
+        <!-- PCP -->
+        <div class="bg-gray-50 border border-gray-300 rounded-xl p-2 flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-[9px] font-black text-gray-500 uppercase mb-1">PCP</div>
+            <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center mx-auto text-gray-700 text-lg mb-1">
+              <i class="ph ph-desktop"></i>
+            </div>
+            <div class="font-bold text-xs text-stone-850">1. Criar OPs</div>
+          </div>
+          <p class="text-[10px] text-stone-500 mt-1 leading-tight">O PCP cria as ordens de produção no Winthor.</p>
+        </div>
+
+        <!-- Líder Programação -->
+        <div class="bg-amber-50 border border-amber-300 rounded-xl p-2 flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-[9px] font-black text-amber-800 uppercase mb-1">Líder</div>
+            <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-700 text-lg mb-1">
+              <i class="ph ph-notebook"></i>
+            </div>
+            <div class="font-bold text-xs text-stone-850">2. Programar</div>
+          </div>
+          <p class="text-[10px] text-stone-600 mt-1 leading-tight">Importa as OPs no tablet e confirma a programação.</p>
+        </div>
+
+        <!-- Masseiros -->
+        <div class="bg-amber-50 border border-amber-300 rounded-xl p-2 flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-[9px] font-black text-amber-800 uppercase mb-1">Masseiro</div>
+            <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-700 text-lg mb-1">
+              <i class="ph ph-users-three"></i>
+            </div>
+            <div class="font-bold text-xs text-stone-850">3. Masseira / Túnel</div>
+          </div>
+          <p class="text-[10px] text-stone-600 mt-1 leading-tight">Lança batidas. Registra entrada/término no túnel de congelamento helicoidal.</p>
+        </div>
+
+        <!-- Parada de Emergência & Fechamento Líder -->
+        <div class="bg-amber-50 border border-amber-300 rounded-xl p-2 flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-[9px] font-black text-amber-800 uppercase mb-1">Líder</div>
+            <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-700 text-lg mb-1">
+              <i class="ph ph-check-square"></i>
+            </div>
+            <div class="font-bold text-xs text-stone-850">4. Fechamento</div>
+          </div>
+          <p class="text-[10px] text-stone-600 mt-1 leading-tight">Registra perdas de produção, sobras, pé de massa e observações.</p>
+        </div>
+
+        <!-- Embaladora -->
+        <div class="bg-amber-50 border border-amber-300 rounded-xl p-2 flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-[9px] font-black text-amber-800 uppercase mb-1">Embaladora</div>
+            <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-700 text-lg mb-1">
+              <i class="ph ph-package"></i>
+            </div>
+            <div class="font-bold text-xs text-stone-850">5. Embalar</div>
+          </div>
+          <p class="text-[10px] text-stone-600 mt-1 leading-tight">Acompanha queda na timeline e empacota caixas em patinhas.</p>
+        </div>
+
+        <!-- Expedição -->
+        <div class="bg-amber-50 border border-amber-300 rounded-xl p-2 flex flex-col justify-between shadow-sm">
+          <div>
+            <div class="text-[9px] font-black text-amber-800 uppercase mb-1">Expedição</div>
+            <div class="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center mx-auto text-amber-700 text-lg mb-1">
+              <i class="ph ph-scales"></i>
+          </div>
+            <div class="font-bold text-xs text-stone-850">6. Pesagem</div>
+          </div>
+          <p class="text-[10px] text-stone-600 mt-1 leading-tight">Registra a lista de pesagens, confere divergência e envia ao estoque.</p>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 3</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 4: MASSEIRO - APONTAMENTO -->
+    <div id="slide-4" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-users-three text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Masseiro - Apontamento de Batidas</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-6 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            <div class="flex justify-between items-center">
+              <div>
+                <span class="font-black text-2xl text-stone-800 font-sans" id="s4-prod-nome">PAO FRANCES</span>
+                <div class="text-xs text-gray-400 mt-1">OP: <span id="s4-op-num">63121</span></div>
+              </div>
+              <span class="bg-amber-50 text-amber-800 text-xs px-3 py-1 rounded-full font-bold">Masseira 1</span>
+            </div>
+            
+            <div class="flex items-center justify-between gap-4">
+              <div class="flex-1">
+                <div class="font-black text-stone-800 text-3xl">
+                  <span id="s4-feitos">3</span> <span class="text-gray-400 text-lg">/ 10 receitas</span>
+                </div>
+                <div class="w-full bg-gray-200 h-4 rounded-full mt-2 overflow-hidden">
+                  <div id="s4-progresso" class="bg-amber-500 h-full transition-all duration-300" style="width: 30%;"></div>
+                </div>
+              </div>
+              
+              <div class="flex gap-2">
+                <button onclick="ajustarBatida(-1)" class="w-14 h-14 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 font-black rounded-xl text-xl flex items-center justify-center relative">
+                  −1 <span class="absolute -top-3 -right-3 legend-indicator">②</span>
+                </button>
+                <button onclick="ajustarBatida(1)" class="w-14 h-14 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-xl text-xl flex items-center justify-center relative">
+                  +1 <span class="absolute -top-3 -right-3 legend-indicator">①</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-list-numbers text-amber-500"></i> Apontamento de Masseira
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Lançar Batida (+1):</b> Registra uma receita de pão batida no freezer. Isso atualiza a velocidade média na TV do monitoramento.</div>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">②</span>
+              <div><b>Desfazer (-1):</b> Use para deduzir uma batida em caso de clique errado.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 4</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 5: MASSEIRO - TÚNEL INÍCIO -->
+    <div id="slide-5" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-wind text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Masseiro - Registrar Entrada no túnel de congelamento helicoidal</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-6 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+              <span class="font-black text-stone-855 text-lg">PAO FRANCES</span>
+              <span class="bg-blue-100 text-blue-800 text-[10px] px-2.5 py-1 rounded font-black tracking-wider uppercase">PRODUÇÃO INICIADA</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <label class="block text-gray-500 font-bold mb-1">Horário de Entrada <span class="legend-indicator">①</span></label>
+                <input type="time" id="s5-hora-entrada" onchange="atualizarHoraEntrada(this.value)" class="w-full p-2 border border-amber-400 bg-amber-50 rounded font-bold text-stone-855" value="18:30">
+              </div>
+              <div>
+                <label class="block text-gray-500 font-bold mb-1">Horário de Término</label>
+                <input type="text" class="w-full p-2 border rounded bg-gray-100 text-gray-400 font-medium italic" value="Aguardando..." readonly>
+              </div>
+            </div>
+
+            <button onclick="alert('Início no túnel registrado!')" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm transition-colors shadow">
+              Registrar Início no Túnel
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-wind text-amber-500"></i> Entrada no Túnel
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Horário de Entrada:</b> O masseiro preenche e lança assim que o pão entra no túnel de congelamento helicoidal. Término fica pendente.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 5</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 6: MASSEIRO - TÚNEL TÉRMINO -->
+    <div id="slide-6" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-wind text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Masseiro - Registrar Término no túnel de congelamento helicoidal</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-6 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            <div class="flex justify-between items-center border-b pb-2">
+              <span class="font-black text-stone-855 text-lg">PAO FRANCES</span>
+              <span class="bg-green-100 text-green-800 text-[10px] px-2.5 py-1 rounded font-black tracking-wider uppercase">PRODUÇÃO CONCLUÍDA</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4 text-sm">
+              <div class="opacity-60">
+                <label class="block text-gray-500 font-bold mb-1">Horário de Entrada</label>
+                <input type="time" id="s6-hora-entrada" class="w-full p-2 border rounded bg-gray-100" value="18:30" readonly>
+              </div>
+              <div>
+                <label class="block text-gray-500 font-bold mb-1">Horário de Término <span class="legend-indicator">①</span></label>
+                <input type="time" id="s6-hora-termino" onchange="atualizarHoraTermino(this.value)" class="w-full p-2 border border-amber-400 bg-amber-50 rounded font-bold text-stone-855" value="19:05">
+              </div>
+            </div>
+
+            <button onclick="alert('Carga finalizada no túnel!')" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-lg text-sm transition-colors shadow">
+              Confirmar Término no Túnel
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-wind text-amber-500"></i> Término de Carga
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Horário de Término:</b> O masseiro acessa e registra o término de entrada assim que o último pão daquele lote entra no túnel de congelamento helicoidal.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 6</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 7: PARADA DE EMERGÊNCIA -->
+    <div id="slide-7" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-warning-circle text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Controle de Parada de Emergência da Fábrica</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-6 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-5 rounded-xl border border-gray-200 shadow-sm space-y-4">
+            <button id="s12-btn-parada" onclick="alternarParadaSlide12()" class="w-full bg-red-100 hover:bg-red-200 text-red-800 border-2 border-red-500 font-black py-4 rounded-xl text-lg flex items-center justify-center gap-2 transition-colors relative">
+              🚨 ACIONAR PARADA DE EMERGÊNCIA <span class="absolute -top-3 -right-3 legend-indicator">①</span>
+            </button>
+            <div class="text-xs p-3 rounded-lg border bg-gray-50 text-gray-600" id="s12-status-parada">
+              <b>Status da Linha:</b> Produzindo normalmente.
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-warning text-amber-500"></i> Parada de Emergência
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Apenas pausa o tempo:</b> O acionamento da parada de emergência serve apenas para congelar e pausar o cronômetro do tempo ativo de produção daquele lote no banco de dados.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 7</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 8: LÍDER - FECHAMENTO DE TURNO -->
+    <div id="slide-8" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-check-square-offset text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Fechamento do Líder - Perdas, Pé de Massa e Observações</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-4 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3 text-xs">
+            <div class="flex justify-between items-center border-b pb-2">
+              <span class="font-black text-stone-850">1. PAO FRANCES</span>
+              <span class="text-stone-500 font-bold">Meta: 10 · Feitos: <span id="s8-feitos-val">3</span></span>
+            </div>
+            
+            <div class="space-y-2">
+              <div class="flex justify-between items-center bg-gray-50 p-2 rounded border">
+                <span>Massa perdida (produção)</span>
+                <input type="number" id="s7-perda-prod" onchange="atualizarPerdaProd(this.value)" class="w-20 p-1 border rounded text-right font-black" value="1.50">
+              </div>
+              
+              <div class="flex justify-between items-center bg-gray-50 p-2 rounded border">
+                <span>Pé de massa utilizado</span>
+                <input type="number" id="s7-pe-massa" onchange="atualizarPeMassa(this.value)" class="w-20 p-1 border rounded text-right font-black" value="5.00">
+              </div>
+
+              <!-- Observações Mockup -->
+              <div>
+                <label class="block text-gray-500 font-bold mb-1">Observações do Turno <span class="legend-indicator">①</span></label>
+                <textarea id="s7-obs" onchange="atualizarObs(this.value)" class="w-full p-2 border border-amber-400 bg-amber-50 rounded text-stone-855 font-medium" rows="2" placeholder="Observações de desvio, sobras de massa..."></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-check-square text-amber-500"></i> Consolidação de Turno
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Observações:</b> Campo de texto livre para o líder apontar eventos anormais ou justificativas sobre desvios de rendimento. A perda da embalagem foi removida pois o fechamento ocorre antes da queda na esteira.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 8</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 9: TELA DA EMBALADORA -->
+    <div id="slide-9" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-package text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Painel Real da Embaladora (Timeline e Quedas)</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-[#151A22] rounded-3xl p-6 shadow-2xl relative max-h-[360px] overflow-y-auto">
+          <h3 class="text-[#F6BE00] font-black text-lg mb-1 flex items-center gap-2 uppercase tracking-wide">
+             <i class="ph ph-monitor-play text-xl"></i> Painel do Túnel Helicoidal
+          </h3>
+          <p class="text-gray-400 text-xs mb-6">Sequência preditiva do que está vindo da masseira e passando pelo túnel.</p>
+          
+          <div class="relative pl-6 space-y-6">
+            <div class="absolute left-0 top-3 bottom-3 w-[2px] bg-gray-700"></div>
+            
+            <div class="relative">
+              <div class="absolute -left-[30px] top-6 w-3 h-3 rounded-full bg-[#F6BE00] shadow-[0_0_10px_#F6BE00]"></div>
+              <div class="bg-[#1D2530] rounded-xl p-4 border border-[#F6BE00]">
+                 <div class="inline-block px-2.5 py-0.5 rounded font-black text-[9px] mb-2 uppercase bg-[#F6BE00] text-[#151A22]">EMBALANDO AGORA</div>
+                 <div class="flex items-center gap-3">
+                   <h4 class="text-lg font-black text-white">PAO FRANCES</h4>
+                   <div class="bg-black text-[#F6BE00] px-2 py-0.5 rounded font-bold text-xs border border-gray-700">Lote <span id="s9-lote">L-0807</span></div>
+                 </div>
+                 <div class="flex flex-col gap-1.5 mt-3 text-xs">
+                   <div class="inline-flex items-center gap-2 bg-[#151A22] border border-gray-700 rounded-lg px-3 py-1.5 w-max">
+                     <i class="ph ph-clock text-[#F6BE00]"></i>
+                     <span class="text-gray-300 font-mono">Início: <span id="s9-entrada">18:30</span> — Fim: <span id="s9-termino">19:05</span></span>
+                   </div>
+                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-2 space-y-4 text-xs text-stone-700">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
+            <h4 class="font-bold text-amber-900 text-sm">Visualização da Embaladora</h4>
+            <p class="text-xs text-amber-800 mt-1 leading-relaxed">
+              Painel idêntico ao carregado no terminal da Embalagem.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 9</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 10: EXPEDIÇÃO - FORMULÁRIO DE PESAGEM -->
+    <div id="slide-10" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-scales text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Expedição - Pesagem das Patinhas</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-4 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3 text-xs">
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Responsável pela Pesagem <span class="legend-indicator">①</span></label>
+              <input id="s9-nome-op" class="w-full p-2.5 border border-gray-300 rounded-lg" value="João" placeholder="Digite seu nome (Ex: João)">
+            </div>
+
+            <div>
+              <label class="block text-sm font-bold text-gray-700 mb-1">Produto Programado (Hoje)</label>
+              <select class="w-full p-2.5 border border-gray-300 rounded-lg bg-gray-50 font-bold text-stone-855">
+                <option value="0">PAO FRANCES (OP 63121)</option>
+              </select>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Lote Físico</label>
+                <input id="s9-lote-op" class="w-full p-2.5 border border-gray-300 rounded-lg" value="L-0807">
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Validade</label>
+                <input type="date" id="s9-val-op" class="w-full p-2.5 border border-gray-300 rounded-lg" value="2026-09-08">
+              </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-2 items-center">
+              <div class="col-span-2">
+                <label class="block text-sm font-bold text-brand-600 mb-1">Peso da Patinha <span class="legend-indicator">②</span></label>
+                <button onclick="digitarPesoInterativoS9()" class="w-full p-3 border border-amber-300 bg-amber-50 rounded-lg font-black text-amber-800 text-center text-lg">
+                  <span id="s9-peso-op">130.50</span> kg
+                </button>
+              </div>
+              <div>
+                <label class="block text-sm font-bold text-gray-700 mb-1">Unidade</label>
+                <select class="w-full p-3 border border-gray-300 rounded-lg bg-gray-50 font-bold text-stone-800">
+                  <option value="kg">kg</option>
+                </select>
+              </div>
+            </div>
+            
+            <button onclick="adicionarPatinhaInterativa()" class="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold py-3 rounded-lg shadow-sm transition">
+              Adicionar à Conferência
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-note text-amber-500"></i> Lançamento de Peso
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Nome do Operador:</b> Responsável pela pesagem do dia.</div>
+            </div>
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">②</span>
+              <div><b>Digitar Peso:</b> Clique no peso para simular digitar o peso da patinha.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-xs">Módulo: Expedição (Pesagem)</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 10</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 11: EXPEDIÇÃO - CONFERÊNCIA E RENDIMENTO -->
+    <div id="slide-11" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-scales text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Conferência & Divergência de Rendimento</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <div class="col-span-3 bg-gray-50 p-4 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <div class="bg-white p-4 rounded-xl border border-gray-200 shadow-sm space-y-3 text-xs">
+            <!-- Comparative yield box -->
+            <div class="bg-amber-50 p-3 rounded-lg border border-amber-300 grid grid-cols-3 text-center">
+              <div>
+                <div class="text-[9px] text-amber-800">Teórico Esperado</div>
+                <div class="font-black text-stone-855">260.00 kg</div>
+              </div>
+              <div>
+                <div class="text-[9px] text-amber-800">Real na Câmara</div>
+                <div class="font-black text-stone-855"><span id="s10-real-camara">258.70</span> kg</div>
+              </div>
+              <div>
+                <div class="text-[9px] text-amber-800">Divergência (Desvio)</div>
+                <div class="font-black text-red-650" id="s10-divergencia">-0.50%</div>
+              </div>
+            </div>
+
+            <!-- List of weighed patinhas -->
+            <div class="border rounded-lg max-h-24 overflow-y-auto divide-y" id="s10-lista-patinhas">
+              <!-- Rendered via JS -->
+            </div>
+
+            <button onclick="confirmarEntradaEstoque()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-lg text-xs transition-colors shadow">
+              Confirmar Entrada na Câmara <span class="legend-indicator">①</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="col-span-2 bg-white border border-gray-200 rounded-xl p-4 shadow-sm space-y-3">
+          <h4 class="font-black text-sm text-stone-800 uppercase tracking-wide border-b pb-1.5 flex items-center gap-1.5">
+            <i class="ph ph-presentation text-amber-500"></i> Desvio de Rendimento
+          </h4>
+          <div class="space-y-2 text-xs">
+            <div class="flex gap-2 items-start">
+              <span class="legend-indicator flex-shrink-0">①</span>
+              <div><b>Confirmar entrada:</b> Ao finalizar, a expedição confirma o envio. Os pesos das patinhas são somados e alimentam o Estoque de Produto Acabado.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 11</span>
+      </div>
+    </div>
+
+
+    <!-- SLIDE 12: EXPEDIÇÃO - VISUALIZAÇÃO DO ESTOQUE -->
+    <div id="slide-12" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-package text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Visualização de Estoque de Produto Acabado</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <!-- Simulated Finished Stock Grid -->
+        <div class="col-span-3 bg-gray-50 p-4 rounded-xl border border-gray-200 relative my-auto shadow-inner">
+          <!-- Search bar -->
+          <div class="relative mb-3">
+            <i class="ph ph-magnifying-glass absolute left-3 top-2.5 text-gray-400"></i>
+            <input onkeyup="filtrarEstoqueSlide11(this.value)" class="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-xs" placeholder="Buscar por produto acabado...">
+          </div>
+
+          <div id="s11-estoque-lista" class="space-y-2 max-h-36 overflow-y-auto text-xs">
+            <!-- Dynamically updated -->
+          </div>
+
+          <!-- Simulated Modal details -->
+          <div id="s11-modal" class="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center p-3 hidden">
+            <div class="bg-white rounded-lg p-3 w-full shadow-lg border">
+              <div class="flex justify-between border-b pb-1.5 mb-1.5 text-xs">
+                <span id="s11-modal-titulo" class="font-bold">Lotes</span>
+                <span onclick="fecharModalEstoque()" class="text-red-500 font-bold cursor-pointer">✕</span>
+              </div>
+              <div class="text-[10px] space-y-1">
+                <div class="flex justify-between py-0.5">
+                  <span id="s11-modal-lote" class="font-mono">L-0807</span>
+                  <span id="s11-modal-val">08/09/2026</span>
+                  <span class="font-bold" id="s11-modal-qtd">258.70 kg</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-2 space-y-4">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
+            <h4 class="font-bold text-amber-900 text-sm">Painel do Estoque Físico</h4>
+            <p class="text-xs text-amber-800 mt-1 leading-relaxed">
+              Aqui se visualiza as entradas consolidadas por lote de produto acabado.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 12</span>
+      </div>
+    </div>
+
+
+        <!-- SLIDE 13: PAINEL DA TV DO MONITORAMENTO -->
+    <div id="slide-13" class="slide-page p-8">
+      <div class="flex justify-between items-center border-b border-gray-200 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ph ph-television text-2xl text-amber-600"></i>
+          <h2 class="font-bold text-xl text-gray-800">Painel da TV - Monitoramento Industrial</h2>
+        </div>
+        <img src="logo.png" alt="Logo" class="h-8">
+      </div>
+
+      <div class="grid grid-cols-5 gap-6 items-center my-auto">
+        <!-- Simulated TV Screen -->
+        <div class="col-span-3 bg-stone-950 text-white p-4 rounded-xl border-4 border-stone-850 shadow-2xl relative my-auto">
+          <div class="flex justify-between items-center border-b border-stone-800 pb-2 mb-2 text-xs">
+            <span class="font-black text-amber-400 tracking-wider">IMAC MONITOR DA FÁBRICA</span>
+            <span class="text-green-500 font-bold animate-pulse">● TRANSMITINDO AO VIVO</span>
+          </div>
+          
+          <div class="grid grid-cols-4 gap-2 mb-3 text-center text-[10px]">
+            <div class="bg-stone-900 p-1.5 rounded border border-stone-800">
+              <div class="text-[8px] text-stone-400">Batidas Hoje</div>
+              <div class="font-black text-amber-400"><span id="s13-batidas">3</span> / 10</div>
+            </div>
+            <div class="bg-stone-900 p-1.5 rounded border border-stone-800">
+              <div class="text-[8px] text-stone-400">Velocidade Média</div>
+              <div class="font-black text-amber-400">7.2 min</div>
+            </div>
+            <div class="bg-stone-900 p-1.5 rounded border border-stone-800">
+              <div class="text-[8px] text-stone-400">Última Batida</div>
+              <div class="font-black text-amber-400">Há 04:12</div>
+            </div>
+            <div class="bg-stone-900 p-1.5 rounded border border-stone-800">
+              <div class="text-[8px] text-stone-400">Fila do Túnel</div>
+              <div class="font-black text-blue-400">1 OP</div>
+            </div>
+          </div>
+
+          <div class="bg-stone-900 p-3 rounded-lg border border-stone-800 space-y-2 text-[10px]">
+            <div class="flex justify-between items-center bg-stone-850 p-2 rounded">
+              <div>
+                <div class="font-bold text-amber-300 text-xs">PAO FRANCES</div>
+                <div class="text-[8px] text-stone-500">Masseira 1 · OP 63121</div>
+              </div>
+              <div class="text-right">
+                <span class="font-bold text-white">Batidas: <span id="s13-batidas-ativo">3</span>/10</span>
+                <div class="text-amber-500 font-bold text-[8px]">Queda Estimada: <span id="s13-queda">19:05</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="col-span-2 space-y-4 text-xs">
+          <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg">
+            <h4 class="font-bold text-amber-900 text-sm">Visibilidade Total</h4>
+            <p class="text-xs text-amber-800 mt-1 leading-relaxed">
+              A TV exibe dinamicamente o progresso das batidas, a velocidade média de produção e o lote atual conforme os operadores atualizam as suas telas.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex justify-between items-center border-t border-gray-100 pt-3 mt-4">
+        <span class="text-gray-400 text-sm">INDÚSTRIA DE MASSAS CONGELADAS - IMAC | JAN GABRIEL - ANALISTA DA QUALIDADE</span>
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-[10px]">SLIDE 13</span>
+      </div>
+    </div>
+
+    <!-- SLIDE 14: QR CODE DE ACESSO -->
+    <div id="slide-14" class="slide-page p-12 flex flex-col items-center justify-center bg-white relative">
+      <div class="text-center space-y-6 w-full h-full flex flex-col justify-center items-center">
+        <h2 class="font-black text-4xl text-amber-800 uppercase tracking-wide">Acesse o Sistema</h2>
+        <p class="text-gray-600 font-bold text-lg mb-8">Escaneie o QR Code abaixo para acessar a tela inicial do aplicativo no seu celular.</p>
+        
+        <!-- Logo layout wrapper for QR code -->
+        <div class="relative inline-block bg-white p-4 rounded-3xl border-4 border-[#e8c667] shadow-2xl">
+          <img src="https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=https://jangabrielsg-bit.github.io/imac/&color=6b4423&bgcolor=ffffff" alt="QR Code App" class="h-80 w-80 rounded-xl">
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <img src="logo.png" alt="Logo" class="h-16 bg-white p-1 rounded-xl shadow border-2 border-gray-100">
+          </div>
+        </div>
+        
+        <div class="absolute bottom-8 left-1/2 transform -translate-x-1/2 flex items-center gap-3">
+          <img src="logo.png" alt="IMAC Logo" class="h-10 bg-white p-1 rounded-lg">
+          <span class="text-gray-400 text-sm font-bold uppercase">Indústria de Massas Congeladas - IMAC | Jan Gabriel</span>
+        </div>
+      </div>
+      <div class="absolute top-4 right-4 flex justify-between items-center pt-3 mt-4">
+        <span class="bg-amber-500 text-stone-900 font-bold px-2 py-0.5 rounded text-xs">SLIDE 14</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Presentation Control Bar (no-print) -->
+  <div class="no-print fixed bottom-0 left-0 right-0 bg-white border-t border-gray-250 p-4 flex justify-between items-center z-50 shadow-[0_-5px_15px_rgba(0,0,0,0.05)]">
+    <div class="flex items-center gap-2">
+      <button onclick="mudarSlide(-1)" class="bg-[#6b4423] hover:bg-[#a78355] text-white p-2 rounded-lg font-bold transition flex items-center gap-1">
+        <i class="ph ph-caret-left-bold"></i> Anterior
+      </button>
+      <span class="text-sm font-bold text-stone-800" id="indicador-slide">Slide 1 de 14</span>
+      <button onclick="mudarSlide(1)" class="bg-[#6b4423] hover:bg-[#a78355] text-white p-2 rounded-lg font-bold transition flex items-center gap-1">
+        Próximo <i class="ph ph-caret-right-bold"></i>
+      </button>
+    </div>
+    <div class="text-xs text-gray-500 font-medium flex items-center gap-4">
+      <span>Atalhos: <span class="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold">Setas ◄ / ►</span> ou <span class="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold">Espaço</span></span>
+    </div>
+  </div>
+
+  <!-- Interactivity Shared Script -->
+  <script>
+    // Global simulation state
+    const sim = {
+      produto: "PAO FRANCES",
+      op: "63121",
+      metaLotes: 10,
+      batidas: 3,
+      horaEntrada: "18:30",
+      horaTermino: "19:05",
+      lote: "L-0807",
+      validade: "2026-09-08",
+      patinhas: [
+        { id: 1, operador: "João", peso: 130.50, lote: "L-0807", validade: "2026-09-08" },
+        { id: 2, operador: "João", peso: 128.20, lote: "L-0807", validade: "2026-09-08" }
+      ],
+      massaPerdidaProd: 1.5,
+      peDeMassa: 5.0,
+      observacoes: "",
+      paradaAtiva: false,
+      estoqueConfirmado: false
+    };
+
+    let slideAtual = 1;
+    const totalSlides = 14;
+
+    function mudarSlide(delta) {
+      if (!document.body.classList.contains('slide-mode')) return;
+      
+      const slides = document.querySelectorAll('.slide-page');
+      slides[slideAtual - 1].classList.remove('active-slide');
+      
+      slideAtual += delta;
+      if (slideAtual < 1) slideAtual = 1;
+      if (slideAtual > totalSlides) slideAtual = totalSlides;
+      
+      slides[slideAtual - 1].classList.add('active-slide');
+      document.getElementById('indicador-slide').innerText = `Slide ${slideAtual} de ${totalSlides}`;
+    }
+
+    function toggleModoApresentacao() {
+      const isSlide = document.body.classList.contains('slide-mode');
+      const btn = document.getElementById('btn-modo');
+      
+      if (isSlide) {
+        document.body.classList.remove('slide-mode');
+        btn.querySelector('span').innerText = "Modo Apresentação";
+        document.querySelectorAll('.slide-page').forEach(el => el.classList.add('active-slide'));
+      } else {
+        document.body.classList.add('slide-mode');
+        btn.querySelector('span').innerText = "Modo Rolagem";
+        document.querySelectorAll('.slide-page').forEach((el, idx) => {
+          if (idx === slideAtual - 1) el.classList.add('active-slide');
+          else el.classList.remove('active-slide');
+        });
+      }
+    }
+
+    function entrarTelaCheia() {
+      const elem = document.getElementById("presentation-area");
+      if (elem.requestFullscreen) {
+        elem.requestFullscreen();
+      } else if (elem.webkitRequestFullscreen) { /* Safari */
+        elem.webkitRequestFullscreen();
+      } else if (elem.msRequestFullscreen) { /* IE11 */
+        elem.msRequestFullscreen();
+      }
+    }
+
+    // Keyboard navigation listener
+    document.addEventListener('keydown', (e) => {
+      if (!document.body.classList.contains('slide-mode')) return;
+      if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+        e.preventDefault();
+        mudarSlide(1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        mudarSlide(-1);
+      }
+    });
+
+    function atualizarTudo() {
+      // Slide 4: Masseiro
+      document.getElementById('s4-feitos').innerText = sim.batidas;
+      document.getElementById('s4-progresso').style.width = (sim.batidas * 10) + '%';
+      
+      // Slide 5 & 6: Túnel
+      document.getElementById('s5-hora-entrada').value = sim.horaEntrada;
+      document.getElementById('s6-hora-entrada').value = sim.horaEntrada;
+      document.getElementById('s6-hora-termino').value = sim.horaTermino;
+      
+      // Slide 7: Parada e status
+      const btnP = document.getElementById('s12-btn-parada');
+      const statusP = document.getElementById('s12-status-parada');
+      if (sim.paradaAtiva) {
+        btnP.className = "w-full bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2 animate-pulse relative";
+        btnP.innerHTML = "🚨 RETOMAR PRODUÇÃO (Desligar Parada) <span class='absolute -top-3 -right-3 legend-indicator'>①</span>";
+        statusP.innerHTML = "<b>Status da Linha:</b> Parada de emergência ativa! Cronômetro de tempo de produção pausado...";
+      } else {
+        btnP.className = "w-full bg-red-100 hover:bg-red-200 text-red-800 border-2 border-red-500 font-black py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2 relative";
+        btnP.innerHTML = "🚨 ACIONAR PARADA DE EMERGÊNCIA <span class='absolute -top-3 -right-3 legend-indicator'>①</span>";
+        statusP.innerHTML = "<b>Status da Linha:</b> Produzindo normalmente.";
+      }
+
+      // Slide 8: Fechamento
+      document.getElementById('s8-feitos-val').innerText = sim.batidas;
+      document.getElementById('s7-obs').value = sim.observacoes;
+      
+      // Slide 9: Embaladora
+      document.getElementById('s9-lote').innerText = sim.lote;
+      document.getElementById('s9-entrada').innerText = sim.horaEntrada;
+      document.getElementById('s9-termino').innerText = sim.horaTermino;
+      
+      // Slide 11: Conferência
+      const totalReal = sim.patinhas.reduce((acc, p) => acc + p.peso, 0);
+      document.getElementById('s10-real-camara').innerText = totalReal.toFixed(2);
+      const teorico = 260.00;
+      const div = teorico > 0 ? ((totalReal - teorico) / teorico * 100) : 0;
+      const divEl = document.getElementById('s10-divergencia');
+      divEl.innerText = (div >= 0 ? '+' : '') + div.toFixed(2) + '%';
+      divEl.className = div < 0 ? 'font-black text-red-600' : 'font-black text-green-600';
+      
+      // Render list of patinhas
+      const listaEl = document.getElementById('s10-lista-patinhas');
+      listaEl.innerHTML = '';
+      sim.patinhas.forEach(p => {
+        listaEl.innerHTML += `
+          <div class="p-2 flex justify-between">
+            <span>Patinha #${p.id} (${sim.produto}) - ${p.lote} (${p.operador})</span>
+            <span class="font-bold">${p.peso.toFixed(2)} kg</span>
+          </div>
+        `;
+      });
+      
+      // Slide 12: Estoque
+      const estoqueEl = document.getElementById('s11-estoque-lista');
+      estoqueEl.innerHTML = '';
+      if(sim.estoqueConfirmado) {
+        estoqueEl.innerHTML = `
+          <div onclick="abrirModalEstoque('${sim.produto} (CONGELADO)', '${totalReal.toFixed(2)} kg')" class="bg-white p-3 rounded-lg border hover:bg-gray-50 cursor-pointer flex justify-between items-center shadow-sm">
+            <span class="font-bold text-stone-850">${sim.produto} (CONGELADO)</span>
+            <div class="flex items-center gap-2">
+              <span class="bg-brand-100 text-brand-800 px-2 py-0.5 rounded-full font-black">${totalReal.toFixed(2)} kg</span>
+              <i class="ph ph-list-magnifying-glass text-gray-400"></i>
+            </div>
+          </div>
+        `;
+      } else {
+        estoqueEl.innerHTML = `<div class="text-center text-gray-400 py-4">Nenhum estoque consolidado hoje. Confirme a entrada no Slide 11 para atualizar!</div>`;
+      }
+      
+      // Slide 13: TV
+      document.getElementById('s13-batidas').innerText = sim.batidas;
+      document.getElementById('s13-batidas-ativo').innerText = sim.batidas;
+      document.getElementById('s13-queda').innerText = sim.horaTermino || 'Pendente';
+    }
+
+    // Interactions
+    function selecionarPerfil(nome, desc) {
+      document.getElementById('login-perfil-nome').innerText = nome;
+      document.getElementById('login-perfil-desc').innerText = desc;
+    }
+    
+    function ajustarBatida(val) {
+      sim.batidas = Math.max(0, Math.min(sim.metaLotes, sim.batidas + val));
+      atualizarTudo();
+    }
+    
+    function atualizarHoraEntrada(val) {
+      sim.horaEntrada = val;
+      atualizarTudo();
+    }
+    
+    function atualizarHoraTermino(val) {
+      sim.horaTermino = val;
+      atualizarTudo();
+    }
+    
+    function atualizarObs(val) {
+      sim.observacoes = val;
+      atualizarTudo();
+    }
+
+    function digitarPesoInterativoS9() {
+      const v = prompt("Insira o peso líquido da patinha (ex: 130.50):", "130.50");
+      if(v) {
+        document.getElementById('s9-peso-op').innerText = parseFloat(v).toFixed(2);
+      }
+    }
+    
+    function adicionarPatinhaInterativa() {
+      const op = document.getElementById('s9-nome-op').value;
+      const lote = document.getElementById('s9-lote-op').value;
+      const peso = parseFloat(document.getElementById('s9-peso-op').innerText);
+      if(!op) { alert("Insira o nome do operador!"); return; }
+      
+      sim.patinhas.push({
+        id: sim.patinhas.length + 1,
+        operador: op,
+        peso: peso,
+        lote: lote,
+        validade: document.getElementById('s9-val-op').value
+      });
+      alert("Patinha adicionada para conferência!");
+      atualizarTudo();
+    }
+    
+    function confirmarEntradaEstoque() {
+      sim.estoqueConfirmado = true;
+      alert("Sucesso! Os pesos foram consolidados no Estoque de Produto Acabado.");
+      atualizarTudo();
+    }
+
+    function abrirModalEstoque(nome, qtd) {
+      document.getElementById('s11-modal-titulo').innerText = nome;
+      document.getElementById('s11-modal-qtd').innerText = qtd;
+      document.getElementById('s11-modal-lote').innerText = sim.lote;
+      document.getElementById('s11-modal-val').innerText = sim.validade;
+      document.getElementById('s11-modal').classList.remove('hidden');
+    }
+    
+    function fecharModalEstoque() {
+      document.getElementById('s11-modal').classList.add('hidden');
+    }
+
+    function alternarParadaSlide12() {
+      sim.paradaAtiva = !sim.paradaAtiva;
+      atualizarTudo();
+    }
+  </script>
+
+</body>
+</html>

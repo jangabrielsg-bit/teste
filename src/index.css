@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #fffcf2;
+  --color-brand-100: #fff7e0;
+  --color-brand-200: #ffebb3;
+  --color-brand-300: #ffdb80;
+  --color-brand-400: #facc15;
+  --color-brand-500: #f5b915;
+  --color-brand-600: #d99d0b;
+  --color-brand-700: #b37a06;
+  --color-brand-800: #8f5f0b;
+  --color-brand-900: #754b0e;
+
+  /* Custom App Colors based on reference */
+  --color-amarelo: #f5b915;
+  --color-amarelo-claro: #fff3d6;
+  --color-marrom: #6b4423;
+  --color-marrom-claro: #a78355;
+  --color-dark-bg: #151A22;
+  --color-dark-card: #1D2530;
+  --color-gold: #F6BE00;
+  --color-stone-850: #292524;
+  --color-stone-855: #1c1917;
+
+  --font-sans: 'Inter', sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-dark-bg text-gray-200 font-sans min-h-screen pb-6;
+  }
+
+  /* Scrollbar Styling */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-500;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-[#1D2530]/80 backdrop-blur-md border border-gray-700/50 rounded-2xl shadow-xl;
+  }
+  
+  .glass-panel {
+    @apply bg-[#151A22]/90 backdrop-blur-lg border-b border-gray-800 shadow-2xl;
+  }
+
+  .btn-primary {
+    @apply bg-amarelo hover:bg-brand-600 text-stone-900 font-bold py-3 px-4 rounded-xl shadow-lg shadow-brand-500/20 transition-all active:scale-[0.98];
+  }
+
+  .btn-secondary {
+    @apply bg-dark-card hover:bg-gray-800 text-white font-bold py-3 px-4 rounded-xl border border-gray-700 shadow-md transition-all active:scale-[0.98];
+  }
+
+  .input-field {
+    @apply w-full p-3 bg-dark-bg border border-gray-700 rounded-xl text-white focus:border-gold focus:ring-1 focus:ring-gold outline-none transition-all placeholder:text-gray-500 font-medium;
+  }
+
+  .legend-indicator {
+    @apply inline-flex items-center justify-center w-5 h-5 bg-red-600 text-white font-black rounded-full text-[10px] shadow border border-white/20;
+  }
+}
