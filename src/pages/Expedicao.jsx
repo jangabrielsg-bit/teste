@@ -296,9 +296,10 @@ export default function Expedicao() {
                 else if (prodConf.estoqueMaxMP > 0 && grp.totalFisico > prodConf.estoqueMaxMP) status = { text: 'Alto', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' } };
                 else status = { text: 'Normal', style: { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' } };
               }
+              const difPerc = sysQtd > 0 ? ((dif / sysQtd) * 100).toFixed(1) : (dif > 0 ? '100.0' : '0.0');
               let corStatus, difStr;
-              if (dif > 0.01) { corStatus = { background: '#fef3c7', color: '#92400e' }; difStr = `Físico > Sys (+${dif.toFixed(2)})`; }
-              else if (dif < -0.01) { corStatus = { background: '#fef2f2', color: '#991b1b' }; difStr = `Físico < Sys (${dif.toFixed(2)})`; }
+              if (dif > 0.01) { corStatus = { background: '#fef3c7', color: '#92400e' }; difStr = `+${difPerc}%`; }
+              else if (dif < -0.01) { corStatus = { background: '#fef2f2', color: '#991b1b' }; difStr = `${difPerc}%`; }
               else { corStatus = { background: '#dcfce7', color: '#166534' }; difStr = 'Bateu'; }
               return (
                 <div key={gIdx} style={{ border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
@@ -330,7 +331,7 @@ export default function Expedicao() {
 
       {/* Modal Lotes */}
       {modalLotesProduto && (
-        <div className="modal-fundo" style={{ alignItems: 'center', background: 'rgba(0,0,0,0.5)' }} onClick={() => setModalLotesProduto(null)}>
+        <div className="modal-fundo" style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', zIndex: 9999 }} onClick={() => setModalLotesProduto(null)}>
           <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 420, maxHeight: '70vh', overflow: 'hidden', margin: 16 }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: 20, borderBottom: '1px solid var(--border-suave)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div><h2 style={{ fontWeight: 900, fontSize: '1.3rem' }}>{modalLotesProduto.nome}</h2><div style={{ fontSize: '0.75rem', color: '#999' }}>CÓD: {modalLotesProduto.codigo || 'N/A'}</div></div>
@@ -341,7 +342,7 @@ export default function Expedicao() {
               modalLotesProduto.lotes.map((lt, lIdx) => (
                 <div key={lIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottom: '1px solid #f3f4f6' }}>
                   <div>
-                    <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || 'S/N'}</div>
+                    <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || lt.batch_number || lt.code || lt.number || lt.batch || 'S/N'}</div>
                     <div style={{ fontSize: '0.75rem', color: '#999' }}>{(lt.validade || lt.expiryDate) ? new Date(lt.validade || lt.expiryDate).toLocaleDateString('pt-BR') : 'Sem validade'}</div>
                   </div>
                   <div style={{ textAlign: 'right' }}><div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div><div style={{ fontSize: '0.75rem', color: '#999' }}>{modalLotesProduto.und || lt.und || 'kg'}</div></div>
