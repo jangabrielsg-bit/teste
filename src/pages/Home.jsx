@@ -10,7 +10,8 @@ const MENU_ITEMS = [
   { id: 'produtos', label: 'Produtos', icon: 'ph-package', bg: '#fefce8', color: '#ca8a04', perfis: ['pcp'] },
   { id: 'pcp', label: 'Lançamentos PCP', icon: 'ph-chart-bar', bg: '#ecfeff', color: '#0891b2', perfis: ['pcp'] },
   { id: 'resumo_pcp', label: 'Painel TV (Resumos)', icon: 'ph-monitor-play', bg: '#eef2ff', color: '#4f46e5', perfis: ['pcp'] },
-  { id: 'expedicao', label: 'Expedição Câmaras', icon: 'ph-snowflake', bg: '#fff1f2', color: '#e11d48', perfis: ['expedicao','pcp'] },
+  { id: 'expedicao', label: 'Expedição Balança', icon: 'ph-scales', bg: '#fff1f2', color: '#e11d48', perfis: ['expedicao','pcp'] },
+  { id: 'estoque', label: 'Gestão de Estoques', icon: 'ph-snowflake', bg: '#f0f9ff', color: '#0284c7', perfis: ['expedicao','pcp','lider'] },
 ];
 
 export default function Home({ ir }) {

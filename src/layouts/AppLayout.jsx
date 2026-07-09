@@ -6,6 +6,7 @@ import Lider from '../pages/Lider';
 import Operador from '../pages/Operador';
 import Embaladora from '../pages/Embaladora';
 import Expedicao from '../pages/Expedicao';
+import Estoque from '../pages/Estoque';
 import Fechamento from '../pages/Fechamento';
 import Relatorio from '../pages/Relatorio';
 import LivroProducao from '../pages/LivroProducao';
@@ -24,7 +25,8 @@ const nomesTelas = {
   'livro': 'Livro de Produção',
   'produtos': 'Produtos e Setores',
   'pcp': 'Lançamentos PCP Winthor',
-  'expedicao': 'Expedição Câmaras'
+  'expedicao': 'Expedição / Balança',
+  'estoque': 'Gestão de Estoques'
 };
 
 export default function AppLayout() {
@@ -69,6 +71,7 @@ export default function AppLayout() {
         {tela === 'operador' && <Operador />}
         {tela === 'embaladora' && <Embaladora />}
         {tela === 'expedicao' && <Expedicao />}
+        {tela === 'estoque' && <Estoque />}
         {tela === 'fechamento' && <Fechamento />}
         {tela === 'relatorio' && <Relatorio />}
         {tela === 'livro' && <LivroProducao />}
