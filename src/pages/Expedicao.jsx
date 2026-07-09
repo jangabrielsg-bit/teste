@@ -3,10 +3,12 @@ import { doc, onSnapshot, collection, writeBatch, setDoc, arrayUnion, getDocs, g
 import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarKg } from '../services/utils';
 import { useAuth } from '../services/auth';
+import { useProdutos } from '../services/hooks';
 import ModalTeclado from '../components/ModalTeclado';
 
 export default function Expedicao() {
   const { currentUser } = useAuth();
+  const { produtos } = useProdutos();
   const dataHoje = hojeISO();
   const [producaoHoje, setProducaoHoje] = useState([]);
   const [tunelHoje, setTunelHoje] = useState([]);
@@ -250,14 +252,26 @@ export default function Expedicao() {
 
           {/* Produto Acabado */}
           {subAbaEstoque === 'acabado' && (listaAcabado.length === 0 ? <div className="status-msg">Nenhum produto encontrado.</div> :
-            <div>{listaAcabado.map((grp, gIdx) => (
+            <div>{listaAcabado.map((grp, gIdx) => {
+              const prodConf = produtos.find(p => p.nome === grp.nome);
+              const qtd = grp.und === 'kg' ? grp.totalKg : grp.totalUnd;
+              let status = null;
+              if (prodConf && (prodConf.estoqueMinAcabado > 0 || prodConf.estoqueMaxAcabado > 0)) {
+                if (prodConf.estoqueMinAcabado > 0 && qtd < prodConf.estoqueMinAcabado) status = { text: 'Baixo', style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } };
+                else if (prodConf.estoqueMaxAcabado > 0 && qtd > prodConf.estoqueMaxAcabado) status = { text: 'Alto', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' } };
+                else status = { text: 'Normal', style: { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' } };
+              }
+              return (
               <div key={gIdx} style={{ border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, cursor: 'pointer', background: 'white' }} onClick={() => setModalLotesProduto(grp)}>
                   <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 10 }}>
                     <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--amarelo-claro)', color: 'var(--amarelo)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <i className="ph ph-package"></i>
                     </div>
-                    {grp.nome}
+                    <div>
+                      <div>{grp.nome}</div>
+                      {status && <div style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: 4, display: 'inline-block', marginTop: 4, ...status.style }}>{status.text}</div>}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                     {grp.totalKg > 0 && <span style={{ background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '4px 10px', borderRadius: 20, fontWeight: 900, fontSize: '0.85rem' }}>{grp.totalKg.toFixed(2)} kg</span>}
@@ -265,7 +279,7 @@ export default function Expedicao() {
                   </div>
                 </div>
               </div>
-            ))}</div>
+            )})}</div>
           )}
 
           {/* Matéria Prima */}
@@ -275,6 +289,13 @@ export default function Expedicao() {
             <div>{mpFiltrado.map((grp, gIdx) => {
               const sysQtd = estoqueWinthor[grp.codigo] || 0;
               const dif = grp.totalFisico - sysQtd;
+              const prodConf = produtos.find(p => p.codigo === grp.codigo || p.nome === grp.nome);
+              let status = null;
+              if (prodConf && (prodConf.estoqueMinMP > 0 || prodConf.estoqueMaxMP > 0)) {
+                if (prodConf.estoqueMinMP > 0 && grp.totalFisico < prodConf.estoqueMinMP) status = { text: 'Baixo', style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } };
+                else if (prodConf.estoqueMaxMP > 0 && grp.totalFisico > prodConf.estoqueMaxMP) status = { text: 'Alto', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' } };
+                else status = { text: 'Normal', style: { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' } };
+              }
               let corStatus, difStr;
               if (dif > 0.01) { corStatus = { background: '#fef3c7', color: '#92400e' }; difStr = `Físico > Sys (+${dif.toFixed(2)})`; }
               else if (dif < -0.01) { corStatus = { background: '#fef2f2', color: '#991b1b' }; difStr = `Físico < Sys (${dif.toFixed(2)})`; }
@@ -287,8 +308,11 @@ export default function Expedicao() {
                         <i className="ph ph-box-arrow-down"></i>
                       </div>
                       <div>
-                        <div style={{ fontWeight: 700 }}>{grp.nome}</div>
-                        <div style={{ fontSize: '0.7rem', color: '#999', fontFamily: 'monospace' }}>CÓD: {grp.codigo}</div>
+                        <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
+                          {grp.nome}
+                          {status && <div style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: 4, display: 'inline-block', ...status.style }}>{status.text}</div>}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: '#999', fontFamily: 'monospace', marginTop: 2 }}>CÓD: {grp.codigo}</div>
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontSize: '0.85rem' }}>

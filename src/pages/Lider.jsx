@@ -111,6 +111,7 @@ export default function Lider() {
   function moverReal(idxA, idxB) { setItens(prev => { if (idxA < 0 || idxB < 0 || idxA >= prev.length || idxB >= prev.length) return prev; const n = [...prev]; [n[idxA], n[idxB]] = [n[idxB], n[idxA]]; return n; }); }
   function alternarConferido(index) { setItens(prev => { const item = prev[index]; if (!item.conferido) { const sem = prev.filter((_, i) => i !== index); return [...sem, { ...item, conferido: true }]; } const nova = [...prev]; nova[index] = { ...nova[index], conferido: false }; return nova; }); }
   function ajustarMeta(index, delta) { setItens(prev => { const nova = [...prev]; nova[index] = { ...nova[index], metaLotes: Math.max(1, nova[index].metaLotes + delta) }; return nova; }); }
+  function arredondarMeta(index) { setItens(prev => { const nova = [...prev]; nova[index] = { ...nova[index], metaLotes: Math.round(nova[index].metaLotes) }; return nova; }); }
 
   async function confirmarEProgramar() {
     if (itens.length === 0) { alert('Adicione pelo menos uma receita.'); return; }
@@ -141,6 +142,11 @@ export default function Lider() {
               <button onClick={() => ajustarMeta(idx, -1)}>−1</button>
               <div className="valor">{item.metaLotes} receita{item.metaLotes === 1 ? '' : 's'}</div>
               <button onClick={() => ajustarMeta(idx, 1)}>+1</button>
+              {item.metaLotes % 1 !== 0 && (
+                <button onClick={() => arredondarMeta(idx)} style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '0 12px', marginLeft: 8 }}>
+                  ~ Arredondar
+                </button>
+              )}
             </div>
             <div className="meta-quick">
               <button onClick={() => ajustarMeta(idx, -10)}>−10</button>
