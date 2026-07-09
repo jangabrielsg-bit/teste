@@ -1,21 +1,30 @@
-import { Routes, Route } from 'react-router-dom';
+import { AuthProvider, useAuth } from './services/auth';
+import Login from './pages/Login';
 import AppLayout from './layouts/AppLayout';
-import Dashboard from './pages/Dashboard';
-import Inbound from './pages/Inbound';
-import Inventory from './pages/Inventory';
-import Outbound from './pages/Outbound';
 
-function App() {
-  return (
-    <Routes>
-      <Route path="/" element={<AppLayout />}>
-        <Route index element={<Dashboard />} />
-        <Route path="inbound" element={<Inbound />} />
-        <Route path="inventory" element={<Inventory />} />
-        <Route path="outbound" element={<Outbound />} />
-      </Route>
-    </Routes>
-  );
+function AppContent() {
+  const { currentUser, firebasePronto } = useAuth();
+
+  if (!firebasePronto) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', width: '100%', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', flexDirection: 'column', gap: 16 }}>
+        <img src={import.meta.env.BASE_URL + 'logo.png'} alt="IMAC" style={{ height: 60, opacity: 0.6 }} />
+        <div style={{ color: 'var(--marrom-claro)', fontWeight: 600 }}>Conectando ao banco de dados...</div>
+      </div>
+    );
+  }
+
+  if (!currentUser) {
+    return <Login />;
+  }
+
+  return <AppLayout />;
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
+}

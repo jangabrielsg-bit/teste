@@ -1,78 +1,112 @@
-import { Outlet, NavLink } from 'react-router-dom';
-import { SquaresFour, BoxArrowDown, Storefront, Package } from '@phosphor-icons/react';
-import clsx from 'clsx';
+import { useState } from 'react';
+import { useAuth } from '../services/auth';
+import GlobalTicker from '../components/GlobalTicker';
+import Home from '../pages/Home';
+import Lider from '../pages/Lider';
+import Operador from '../pages/Operador';
+import Embaladora from '../pages/Embaladora';
+import Expedicao from '../pages/Expedicao';
+import Fechamento from '../pages/Fechamento';
+import Relatorio from '../pages/Relatorio';
+import LivroProducao from '../pages/LivroProducao';
+import Produtos from '../pages/Produtos';
+import PCP from '../pages/PCP';
+import PainelTV from '../pages/PainelTV';
+import ResumoPCP from '../pages/ResumoPCP';
+
+const nomesTelas = {
+  'lider': 'Conferência de Receitas',
+  'operador': 'Painel de Produção',
+  'embaladora': 'Embaladora',
+  'resumo_pcp': 'Painel TV (Resumos)',
+  'relatorio': 'Relatório',
+  'fechamento': 'Fechamento de Produção',
+  'livro': 'Livro de Produção',
+  'produtos': 'Produtos e Setores',
+  'pcp': 'Lançamentos PCP Winthor',
+  'expedicao': 'Expedição Câmaras'
+};
 
 export default function AppLayout() {
-  const menuItems = [
-    { name: 'Dashboard', path: '/', icon: SquaresFour },
-    { name: 'Inbound', path: '/inbound', icon: BoxArrowDown },
-    { name: 'Estoque', path: '/inventory', icon: Storefront },
-    { name: 'Expedição', path: '/outbound', icon: Package },
-  ];
+  const { currentUser, logout } = useAuth();
+  const s = currentUser?.setor;
+
+  const [tela, setTela] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('tv') === '1' ? 'painel' : 'inicio';
+    } catch { return 'inicio'; }
+  });
+
+  // Tela cheia do painel TV
+  if (tela === 'painel') return <PainelTV sair={() => setTela('inicio')} />;
+  if (tela === 'resumo_pcp') return <ResumoPCP sair={() => setTela('inicio')} />;
 
   return (
-    <div className="flex min-h-screen bg-[#151A22] text-gray-200 font-sans">
-      {/* Sidebar */}
-      <aside className="w-64 glass-panel border-r border-gray-800 flex flex-col z-20">
-        <div className="p-6 flex items-center gap-3 border-b border-gray-800">
-          <div className="w-10 h-10 bg-gold rounded-xl flex items-center justify-center text-stone-900 font-black text-xl shadow-[0_0_15px_rgba(246,190,0,0.4)]">
-            W
-          </div>
-          <div>
-            <h1 className="font-black text-white text-xl tracking-wide">IMAC WMS</h1>
-            <p className="text-[10px] text-gold uppercase font-bold tracking-wider">SaaS Edition</p>
-          </div>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', width: '100%', position: 'relative', paddingBottom: 64, background: 'var(--bg)' }}>
+      <GlobalTicker />
 
-        <nav className="flex-1 p-4 space-y-2">
-          {menuItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                clsx(
-                  'flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-all',
-                  isActive
-                    ? 'bg-gold/10 text-gold border border-gold/20'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'
-                )
-              }
-            >
-              <item.icon weight="fill" className="text-xl" />
-              {item.name}
-            </NavLink>
-          ))}
-        </nav>
-
-        <div className="p-4 border-t border-gray-800">
-          <div className="bg-[#1D2530] p-4 rounded-xl border border-gray-800 text-xs">
-            <p className="text-gray-400 font-bold mb-1">Status do Sistema</p>
-            <div className="flex items-center gap-2 text-green-400 font-bold">
-              <span className="w-2 h-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]"></span>
-              Online
-            </div>
-          </div>
+      {/* Header */}
+      <header className="app-header">
+        <div className="logo-area">
+          {tela !== 'inicio' && (
+            <button onClick={() => setTela('inicio')} style={{ background: 'none', border: 'none', color: 'var(--marrom-claro)', cursor: 'pointer', fontSize: '1.4rem', marginRight: 4 }}>
+              <i className="ph ph-arrow-left"></i>
+            </button>
+          )}
+          <img src={import.meta.env.BASE_URL + 'logo.png'} alt="IMAC" />
+          <h2>{tela === 'inicio' ? 'Fábrica / PCP' : (nomesTelas[tela] || 'Painel')}</h2>
         </div>
-      </aside>
+        <div className="user-area">
+          <span style={{ fontWeight: 700, color: 'var(--marrom)', textTransform: 'capitalize' }}>{s}</span>
+          <button onClick={logout}><i className="ph ph-sign-out" style={{ fontSize: '1.3rem' }}></i>Sair</button>
+        </div>
+      </header>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col relative overflow-hidden">
-        {/* Glow effect in background */}
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-gold/5 blur-[120px] rounded-full pointer-events-none"></div>
-        
-        <header className="h-20 glass-panel flex items-center justify-between px-8 z-10 border-b border-gray-800">
-          <h2 className="text-xl font-black text-white">Gestão de Armazém</h2>
-          <div className="flex items-center gap-4">
-            <button className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center border border-gray-700 hover:border-gold transition-colors">
-              <img src="/logo.png" alt="User" className="w-6 h-6 object-contain" onError={(e) => e.target.style.display = 'none'} />
-            </button>
-          </div>
-        </header>
-
-        <div className="flex-1 p-8 overflow-auto z-10 relative">
-          <Outlet />
-        </div>
+      <main className="app-main">
+        {tela === 'inicio' && <Home ir={setTela} />}
+        {tela === 'lider' && <Lider />}
+        {tela === 'operador' && <Operador />}
+        {tela === 'embaladora' && <Embaladora />}
+        {tela === 'expedicao' && <Expedicao />}
+        {tela === 'fechamento' && <Fechamento />}
+        {tela === 'relatorio' && <Relatorio />}
+        {tela === 'livro' && <LivroProducao />}
+        {tela === 'produtos' && <Produtos />}
+        {tela === 'pcp' && <PCP />}
       </main>
+
+      {/* Bottom Navigation */}
+      <nav className="bottom-nav">
+        <button className={tela === 'inicio' ? 'active' : ''} onClick={() => setTela('inicio')}>
+          <i className="ph ph-squares-four"></i>Início
+        </button>
+        {(s === 'pcp' || s === 'lider') && (
+          <button className={tela === 'lider' ? 'active' : ''} onClick={() => setTela('lider')}>
+            <i className="ph ph-users"></i>Líder
+          </button>
+        )}
+        {(s === 'pcp' || s === 'producao' || s === 'lider') && (
+          <button className={tela === 'operador' ? 'active' : ''} onClick={() => setTela('operador')}>
+            <i className="ph ph-cooking-pot"></i>Produção
+          </button>
+        )}
+        {s === 'embaladora' && (
+          <button className={tela === 'embaladora' ? 'active' : ''} onClick={() => setTela('embaladora')}>
+            <i className="ph ph-package"></i>Embaladora
+          </button>
+        )}
+        {s === 'expedicao' && (
+          <button className={tela === 'expedicao' ? 'active' : ''} onClick={() => setTela('expedicao')}>
+            <i className="ph ph-snowflake"></i>Expedição
+          </button>
+        )}
+        {s === 'pcp' && (
+          <button className={tela === 'pcp' ? 'active' : ''} onClick={() => setTela('pcp')}>
+            <i className="ph ph-chart-bar"></i>PCP
+          </button>
+        )}
+      </nav>
     </div>
   );
 }
