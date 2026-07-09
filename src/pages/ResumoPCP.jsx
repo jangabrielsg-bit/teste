@@ -5,6 +5,7 @@ import { formatarDataBR } from '../services/utils';
 
 export default function ResumoPCP({ sair }) {
   const [abaAtual, setAbaAtual] = useState(0);
+  const [autoRodizio, setAutoRodizio] = useState(false);
   const [dataAlvo, setDataAlvo] = useState(() => new Date().toISOString().split('T')[0]);
   const [prodDiaria, setProdDiaria] = useState([]);
   const [tunel, setTunel] = useState([]);
@@ -23,6 +24,16 @@ export default function ResumoPCP({ sair }) {
     return () => { unsubProd(); unsubExp(); };
   }, [dataAlvo]);
 
+  useEffect(() => {
+    let interval;
+    if (autoRodizio) {
+      interval = setInterval(() => {
+        setAbaAtual(prev => (prev + 1) % 3);
+      }, 30000);
+    }
+    return () => clearInterval(interval);
+  }, [autoRodizio]);
+
   function toggleFullScreen() {
     if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
     else document.exitFullscreen().catch(() => {});
@@ -39,8 +50,12 @@ export default function ResumoPCP({ sair }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ display: 'flex', background: '#3D2515', padding: 4, borderRadius: 8, border: '1px solid #734A2A', gap: 4 }}>
             {['Masseira', 'Embaladora', 'Câmaras'].map((txt, i) => (
-              <button key={i} onClick={() => setAbaAtual(i)} style={{ padding: '8px 16px', borderRadius: 4, fontWeight: 700, border: 'none', cursor: 'pointer', background: abaAtual === i ? '#F6BE00' : 'transparent', color: abaAtual === i ? '#2A170A' : '#D0B29E', transition: 'all 0.15s' }}>{txt}</button>
+              <button key={i} onClick={() => { setAbaAtual(i); setAutoRodizio(false); }} style={{ padding: '8px 16px', borderRadius: 4, fontWeight: 700, border: 'none', cursor: 'pointer', background: abaAtual === i ? '#F6BE00' : 'transparent', color: abaAtual === i ? '#2A170A' : '#D0B29E', transition: 'all 0.15s' }}>{txt}</button>
             ))}
+            <button onClick={() => setAutoRodizio(!autoRodizio)} style={{ padding: '8px 16px', borderRadius: 4, fontWeight: 700, border: 'none', cursor: 'pointer', background: autoRodizio ? '#10b981' : 'transparent', color: autoRodizio ? '#fff' : '#D0B29E', display: 'flex', alignItems: 'center', gap: 6, transition: 'all 0.15s' }}>
+              <i className={`ph ${autoRodizio ? 'ph-arrows-clockwise' : 'ph-play'}`}></i>
+              Auto 30s
+            </button>
           </div>
           <input type="date" style={{ background: '#4A2E1A', color: '#F6BE00', padding: 8, borderRadius: 6, border: '1px solid #734A2A', fontWeight: 700 }} value={dataAlvo} onChange={e => setDataAlvo(e.target.value)} />
           <button onClick={toggleFullScreen} style={{ background: '#F6BE00', color: '#2A170A', padding: '8px 16px', borderRadius: 6, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
