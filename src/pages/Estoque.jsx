@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment, setDoc, addDoc } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { useAuth } from '../services/auth';
 import { useProdutos } from '../services/hooks';
@@ -43,27 +43,52 @@ function fmtQtd(n, un) {
   if (n == null || !isFinite(n)) return '—';
   return `${Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} ${un || 'UN'}`;
 }
-function fmtHoras(h) {
-  if (h == null || !isFinite(h) || h > 9999) return '—';
-  if (h < 24) return `${Math.round(h)}h`;
-  return `${(h / 24).toFixed(1)}d`;
-}
 function horaCurta(iso) {
   try { return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
   catch { return ''; }
 }
 
+// ── Métrica individual (label pequena + valor) ────────────────────
+function Metrica({ label, valor, cor, destaque }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#b08d55', textTransform: 'uppercase', letterSpacing: '0.5px', whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontSize: destaque ? '1rem' : '0.88rem', fontWeight: 800, color: cor || 'var(--marrom)', whiteSpace: 'nowrap' }}>{valor}</span>
+    </div>
+  );
+}
+
+// ── Badge de cobertura ─────────────────────────────────────────────
+function BadgeCobertura({ disponivel, demanda }) {
+  if (demanda == null || demanda <= 0) return null;
+  if (disponivel == null) return null;
+
+  const percCobertura = demanda > 0 ? (disponivel / demanda) * 100 : 100;
+  let cor, bg, texto, icone;
+
+  if (percCobertura >= 130) { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = 'Cobre a demanda'; }
+  else if (percCobertura >= 100) { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = 'Cobre (folga baixa)'; }
+  else if (percCobertura >= 60) { cor = '#92400e'; bg = '#fef3c7'; icone = 'ph-warning'; texto = `Cobre ${percCobertura.toFixed(0)}% — atenção`; }
+  else { cor = '#991b1b'; bg = '#fef2f2'; icone = 'ph-warning-circle'; texto = `Insuficiente (${percCobertura.toFixed(0)}%)`; }
+
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: bg, color: cor, fontSize: '0.75rem', fontWeight: 800, padding: '5px 12px', borderRadius: 20 }}>
+      <i className={`ph ${icone}`}></i> {texto}
+    </div>
+  );
+}
+
 // ── Modal de Ajuste Físico PA (só PCP) ───────────────────────────
-function ModalAjusteFisico({ item, winthorEntry, aoFechar }) {
-  const [modo, setModo] = useState('ajuste'); // 'ajuste' | 'entrada' | 'saida'
+function ModalAjusteFisico({ item, aoFechar }) {
+  const [modo, setModo] = useState('ajuste');
   const [valor, setValor] = useState('');
   const [motivo, setMotivo] = useState('');
   const [salvando, setSalvando] = useState(false);
 
-  const saldoAtual = item?.saldoFisico || 0;
-  const unidade    = item?.unidade || winthorEntry?.unidade || 'UN';
-  const codigo     = item?.codigo || winthorEntry?.codigo;
-  const produto    = item?.produto || winthorEntry?.produto;
+  const saldoAtual = item?.fisico?.saldoFisico || 0;
+  const unidade    = item?.fisico?.unidade || item?.winthor?.unidade || 'UN';
+  const codigo     = item.codigo;
+  const produto    = item.produto;
 
   async function salvar() {
     if (!valor || isNaN(parseFloat(valor))) return alert('Insira um valor válido.');
@@ -71,50 +96,21 @@ function ModalAjusteFisico({ item, winthorEntry, aoFechar }) {
     setSalvando(true);
     try {
       const n = parseFloat(valor);
-      let delta = 0;
-      let tipo = '';
-      if (modo === 'ajuste') {
-        delta = n - saldoAtual;
-        tipo = 'AJUSTE_INVENTARIO';
-      } else if (modo === 'entrada') {
-        delta = n;
-        tipo = 'ENTRADA_MANUAL';
-      } else {
-        delta = -n;
-        tipo = 'SAIDA_MANUAL';
-      }
+      let delta = 0, tipo = '';
+      if (modo === 'ajuste') { delta = n - saldoAtual; tipo = 'AJUSTE_INVENTARIO'; }
+      else if (modo === 'entrada') { delta = n; tipo = 'ENTRADA_MANUAL'; }
+      else { delta = -n; tipo = 'SAIDA_MANUAL'; }
 
       const batch = writeBatch(db);
-
-      // Atualiza saldo no documento principal
       const refSaldo = doc(db, 'estoquePAFisico', codigo);
-      batch.set(refSaldo, {
-        codigo,
-        produto,
-        saldoFisico:  increment(delta),
-        unidade,
-        ultimoAjuste: new Date().toISOString(),
-      }, { merge: true });
-
-      // Registra no histórico de ajustes
+      batch.set(refSaldo, { codigo, produto, saldoFisico: increment(delta), unidade, ultimoAjuste: new Date().toISOString() }, { merge: true });
       const refMov = doc(collection(db, 'estoquePAFisico', codigo, 'ajustes'));
-      batch.set(refMov, {
-        tipo,
-        saldoAntes:   saldoAtual,
-        valor:        n,
-        delta,
-        motivo:       motivo.trim(),
-        registradoEm: new Date().toISOString(),
-      });
-
+      batch.set(refMov, { tipo, saldoAntes: saldoAtual, valor: n, delta, motivo: motivo.trim(), registradoEm: new Date().toISOString() });
       await batch.commit();
       alert('Ajuste salvo!');
       aoFechar();
-    } catch (e) {
-      alert('Erro: ' + e.message);
-    } finally {
-      setSalvando(false);
-    }
+    } catch (e) { alert('Erro: ' + e.message); }
+    finally { setSalvando(false); }
   }
 
   return (
@@ -128,7 +124,6 @@ function ModalAjusteFisico({ item, winthorEntry, aoFechar }) {
           <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }}>✕</button>
         </div>
 
-        {/* Tipo de operação */}
         <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
           {[['ajuste', '🎯 Inventário'], ['entrada', '📥 Entrada'], ['saida', '📤 Saída']].map(([m, label]) => (
             <button key={m} onClick={() => setModo(m)} style={{ flex: 1, padding: '10px 8px', borderRadius: 10, border: '2px solid', fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', background: modo === m ? 'var(--amarelo)' : 'white', borderColor: modo === m ? 'var(--amarelo)' : 'var(--border-suave)', color: modo === m ? 'var(--marrom)' : '#999' }}>
@@ -139,23 +134,15 @@ function ModalAjusteFisico({ item, winthorEntry, aoFechar }) {
 
         <div style={{ background: 'var(--amarelo-claro)', borderRadius: 10, padding: 12, marginBottom: 16, fontSize: '0.82rem', color: 'var(--marrom)' }}>
           {modo === 'ajuste' && <><strong>Inventário:</strong> informe o saldo real contado — o sistema calcula a diferença automaticamente.</>}
-          {modo === 'entrada' && <><strong>Entrada manual:</strong> quantidade a adicionar ao saldo (ex: transferência não registrada).</>}
-          {modo === 'saida'  && <><strong>Saída manual:</strong> quantidade a remover do saldo (ex: descarte, expedição retroativa).</>}
+          {modo === 'entrada' && <><strong>Entrada manual:</strong> quantidade a adicionar ao saldo.</>}
+          {modo === 'saida'  && <><strong>Saída manual:</strong> quantidade a remover do saldo.</>}
         </div>
 
         <div style={{ marginBottom: 14 }}>
           <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>
             {modo === 'ajuste' ? `Saldo real contado (${unidade})` : `Quantidade (${unidade})`}
           </label>
-          <input
-            type="number"
-            step="0.01"
-            min="0"
-            className="input-texto"
-            value={valor}
-            onChange={e => setValor(e.target.value)}
-            placeholder={modo === 'ajuste' ? `Saldo atual: ${saldoAtual.toFixed(2)}` : '0.00'}
-          />
+          <input type="number" step="0.01" min="0" className="input-texto" value={valor} onChange={e => setValor(e.target.value)} placeholder={modo === 'ajuste' ? `Saldo atual: ${saldoAtual.toFixed(2)}` : '0.00'} />
           {modo === 'ajuste' && valor && !isNaN(parseFloat(valor)) && (
             <div style={{ marginTop: 6, fontSize: '0.82rem', fontWeight: 700, color: parseFloat(valor) - saldoAtual >= 0 ? 'var(--success)' : 'var(--danger)' }}>
               Diferença: {parseFloat(valor) - saldoAtual >= 0 ? '+' : ''}{(parseFloat(valor) - saldoAtual).toFixed(2)} {unidade}
@@ -168,14 +155,118 @@ function ModalAjusteFisico({ item, winthorEntry, aoFechar }) {
           <input className="input-texto" value={motivo} onChange={e => setMotivo(e.target.value)} placeholder="Ex: Contagem física de câmara, Descarte por vencimento..." />
         </div>
 
-        <button
-          onClick={salvar}
-          disabled={salvando}
-          style={{ width: '100%', padding: 16, borderRadius: 12, border: 'none', background: 'var(--marrom)', color: 'white', fontWeight: 900, fontSize: '1rem', cursor: 'pointer' }}
-        >
+        <button onClick={salvar} disabled={salvando} style={{ width: '100%', padding: 16, borderRadius: 12, border: 'none', background: 'var(--marrom)', color: 'white', fontWeight: 900, fontSize: '1rem', cursor: 'pointer' }}>
           {salvando ? 'Salvando...' : 'Confirmar Ajuste'}
         </button>
       </div>
+    </div>
+  );
+}
+
+// ── Modal Lotes (compartilhado PA e MP) ───────────────────────────
+function ModalLotes({ produto, aoFechar }) {
+  return (
+    <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', zIndex: 9999 }} onClick={aoFechar}>
+      <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 420, maxHeight: '70vh', overflow: 'hidden', margin: 16 }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: 20, borderBottom: '1px solid var(--border-suave)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div><h2 style={{ fontWeight: 900, fontSize: '1.3rem' }}>{produto.nome}</h2><div style={{ fontSize: '0.75rem', color: '#999' }}>CÓD: {produto.codigo || 'N/A'}</div></div>
+          <button style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }} onClick={aoFechar}>✕</button>
+        </div>
+        <div style={{ padding: 12, maxHeight: '50vh', overflowY: 'auto' }}>
+          {(produto.lotes || []).length === 0
+            ? <div className="status-msg">Nenhum lote encontrado.</div>
+            : (produto.lotes || []).map((lt, lIdx) => (
+                <div key={lIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottom: '1px solid #f3f4f6' }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || lt.code || 'S/N'}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#999' }}>{(lt.validade || lt.expiryDate) ? new Date(lt.validade || lt.expiryDate).toLocaleDateString('pt-BR') : 'Sem validade'}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#999' }}>{produto.und || lt.und || 'kg'}</div>
+                  </div>
+                </div>
+              ))
+          }
+        </div>
+        <div style={{ padding: 14, background: '#fafafa', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, color: '#999' }}>Total</span>
+          <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.2rem' }}>
+            {((produto.totalKg || 0) > 0 ? produto.totalKg.toFixed(2) : (produto.totalUnd || 0) > 0 ? produto.totalUnd : (produto.totalFisico || 0).toFixed(2))} {produto.und || 'kg'}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Chips de resumo (compartilhado) ───────────────────────────────
+function ChipsResumo({ criticos, avisos, atualizadoEm, labelFonte }) {
+  if (criticos === 0 && avisos === 0 && !atualizadoEm) return null;
+  return (
+    <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+      {criticos > 0 && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fde8e8', color: '#c0392b', padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: '0.8rem' }}>
+          <i className="ph ph-warning-circle"></i> {criticos} crítico{criticos > 1 ? 's' : ''}
+        </div>
+      )}
+      {avisos > 0 && (
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef3e2', color: '#e67e22', padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: '0.8rem' }}>
+          <i className="ph ph-warning"></i> {avisos} aviso{avisos > 1 ? 's' : ''}
+        </div>
+      )}
+      {atualizadoEm && (
+        <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: '#a78355', fontWeight: 600 }}>
+          <i className="ph ph-arrows-clockwise"></i> {labelFonte} {horaCurta(atualizadoEm)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── CARD SÓLIDO — mesmo layout para PA e MP ───────────────────────
+function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, onClick, onAjustar, borderColor }) {
+  return (
+    <div style={{
+      border: `1px solid ${borderColor || '#f0e3c4'}`,
+      borderLeft: `4px solid ${borderColor || '#f5b915'}`,
+      borderRadius: 14,
+      marginBottom: 10,
+      background: 'white',
+      overflow: 'hidden',
+      boxShadow: '0 1px 3px rgba(107,68,35,0.04)',
+    }}>
+      <div
+        style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 16px 12px', cursor: onClick ? 'pointer' : 'default' }}
+        onClick={onClick}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--amarelo-claro)', color: 'var(--amarelo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.15rem' }}>
+            <i className={`ph ${icone}`}></i>
+          </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontWeight: 800, color: 'var(--marrom)', fontSize: '0.98rem' }}>{produto}</div>
+            <div style={{ fontSize: '0.7rem', color: '#b08d55', fontFamily: 'monospace', marginTop: 1, fontWeight: 600 }}>CÓD: {codigo}</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {tagQtd}
+          {onAjustar && (
+            <button
+              onClick={e => { e.stopPropagation(); onAjustar(); }}
+              style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 10px', fontWeight: 700, fontSize: '0.72rem', color: 'var(--marrom)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              <i className="ph ph-sliders"></i>
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 22, padding: '10px 16px 12px', borderTop: '1px dashed #f0e3c4', flexWrap: 'wrap' }}>
+        {metricas}
+      </div>
+
+      {coberturaEl && <div style={{ padding: '0 16px 14px' }}>{coberturaEl}</div>}
     </div>
   );
 }
@@ -186,20 +277,19 @@ export default function Estoque() {
   const { produtos } = useProdutos();
   const isPcp = currentUser?.setor === 'pcp';
 
-  const [estoqueAtual, setEstoqueAtual]         = useState([]);
-  const [termoBuscaEstoque, setTermoBuscaEstoque] = useState('');
-  const [subAbaEstoque, setSubAbaEstoque]         = useState('acabado');
-  const [modalLotesProduto, setModalLotesProduto] = useState(null);
-  const [modalAjuste, setModalAjuste]             = useState(null); // { fisico, winthor }
+  const [estoqueAtual, setEstoqueAtual] = useState([]);
+  const [termoBusca, setTermoBusca]     = useState('');
+  const [subAba, setSubAba]             = useState('acabado');
+  const [modalLotes, setModalLotes]     = useState(null);
+  const [modalAjuste, setModalAjuste]   = useState(null);
 
   const [estoqueWinthorSistema, setEstoqueWinthorSistema] = useState({});
-  const [estoqueMP, setEstoqueMP]               = useState([]);
-  const [carregandoMP, setCarregandoMP]         = useState(false);
+  const [estoqueMP, setEstoqueMP]       = useState([]);
+  const [carregandoMP, setCarregandoMP] = useState(false);
 
   const { dados: winthorPA, atualizadoEm: paAtualizadoEm } = useEstoqueWinthorPA();
   const fisicoPA = useEstoquePAFisico();
 
-  // Estoque físico por lotes (coleção 'estoque')
   useEffect(() => {
     return onSnapshot(collection(db, 'estoque'), snap => {
       const est = [];
@@ -208,9 +298,8 @@ export default function Estoque() {
     });
   }, []);
 
-  // Matéria Prima
   useEffect(() => {
-    if (subAbaEstoque === 'mp' && isPcp) {
+    if (subAba === 'mp' && isPcp) {
       setCarregandoMP(true);
       (async () => {
         try {
@@ -239,9 +328,8 @@ export default function Estoque() {
         setCarregandoMP(false);
       })();
     }
-  }, [subAbaEstoque, isPcp]);
+  }, [subAba, isPcp]);
 
-  // Agrupamento lotes físicos por código
   const lotesPorCodigo = {};
   estoqueAtual.forEach(it => {
     const cod = it.codigo || it.nome;
@@ -251,51 +339,45 @@ export default function Estoque() {
     lotesPorCodigo[cod].lotes.push(it);
   });
 
-  // União: todos os produtos que aparecem no Winthor PA OU no físico
-  const todasChaves = new Set([
-    ...Object.keys(winthorPA),
-    ...Object.keys(fisicoPA),
-  ]);
-
+  const todasChaves = new Set([...Object.keys(winthorPA), ...Object.keys(fisicoPA)]);
   let listaAcabado = Array.from(todasChaves).map(codigo => {
     const w = winthorPA[codigo];
     const f = fisicoPA[codigo];
     const lotesGrp = lotesPorCodigo[codigo] || lotesPorCodigo[w?.produto] || null;
-    return {
-      codigo,
-      produto:     w?.produto || f?.produto || codigo,
-      winthor:     w || null,
-      fisico:      f || null,
-      lotesGrp,
-    };
+    return { codigo, produto: w?.produto || f?.produto || codigo, winthor: w || null, fisico: f || null, lotesGrp };
   });
 
-  if (termoBuscaEstoque) {
-    const t = termoBuscaEstoque.toLowerCase();
-    listaAcabado = listaAcabado.filter(g =>
-      g.produto.toLowerCase().includes(t) || g.codigo.toLowerCase().includes(t)
-    );
+  if (termoBusca && subAba === 'acabado') {
+    const t = termoBusca.toLowerCase();
+    listaAcabado = listaAcabado.filter(g => g.produto.toLowerCase().includes(t) || g.codigo.toLowerCase().includes(t));
   }
 
-  // Ordenação: críticos Winthor primeiro
+  function classificar(g) {
+    const w = g.winthor;
+    if (!w) return 2;
+    const disponivel = w.estoqueAtual ?? 0;
+    const demanda = (w.saida24h || 0) + (w.saida48h || 0);
+    if (demanda <= 0) return 2;
+    const perc = (disponivel / demanda) * 100;
+    if (perc < 60) return 0;
+    if (perc < 100) return 1;
+    return 2;
+  }
+
   listaAcabado.sort((a, b) => {
-    const nivelA = a.winthor?.estoqueAtual != null && a.winthor.estoqueAtual <= (a.winthor.estoqueMinimo || 0) ? 0
-      : a.winthor?.horasAteMinimo != null && a.winthor.horasAteMinimo <= 48 ? 1 : 2;
-    const nivelB = b.winthor?.estoqueAtual != null && b.winthor.estoqueAtual <= (b.winthor.estoqueMinimo || 0) ? 0
-      : b.winthor?.horasAteMinimo != null && b.winthor.horasAteMinimo <= 48 ? 1 : 2;
-    if (nivelA !== nivelB) return nivelA - nivelB;
+    const nA = classificar(a), nB = classificar(b);
+    if (nA !== nB) return nA - nB;
     return a.produto.localeCompare(b.produto, 'pt-BR');
   });
 
+  const totalCriticos = listaAcabado.filter(g => classificar(g) === 0).length;
+  const totalAvisos   = listaAcabado.filter(g => classificar(g) === 1).length;
+
   let mpFiltrado = estoqueMP;
-  if (termoBuscaEstoque && subAbaEstoque === 'mp') {
-    const t = termoBuscaEstoque.toLowerCase();
+  if (termoBusca && subAba === 'mp') {
+    const t = termoBusca.toLowerCase();
     mpFiltrado = estoqueMP.filter(g => g.nome.toLowerCase().includes(t) || (g.codigo && g.codigo.toLowerCase().includes(t)));
   }
-
-  // Chips de resumo
-  const totalCriticos = listaAcabado.filter(g => g.winthor?.estoqueAtual != null && g.winthor.estoqueAtual <= (g.winthor.estoqueMinimo || 0)).length;
-  const totalAvisos   = listaAcabado.filter(g => g.winthor && !( g.winthor.estoqueAtual <= (g.winthor.estoqueMinimo || 0)) && g.winthor.horasAteMinimo != null && g.winthor.horasAteMinimo <= 48).length;
 
   return (
     <div style={{ padding: 16, maxWidth: 900, margin: '0 auto' }}>
@@ -306,183 +388,82 @@ export default function Estoque() {
       </div>
 
       <div className="card">
-        {/* Abas */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <h3 className="nome">Painel de Estoque</h3>
           {isPcp && (
             <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 8, padding: 4 }}>
-              <button onClick={() => setSubAbaEstoque('acabado')} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAbaEstoque === 'acabado' ? 'white' : 'transparent', color: subAbaEstoque === 'acabado' ? 'var(--marrom)' : '#999', boxShadow: subAbaEstoque === 'acabado' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+              <button onClick={() => { setSubAba('acabado'); setTermoBusca(''); }} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAba === 'acabado' ? 'white' : 'transparent', color: subAba === 'acabado' ? 'var(--marrom)' : '#999', boxShadow: subAba === 'acabado' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                 🧊 Produto Acabado
               </button>
-              <button onClick={() => setSubAbaEstoque('mp')} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAbaEstoque === 'mp' ? 'white' : 'transparent', color: subAbaEstoque === 'mp' ? 'var(--marrom)' : '#999', boxShadow: subAbaEstoque === 'mp' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+              <button onClick={() => { setSubAba('mp'); setTermoBusca(''); }} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAba === 'mp' ? 'white' : 'transparent', color: subAba === 'mp' ? 'var(--marrom)' : '#999', boxShadow: subAba === 'mp' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                 📦 Matéria Prima
               </button>
             </div>
           )}
         </div>
 
-        {/* Chips resumo PA */}
-        {subAbaEstoque === 'acabado' && (totalCriticos > 0 || totalAvisos > 0) && (
-          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
-            {totalCriticos > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fde8e8', color: '#c0392b', padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: '0.8rem' }}>
-                <i className="ph ph-warning-circle"></i> {totalCriticos} crítico{totalCriticos > 1 ? 's' : ''}
-              </div>
-            )}
-            {totalAvisos > 0 && (
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fef3e2', color: '#e67e22', padding: '6px 14px', borderRadius: 20, fontWeight: 700, fontSize: '0.8rem' }}>
-                <i className="ph ph-warning"></i> {totalAvisos} aviso{totalAvisos > 1 ? 's' : ''} 48h
-              </div>
-            )}
-            {paAtualizadoEm && (
-              <div style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: '0.72rem', color: '#a78355', fontWeight: 600 }}>
-                <i className="ph ph-arrows-clockwise"></i> Winthor {horaCurta(paAtualizadoEm)}
-              </div>
-            )}
-          </div>
+        {subAba === 'acabado' && (
+          <ChipsResumo criticos={totalCriticos} avisos={totalAvisos} atualizadoEm={paAtualizadoEm} labelFonte="Winthor" />
         )}
 
-        {/* Busca */}
         <div style={{ marginBottom: 16 }}>
-          <input type="text" className="input-texto" placeholder="Buscar por nome ou código..." value={termoBuscaEstoque} onChange={e => setTermoBuscaEstoque(e.target.value)} />
+          <input type="text" className="input-texto" placeholder="Buscar por nome ou código..." value={termoBusca} onChange={e => setTermoBusca(e.target.value)} />
         </div>
 
         {/* ── ABA: PRODUTO ACABADO ── */}
-        {subAbaEstoque === 'acabado' && (
+        {subAba === 'acabado' && (
           listaAcabado.length === 0
             ? <div className="status-msg">Nenhum produto encontrado.</div>
             : <div>
                 {listaAcabado.map(grp => {
                   const { codigo, produto, winthor: w, fisico: f, lotesGrp } = grp;
-                  const abaixoMin = w?.estoqueAtual != null && w.estoqueAtual <= (w.estoqueMinimo || 0);
-                  const emAviso   = w && !abaixoMin && w.horasAteMinimo != null && w.horasAteMinimo <= 48;
-                  const borderColor = abaixoMin ? '#c0392b' : emAviso ? '#e67e22' : 'var(--border-suave)';
+                  const nivel = classificar(grp);
+                  const borderColor = nivel === 0 ? '#c0392b' : nivel === 1 ? '#e67e22' : '#e8dcc0';
 
                   const saldoFisico = f?.saldoFisico ?? (lotesGrp ? (lotesGrp.und === 'kg' ? lotesGrp.totalKg : lotesGrp.totalUnd) : null);
                   const unidade = w?.unidade || f?.unidade || 'UN';
+                  const disponivelWinthor = w?.estoqueAtual;
+                  const demanda = w ? (w.saida24h || 0) + (w.saida48h || 0) : null;
+                  const corWinthor = nivel === 0 ? '#c0392b' : nivel === 1 ? '#e67e22' : '#3d8b53';
 
-                  // Status baseado em config do produto
-                  const prodConf = produtos.find(p => p.codigo === codigo || p.nome === produto);
-                  let statusTag = null;
-                  if (prodConf && saldoFisico != null) {
-                    if (prodConf.estoqueMinAcabado > 0 && saldoFisico < prodConf.estoqueMinAcabado)
-                      statusTag = { text: 'Físico Baixo', style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } };
-                    else if (prodConf.estoqueMaxAcabado > 0 && saldoFisico > prodConf.estoqueMaxAcabado)
-                      statusTag = { text: 'Físico Alto', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' } };
-                  }
+                  const metricas = (
+                    <>
+                      <Metrica label="Winthor" valor={w ? fmtQtd(w.estoqueAtual, w.unidade) : '—'} cor={corWinthor} destaque />
+                      <Metrica label="Físico" valor={saldoFisico != null ? fmtQtd(saldoFisico, unidade) : '—'} destaque />
+                      <Metrica label="Saída 24h" valor={w?.saida24h != null ? fmtQtd(w.saida24h, w.unidade) : '—'} />
+                      <Metrica label="Saída 48h" valor={w?.saida48h != null ? fmtQtd(w.saida48h, w.unidade) : '—'} />
+                      {demanda != null && demanda > 0 && (
+                        <Metrica label="Demanda 24+48h" valor={fmtQtd(demanda, w.unidade)} cor="#a78355" />
+                      )}
+                    </>
+                  );
 
                   return (
-                    <div key={codigo} style={{ border: `1px solid ${borderColor}`, borderLeft: `4px solid ${borderColor}`, borderRadius: 14, marginBottom: 10, overflow: 'hidden', background: 'white' }}>
-                      {/* ── Cabeçalho do card ── */}
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '14px 14px 10px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                          <div style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--amarelo-claro)', color: 'var(--amarelo)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                            <i className="ph ph-package"></i>
-                          </div>
-                          <div>
-                            <div style={{ fontWeight: 800, color: 'var(--marrom)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {produto}
-                              {statusTag && <span style={{ fontSize: '0.65rem', padding: '2px 7px', borderRadius: 4, ...statusTag.style }}>{statusTag.text}</span>}
-                            </div>
-                            <div style={{ fontSize: '0.7rem', color: '#a78355', fontFamily: 'monospace', marginTop: 1 }}>CÓD: {codigo}</div>
-                          </div>
-                        </div>
-                        {/* Botão ajuste PCP */}
-                        {isPcp && (
-                          <button
-                            onClick={() => setModalAjuste({ fisico: f, winthor: w, codigo, produto })}
-                            style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 12px', fontWeight: 700, fontSize: '0.75rem', color: 'var(--marrom)', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
-                          >
-                            <i className="ph ph-sliders"></i> Ajustar
-                          </button>
-                        )}
-                      </div>
-
-                      {/* ── Painel duplo: Físico | Winthor ── */}
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, borderTop: '1px solid #f0e3c4' }}>
-
-                        {/* Físico (entradas da expedição) */}
-                        <div style={{ padding: '12px 14px', borderRight: '1px solid #f0e3c4' }}>
-                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a78355', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <i className="ph ph-snowflake"></i> Físico / Câmara
-                          </div>
-                          {saldoFisico != null
-                            ? <>
-                                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: 'var(--marrom)' }}>
-                                  {fmtQtd(saldoFisico, unidade)}
-                                </div>
-                                {lotesGrp && (
-                                  <button
-                                    onClick={() => setModalLotesProduto(lotesGrp)}
-                                    style={{ marginTop: 6, fontSize: '0.72rem', color: '#a78355', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-                                  >
-                                    {lotesGrp.lotes.length} lote{lotesGrp.lotes.length > 1 ? 's' : ''} →
-                                  </button>
-                                )}
-                              </>
-                            : <div style={{ fontSize: '0.82rem', color: '#ccc', fontStyle: 'italic' }}>Sem entrada</div>
-                          }
-                        </div>
-
-                        {/* Winthor */}
-                        <div style={{ padding: '12px 14px' }}>
-                          <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#a78355', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <i className="ph ph-database"></i> Winthor
-                          </div>
-                          {w
-                            ? <>
-                                <div style={{ fontSize: '1.15rem', fontWeight: 900, color: abaixoMin ? '#c0392b' : emAviso ? '#e67e22' : '#3d8b53' }}>
-                                  {fmtQtd(w.estoqueAtual, w.unidade)}
-                                </div>
-                                <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
-                                  {w.saida24h != null && (
-                                    <div style={{ fontSize: '0.72rem' }}>
-                                      <span style={{ color: '#a78355', fontWeight: 700 }}>24h </span>
-                                      <span style={{ fontWeight: 800, color: 'var(--marrom)' }}>{fmtQtd(w.saida24h, w.unidade)}</span>
-                                    </div>
-                                  )}
-                                  {w.saida48h != null && (
-                                    <div style={{ fontSize: '0.72rem' }}>
-                                      <span style={{ color: '#a78355', fontWeight: 700 }}>48h </span>
-                                      <span style={{ fontWeight: 800, color: 'var(--marrom)' }}>{fmtQtd(w.saida48h, w.unidade)}</span>
-                                    </div>
-                                  )}
-                                  {w.horasAteMinimo != null && isFinite(w.horasAteMinimo) && (
-                                    <div style={{ fontSize: '0.72rem' }}>
-                                      <span style={{ color: '#a78355', fontWeight: 700 }}>dura </span>
-                                      <span style={{ fontWeight: 800, color: abaixoMin ? '#c0392b' : emAviso ? '#e67e22' : '#3d8b53' }}>{fmtHoras(w.horasAteMinimo)}</span>
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            : <div style={{ fontSize: '0.82rem', color: '#ccc', fontStyle: 'italic' }}>Sem dados</div>
-                          }
-                        </div>
-                      </div>
-
-                      {/* Badges de alerta */}
-                      {(abaixoMin || emAviso) && (
-                        <div style={{ padding: '8px 14px', borderTop: '1px dashed #f0e3c4' }}>
-                          {abaixoMin && (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fde8e8', color: '#c0392b', fontSize: '0.72rem', fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>
-                              <i className="ph ph-warning-circle"></i> Abaixo do mínimo — emitir OP
-                            </div>
-                          )}
-                          {emAviso && (
-                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: '#fef3e2', color: '#e67e22', fontSize: '0.72rem', fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>
-                              <i className="ph ph-warning"></i> Ruptura em {fmtHoras(w.horasAteMinimo)} — programar OP
-                            </div>
-                          )}
-                        </div>
+                    <CardEstoque
+                      key={codigo}
+                      icone="ph-package"
+                      produto={produto}
+                      codigo={codigo}
+                      borderColor={borderColor}
+                      metricas={metricas}
+                      tagQtd={lotesGrp && lotesGrp.lotes.length > 0 && (
+                        <span
+                          onClick={e => { e.stopPropagation(); setModalLotes(lotesGrp); }}
+                          style={{ fontSize: '0.68rem', color: '#a78355', fontWeight: 700, background: '#faf6ea', padding: '4px 8px', borderRadius: 8, cursor: 'pointer' }}
+                        >
+                          {lotesGrp.lotes.length} lote{lotesGrp.lotes.length > 1 ? 's' : ''}
+                        </span>
                       )}
-                    </div>
+                      onAjustar={isPcp ? () => setModalAjuste({ codigo, produto, winthor: w, fisico: f }) : null}
+                      coberturaEl={<BadgeCobertura disponivel={disponivelWinthor} demanda={demanda} />}
+                    />
                   );
                 })}
               </div>
         )}
 
-        {/* ── ABA: MATÉRIA PRIMA (original preservado) ── */}
-        {subAbaEstoque === 'mp' && isPcp && (
+        {/* ── ABA: MATÉRIA PRIMA — mesmo layout sólido ── */}
+        {subAba === 'mp' && isPcp && (
           carregandoMP
             ? <div className="status-msg" style={{ fontWeight: 700 }}>Carregando conciliação...</div>
             : mpFiltrado.length === 0
@@ -491,89 +472,45 @@ export default function Estoque() {
                   {mpFiltrado.map((grp, gIdx) => {
                     const sysQtd = estoqueWinthorSistema[grp.codigo] || 0;
                     const dif = grp.totalFisico - sysQtd;
-                    const prodConf = produtos.find(p => p.codigo === grp.codigo || p.nome === grp.nome);
-                    let status = null;
-                    if (prodConf && (prodConf.estoqueMinMP > 0 || prodConf.estoqueMaxMP > 0)) {
-                      if (prodConf.estoqueMinMP > 0 && grp.totalFisico < prodConf.estoqueMinMP) status = { text: 'Baixo', style: { background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' } };
-                      else if (prodConf.estoqueMaxMP > 0 && grp.totalFisico > prodConf.estoqueMaxMP) status = { text: 'Alto', style: { background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' } };
-                      else status = { text: 'Normal', style: { background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' } };
-                    }
-                    const difPerc = sysQtd > 0 ? ((dif / sysQtd) * 100).toFixed(1) : (dif > 0 ? '100.0' : '0.0');
-                    let corStatus, difStr;
-                    if      (dif >  0.01) { corStatus = { background: '#fef3c7', color: '#92400e' }; difStr = `+${difPerc}%`; }
-                    else if (dif < -0.01) { corStatus = { background: '#fef2f2', color: '#991b1b' }; difStr = `${difPerc}%`; }
-                    else                  { corStatus = { background: '#dcfce7', color: '#166534' }; difStr = 'Bateu'; }
+                    const difPerc = sysQtd > 0 ? ((dif / sysQtd) * 100) : (dif > 0 ? 100 : 0);
+                    let nivel = 2, corDif;
+                    if (dif > 0.01)      { nivel = 1; corDif = '#92400e'; }
+                    else if (dif < -0.01){ nivel = 1; corDif = '#991b1b'; }
+                    else                 { nivel = 2; corDif = '#166534'; }
+                    const borderColor = nivel === 1 ? '#e67e22' : '#e8dcc0';
+                    const difStr = dif > 0.01 ? `+${difPerc.toFixed(1)}%` : dif < -0.01 ? `${difPerc.toFixed(1)}%` : 'Bateu';
+
+                    const metricas = (
+                      <>
+                        <Metrica label="Físico OS" valor={fmtQtd(grp.totalFisico, grp.und)} destaque />
+                        <Metrica label="Winthor" valor={fmtQtd(sysQtd, grp.und)} destaque />
+                        <Metrica label="Diferença" valor={difStr} cor={corDif} />
+                      </>
+                    );
+
                     return (
-                      <div key={gIdx} style={{ border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10, overflow: 'hidden' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, cursor: 'pointer', background: 'white' }} onClick={() => setModalLotesProduto(grp)}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#fff7ed', color: '#ea580c', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <i className="ph ph-box-arrow-down"></i>
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                {grp.nome}
-                                {status && <div style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: 4, display: 'inline-block', ...status.style }}>{status.text}</div>}
-                              </div>
-                              <div style={{ fontSize: '0.7rem', color: '#999', fontFamily: 'monospace', marginTop: 2 }}>CÓD: {grp.codigo}</div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 20, fontSize: '0.85rem' }}>
-                            <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.7rem', color: '#999', textTransform: 'uppercase' }}>Físico OS</div><div style={{ fontWeight: 700 }}>{grp.totalFisico.toFixed(2)} {grp.und}</div></div>
-                            <div style={{ textAlign: 'center' }}><div style={{ fontSize: '0.7rem', color: '#999', textTransform: 'uppercase' }}>Winthor</div><div style={{ fontWeight: 700 }}>{sysQtd.toFixed(2)} {grp.und}</div></div>
-                            <span style={{ padding: '4px 10px', borderRadius: 20, fontWeight: 700, fontSize: '0.75rem', ...corStatus }}>{difStr}</span>
-                          </div>
-                        </div>
-                      </div>
+                      <CardEstoque
+                        key={gIdx}
+                        icone="ph-box-arrow-down"
+                        produto={grp.nome}
+                        codigo={grp.codigo}
+                        borderColor={borderColor}
+                        metricas={metricas}
+                        onClick={() => setModalLotes(grp)}
+                        tagQtd={grp.lotes.length > 0 && (
+                          <span style={{ fontSize: '0.68rem', color: '#a78355', fontWeight: 700, background: '#faf6ea', padding: '4px 8px', borderRadius: 8 }}>
+                            {grp.lotes.length} lote{grp.lotes.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      />
                     );
                   })}
                 </div>
         )}
       </div>
 
-      {/* ── Modal Lotes ── */}
-      {modalLotesProduto && (
-        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', zIndex: 9999 }} onClick={() => setModalLotesProduto(null)}>
-          <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 420, maxHeight: '70vh', overflow: 'hidden', margin: 16 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: 20, borderBottom: '1px solid var(--border-suave)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div><h2 style={{ fontWeight: 900, fontSize: '1.3rem' }}>{modalLotesProduto.nome}</h2><div style={{ fontSize: '0.75rem', color: '#999' }}>CÓD: {modalLotesProduto.codigo || 'N/A'}</div></div>
-              <button style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }} onClick={() => setModalLotesProduto(null)}>✕</button>
-            </div>
-            <div style={{ padding: 12, maxHeight: '50vh', overflowY: 'auto' }}>
-              {(modalLotesProduto.lotes || []).length === 0
-                ? <div className="status-msg">Nenhum lote encontrado.</div>
-                : (modalLotesProduto.lotes || []).map((lt, lIdx) => (
-                    <div key={lIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottom: '1px solid #f3f4f6' }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || lt.code || 'S/N'}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#999' }}>{(lt.validade || lt.expiryDate) ? new Date(lt.validade || lt.expiryDate).toLocaleDateString('pt-BR') : 'Sem validade'}</div>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#999' }}>{modalLotesProduto.und || lt.und || 'kg'}</div>
-                      </div>
-                    </div>
-                  ))
-              }
-            </div>
-            <div style={{ padding: 14, background: '#fafafa', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, color: '#999' }}>Total Físico</span>
-              <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.2rem' }}>
-                {((modalLotesProduto.totalKg || 0) > 0 ? modalLotesProduto.totalKg.toFixed(2) : (modalLotesProduto.totalUnd || 0) > 0 ? modalLotesProduto.totalUnd : (modalLotesProduto.totalFisico || 0).toFixed(2))} {modalLotesProduto.und || 'kg'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Modal Ajuste Físico PA (só PCP) ── */}
-      {modalAjuste && isPcp && (
-        <ModalAjusteFisico
-          item={{ ...modalAjuste.fisico, codigo: modalAjuste.codigo, produto: modalAjuste.produto }}
-          winthorEntry={modalAjuste.winthor}
-          aoFechar={() => setModalAjuste(null)}
-        />
-      )}
+      {modalLotes && <ModalLotes produto={modalLotes} aoFechar={() => setModalLotes(null)} />}
+      {modalAjuste && isPcp && <ModalAjusteFisico item={modalAjuste} aoFechar={() => setModalAjuste(null)} />}
     </div>
   );
 }
