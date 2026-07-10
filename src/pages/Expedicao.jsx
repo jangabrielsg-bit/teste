@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, collection, writeBatch, setDoc, arrayUnion, getDocs, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, collection, writeBatch, arrayUnion, getDocs, getDoc, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarKg } from '../services/utils';
 import { useAuth } from '../services/auth';
@@ -10,28 +10,28 @@ export default function Expedicao() {
   const { currentUser } = useAuth();
   const { produtos } = useProdutos();
   const dataHoje = hojeISO();
-  const [producaoHoje, setProducaoHoje] = useState([]);
-  const [tunelHoje, setTunelHoje] = useState([]);
-  const [carregando, setCarregando] = useState(true);
-  const [listaEntrada, setListaEntrada] = useState([]);
-  const [salvando, setSalvando] = useState(false);
-  const [produtoIdx, setProdutoIdx] = useState('');
-  const [lote, setLote] = useState('');
-  const [qtd, setQtd] = useState('');
-  const [und, setUnd] = useState('kg');
-  const [validade, setValidade] = useState('');
-  const [nomeOperador, setNomeOperador] = useState(localStorage.getItem('nomeOperador') || '');
-  const [tecladoAberto, setTecladoAberto] = useState(false);
-  const [aba, setAba] = useState(0);
-  const [estoqueAtual, setEstoqueAtual] = useState([]);
+  const [producaoHoje, setProducaoHoje]     = useState([]);
+  const [tunelHoje, setTunelHoje]           = useState([]);
+  const [carregando, setCarregando]         = useState(true);
+  const [listaEntrada, setListaEntrada]     = useState([]);
+  const [salvando, setSalvando]             = useState(false);
+  const [produtoIdx, setProdutoIdx]         = useState('');
+  const [lote, setLote]                     = useState('');
+  const [qtd, setQtd]                       = useState('');
+  const [und, setUnd]                       = useState('kg');
+  const [validade, setValidade]             = useState('');
+  const [nomeOperador, setNomeOperador]     = useState(localStorage.getItem('nomeOperador') || '');
+  const [tecladoAberto, setTecladoAberto]   = useState(false);
+  const [aba, setAba]                       = useState(0);
+  const [estoqueAtual, setEstoqueAtual]     = useState([]);
   const [termoBuscaEstoque, setTermoBuscaEstoque] = useState('');
   const [modalLotesProduto, setModalLotesProduto] = useState(null);
-  const [subAbaEstoque, setSubAbaEstoque] = useState('acabado');
-  const [estoqueMP, setEstoqueMP] = useState([]);
+  const [subAbaEstoque, setSubAbaEstoque]   = useState('acabado');
+  const [estoqueMP, setEstoqueMP]           = useState([]);
   const [estoqueWinthor, setEstoqueWinthor] = useState({});
-  const [carregandoMP, setCarregandoMP] = useState(false);
+  const [carregandoMP, setCarregandoMP]     = useState(false);
 
-  // Carregar Matéria Prima quando entrar na sub-aba
+  // Matéria Prima (original intacto)
   useEffect(() => {
     if (aba === 2 && subAbaEstoque === 'mp') {
       (async () => {
@@ -64,6 +64,7 @@ export default function Expedicao() {
     }
   }, [aba, subAbaEstoque]);
 
+  // Produção do dia
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'producaoDiaria', dataHoje), snap => {
       if (snap.exists()) { setProducaoHoje(snap.data().itens || []); setTunelHoje(snap.data().tunelRegistros || []); }
@@ -73,20 +74,24 @@ export default function Expedicao() {
     return unsub;
   }, [dataHoje]);
 
+  // Auto-preenche lote/validade do túnel
   useEffect(() => {
     if (produtoIdx !== '') {
       const itemProg = producaoHoje[produtoIdx];
       if (itemProg) {
         const tunelItem = tunelHoje.slice().reverse().find(t => t.produto === itemProg.produto && t.lote);
-        setLote(tunelItem?.lote || ''); setValidade(tunelItem?.validade || '');
+        setLote(tunelItem?.lote || '');
+        setValidade(tunelItem?.validade || '');
       }
     }
   }, [produtoIdx, producaoHoje, tunelHoje]);
 
+  // Estoque físico PA (coleção 'estoque' — lotes individuais)
   useEffect(() => {
     if (aba === 2) {
       const unsub = onSnapshot(collection(db, 'estoque'), snap => {
-        const est = []; snap.forEach(d => est.push({ ...d.data(), id: d.id }));
+        const est = [];
+        snap.forEach(d => est.push({ ...d.data(), id: d.id }));
         setEstoqueAtual(est);
       });
       return unsub;
@@ -100,7 +105,18 @@ export default function Expedicao() {
     if (!nomeOperador.trim()) return alert('Informe seu nome!');
     localStorage.setItem('nomeOperador', nomeOperador.trim());
     const itemProg = producaoHoje[produtoIdx];
-    setListaEntrada(prev => [...prev, { operador: nomeOperador.trim(), nome: itemProg.produto, codigo: itemProg.codigo, ops: itemProg.ops || [], setor: itemProg.categoria || 'Câmara', dataEntrada: dataHoje, lote: lote.trim(), qtd: parseFloat(qtd), und, validade }]);
+    setListaEntrada(prev => [...prev, {
+      operador:    nomeOperador.trim(),
+      nome:        itemProg.produto,
+      codigo:      itemProg.codigo,   // ← código Winthor linkado
+      ops:         itemProg.ops || [],
+      setor:       itemProg.categoria || 'Câmara',
+      dataEntrada: dataHoje,
+      lote:        lote.trim(),
+      qtd:         parseFloat(qtd),
+      und,
+      validade,
+    }]);
     setQtd('');
     alert('Patinha adicionada para conferência!');
   }
@@ -110,30 +126,99 @@ export default function Expedicao() {
     setSalvando(true);
     try {
       const batch = writeBatch(db);
+
       listaEntrada.forEach(item => {
+        // ── 1. Lote individual no estoque físico (colecão original) ──
         const refEst = doc(collection(db, 'estoque'));
-        batch.set(refEst, { nome: item.nome, setor: item.setor, lote: item.lote, qtd: item.qtd, und: item.und, validade: item.validade, dataEntrada: item.dataEntrada, isTeste: false });
+        batch.set(refEst, {
+          nome:        item.nome,
+          codigo:      item.codigo,
+          setor:       item.setor,
+          lote:        item.lote,
+          qtd:         item.qtd,
+          und:         item.und,
+          validade:    item.validade,
+          dataEntrada: item.dataEntrada,
+          ops:         item.ops,
+          isTeste:     false,
+        });
+
+        // ── 2. Movimento de entrada (original) ──
         const refMov = doc(collection(db, 'movimentos'));
-        batch.set(refMov, { tipo: 'ENTRADA', nome: item.nome, lote: item.lote, qtd: item.qtd, und: item.und, data: new Date().toISOString(), usuario: 'Expedição (App)' });
+        batch.set(refMov, {
+          tipo:    'ENTRADA',
+          nome:    item.nome,
+          codigo:  item.codigo,
+          lote:    item.lote,
+          qtd:     item.qtd,
+          und:     item.und,
+          data:    new Date().toISOString(),
+          usuario: item.operador,
+        });
+
+        // ── 3. Expedição diária (original) ──
         const refExp = doc(db, 'expedicaoDiaria', dataHoje);
-        const regExp = { id: Date.now().toString() + Math.random(), codigoProduto: item.codigo, produto: item.nome, ops: item.ops, lote: item.lote, pesoTotal: item.qtd, qtCaixas: 1, horario: new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }), timestamp: new Date().toISOString() };
+        const regExp = {
+          id:             Date.now().toString() + Math.random(),
+          codigoProduto:  item.codigo,
+          produto:        item.nome,
+          ops:            item.ops,
+          lote:           item.lote,
+          pesoTotal:      item.qtd,
+          qtCaixas:       1,
+          horario:        new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }),
+          timestamp:      new Date().toISOString(),
+        };
         batch.set(refExp, { data: dataHoje, registros: arrayUnion(regExp) }, { merge: true });
+
+        // ── 4. NOVO: saldo físico PA por código (estoquePAFisico) ──
+        // Documento principal: saldo agregado por produto
+        if (item.codigo) {
+          const refSaldo = doc(db, 'estoquePAFisico', item.codigo);
+          batch.set(refSaldo, {
+            codigo:       item.codigo,
+            produto:      item.nome,
+            saldoFisico:  increment(item.qtd),
+            unidade:      item.und,
+            ultimaEntrada: new Date().toISOString(),
+          }, { merge: true });
+
+          // Sub-coleção: lotes individuais rastreáveis
+          const refLote = doc(collection(db, 'estoquePAFisico', item.codigo, 'lotes'));
+          batch.set(refLote, {
+            lote:         item.lote,
+            qtd:          item.qtd,
+            und:          item.und,
+            validade:     item.validade,
+            dataEntrada:  item.dataEntrada,
+            ops:          item.ops,
+            operador:     item.operador,
+            ativo:        true,   // false quando consumido/ajustado
+            registradoEm: new Date().toISOString(),
+          });
+        }
       });
+
       await batch.commit();
-      alert(`${listaEntrada.length} patinhas registradas!`);
-      setListaEntrada([]); setQtd(''); setAba(2);
-    } catch (e) { alert(e.message); }
-    finally { setSalvando(false); }
+      alert(`${listaEntrada.length} patinhas registradas na câmara!`);
+      setListaEntrada([]);
+      setQtd('');
+      setAba(2);
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setSalvando(false);
+    }
   }
 
   if (carregando) return <div className="status-msg">Buscando produção de hoje...</div>;
 
   const isPcp = currentUser?.setor === 'pcp';
 
-  // Agrupamento estoque acabado
+  // Agrupamento estoque físico acabado
   const gruposAcabado = {};
   estoqueAtual.forEach(it => {
-    if (!gruposAcabado[it.nome]) gruposAcabado[it.nome] = { nome: it.nome, totalKg: 0, totalUnd: 0, lotes: [], und: it.und };
+    if (!gruposAcabado[it.nome]) gruposAcabado[it.nome] = { nome: it.nome, codigo: it.codigo, totalKg: 0, totalUnd: 0, lotes: [], und: it.und };
     if (it.und === 'kg') gruposAcabado[it.nome].totalKg += parseFloat(it.qtd || 0);
     else gruposAcabado[it.nome].totalUnd += parseFloat(it.qtd || 0);
     gruposAcabado[it.nome].lotes.push(it);
@@ -170,7 +255,11 @@ export default function Expedicao() {
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>Produto Programado</label>
             <select className="input-texto" value={produtoIdx} onChange={e => setProdutoIdx(e.target.value)} style={{ padding: 14 }}>
               <option value="">Selecione...</option>
-              {producaoHoje.map((it, i) => <option key={i} value={i}>{it.produto}</option>)}
+              {producaoHoje.map((it, i) => (
+                <option key={i} value={i}>
+                  {it.produto}{it.codigo ? ` [${it.codigo}]` : ''}
+                </option>
+              ))}
             </select>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
@@ -193,7 +282,8 @@ export default function Expedicao() {
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>Unidade</label>
               <select className="input-texto" value={und} onChange={e => setUnd(e.target.value)} style={{ padding: 16 }}>
-                <option value="kg">kg</option><option value="und">und</option>
+                <option value="kg">kg</option>
+                <option value="und">und</option>
               </select>
             </div>
           </div>
@@ -212,23 +302,48 @@ export default function Expedicao() {
               Total: {listaEntrada.reduce((acc, item) => acc + (item.und === 'kg' ? item.qtd : 0), 0).toFixed(2)} kg
             </span>
           </div>
-          {listaEntrada.length === 0 ? <div className="status-msg">Nenhuma patinha na lista.</div> :
-            <div>{listaEntrada.map((item, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, background: '#fafafa', border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10 }}>
-                <div><div style={{ fontWeight: 700, color: 'var(--marrom)' }}>{item.nome}</div><div style={{ fontSize: '0.8rem', color: '#999' }}>Lote: {item.lote} | Val: {item.validade}</div></div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.1rem' }}>{formatarKg(item.qtd)} {item.und}</span>
-                  <button className="remover-btn" onClick={() => setListaEntrada(prev => prev.filter((_, i) => i !== idx))}>✕</button>
-                </div>
+          {listaEntrada.length === 0
+            ? <div className="status-msg">Nenhuma patinha na lista.</div>
+            : <div>
+                {listaEntrada.map((item, idx) => (
+                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, background: '#fafafa', border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: 'var(--marrom)' }}>{item.nome}</div>
+                      <div style={{ fontSize: '0.78rem', color: '#999', marginTop: 2 }}>
+                        Lote: {item.lote} | Val: {item.validade}
+                        {item.codigo && <span style={{ marginLeft: 8, background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '1px 7px', borderRadius: 8, fontWeight: 700 }}>COD {item.codigo}</span>}
+                        {item.ops?.length > 0 && <span style={{ marginLeft: 6, color: '#a78355' }}>OP: {item.ops.join(', ')}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.1rem' }}>{formatarKg(item.qtd)} {item.und}</span>
+                      <button className="remover-btn" onClick={() => setListaEntrada(prev => prev.filter((_, i) => i !== idx))}>✕</button>
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}</div>}
-          {listaEntrada.length > 0 && <button className="btn btn-block" style={{ marginTop: 14, background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }} onClick={salvarEntradas} disabled={salvando}>
-            {salvando ? 'Salvando...' : '✓ Confirmar Entrada na Câmara'}
-          </button>}
+          }
+          {listaEntrada.length > 0 && (
+            <button
+              className="btn btn-block"
+              style={{ marginTop: 14, background: 'var(--success)', color: 'white', borderColor: 'var(--success)' }}
+              onClick={salvarEntradas}
+              disabled={salvando}
+            >
+              {salvando ? 'Salvando...' : '✓ Confirmar Entrada na Câmara'}
+            </button>
+          )}
         </div>
       )}
 
-      {tecladoAberto && <ModalTeclado titulo="Peso da Patinha" valorInicial={qtd} aoConfirmar={v => { setQtd(v); setTecladoAberto(false); }} aoFechar={() => setTecladoAberto(false)} />}
+      {tecladoAberto && (
+        <ModalTeclado
+          titulo="Peso da Patinha"
+          valorInicial={qtd}
+          aoConfirmar={v => { setQtd(v); setTecladoAberto(false); }}
+          aoFechar={() => setTecladoAberto(false)}
+        />
+      )}
     </div>
   );
 }
