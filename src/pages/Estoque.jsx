@@ -438,6 +438,10 @@ export default function Estoque() {
                     </>
                   );
 
+                  // Sempre permite abrir o modal de lotes — mesmo sem lote físico ainda registrado
+                  const lotesParaModal = lotesGrp || { nome: produto, codigo, und: unidade, lotes: [], totalKg: 0, totalUnd: 0 };
+                  const qtdLotes = lotesGrp?.lotes?.length || 0;
+
                   return (
                     <CardEstoque
                       key={codigo}
@@ -446,14 +450,14 @@ export default function Estoque() {
                       codigo={codigo}
                       borderColor={borderColor}
                       metricas={metricas}
-                      tagQtd={lotesGrp && lotesGrp.lotes.length > 0 && (
+                      onClick={() => setModalLotes(lotesParaModal)}
+                      tagQtd={
                         <span
-                          onClick={e => { e.stopPropagation(); setModalLotes(lotesGrp); }}
-                          style={{ fontSize: '0.68rem', color: '#a78355', fontWeight: 700, background: '#faf6ea', padding: '4px 8px', borderRadius: 8, cursor: 'pointer' }}
+                          style={{ fontSize: '0.68rem', color: qtdLotes > 0 ? '#a78355' : '#c4b494', fontWeight: 700, background: '#faf6ea', padding: '4px 8px', borderRadius: 8 }}
                         >
-                          {lotesGrp.lotes.length} lote{lotesGrp.lotes.length > 1 ? 's' : ''}
+                          {qtdLotes > 0 ? `${qtdLotes} lote${qtdLotes > 1 ? 's' : ''}` : 'ver lotes'}
                         </span>
-                      )}
+                      }
                       onAjustar={isPcp ? () => setModalAjuste({ codigo, produto, winthor: w, fisico: f }) : null}
                       coberturaEl={<BadgeCobertura disponivel={disponivelWinthor} demanda={demanda} />}
                     />
