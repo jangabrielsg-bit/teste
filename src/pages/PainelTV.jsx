@@ -129,11 +129,21 @@ export default function PainelTV({ sair }) {
                     {porCategoria[cat].map((it, i) => {
                       const concluido = it.feitos >= it.metaLotes;
                       const ativo = itemAtivo && it === itemAtivo;
+                      const vel = velocidadeMedia(it);
+                      const ultimaBatida = it.batidas?.length > 0 ? it.batidas[it.batidas.length - 1] : null;
                       return (
-                        <div className={'tv-item-row' + (concluido ? ' tv-item-concluido' : '') + (ativo ? ' tv-item-ativo' : '')} key={i}>
-                          <span className="tv-item-status">{concluido ? '✔' : ativo ? '●' : '—'}</span>
-                          <span className="tv-item-nome">{it.produto}</span>
-                          <span className="tv-item-contagem">{it.feitos}/{it.metaLotes}</span>
+                        <div className={'tv-item-row' + (concluido ? ' tv-item-concluido' : '') + (ativo ? ' tv-item-ativo' : '')} key={i} style={{ flexDirection: 'column', alignItems: 'stretch', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                            <span className="tv-item-status">{concluido ? '✔' : ativo ? '●' : '—'}</span>
+                            <span className="tv-item-nome">{it.produto}</span>
+                            <span className="tv-item-contagem">{it.feitos}/{it.metaLotes}</span>
+                          </div>
+                          {(vel != null || ultimaBatida) && !concluido && (
+                            <div style={{ display: 'flex', gap: 14, fontSize: '0.72rem', color: '#9ca3af', paddingLeft: 22 }}>
+                              {vel != null && <span>⚡ {vel.toFixed(1)} min/receita</span>}
+                              {ultimaBatida && <span>🕐 há {tempoDecorrido(ultimaBatida)} da última</span>}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
