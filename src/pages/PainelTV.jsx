@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../services/firebase';
-import { hojeISO, formatarDataBR, formatarKg } from '../services/utils';
+import { hojeISO, formatarDataBR } from '../services/utils';
 
 export default function PainelTV({ sair }) {
   const dataHoje = hojeISO();
@@ -9,6 +9,8 @@ export default function PainelTV({ sair }) {
   const [existe, setExiste] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [agora, setAgora] = useState(new Date());
+  const [abaTV, setAbaTV] = useState('producao'); // 'producao' | 'estoque'
+  const [estoquePA, setEstoquePA] = useState([]);
 
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'producaoDiaria', dataHoje), snap => {
@@ -18,6 +20,23 @@ export default function PainelTV({ sair }) {
     });
     return unsub;
   }, [dataHoje]);
+
+  // Só escuta estoquePA quando a aba está ativa — economiza leituras
+  useEffect(() => {
+    if (abaTV !== 'estoque') return;
+    const unsub = onSnapshot(collection(db, 'estoquePA'), snap => {
+      const lista = [];
+      snap.forEach(d => lista.push({ id: d.id, ...d.data() }));
+      lista.sort((a, b) => {
+        const critA = a.estoqueMinimo > 0 && a.estoqueAtual <= a.estoqueMinimo ? 0 : 1;
+        const critB = b.estoqueMinimo > 0 && b.estoqueAtual <= b.estoqueMinimo ? 0 : 1;
+        if (critA !== critB) return critA - critB;
+        return (a.produto || '').localeCompare(b.produto || '', 'pt-BR');
+      });
+      setEstoquePA(lista);
+    });
+    return unsub;
+  }, [abaTV]);
 
   useEffect(() => { const t = setInterval(() => setAgora(new Date()), 1000); return () => clearInterval(t); }, []);
 
@@ -51,70 +70,110 @@ export default function PainelTV({ sair }) {
     <div className="tv-shell">
       <div className="tv-topo">
         <div className="tv-data">{formatarDataBR(dataHoje)}</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="tv-fs-btn" onClick={() => setAbaTV('producao')} style={{ opacity: abaTV === 'producao' ? 1 : 0.5 }}>Produção</button>
+          <button className="tv-fs-btn" onClick={() => setAbaTV('estoque')} style={{ opacity: abaTV === 'estoque' ? 1 : 0.5 }}>Estoque</button>
+        </div>
         <div className="tv-relogio">{agora.toLocaleTimeString('pt-BR')}</div>
         <button className="tv-fs-btn" onClick={alternarTelaCheia}>Tela Cheia</button>
         {sair && <button className="tv-fs-btn" onClick={sair} style={{ marginLeft: 10 }}>Voltar</button>}
       </div>
 
-      {carregando && <div className="status-msg" style={{ color: '#d9bd90' }}>Carregando painel...</div>}
-      {!carregando && !existe && <div className="tv-vazio">Nenhuma produção programada para hoje.</div>}
-      {!carregando && existe && (
+      {/* ── ABA PRODUÇÃO (original) ── */}
+      {abaTV === 'producao' && (
         <>
-          <div className="tv-resumo">
-            <div className="tv-resumo-num">{totalFeito}<span className="tv-resumo-meta"> / {totalProgramado}</span></div>
-            <div className="tv-resumo-label">receitas produzidas hoje</div>
-            <div className="tv-barra-geral"><div className="tv-barra-geral-fill" style={{ width: pctGeral + '%' }}></div></div>
-            <div className="tv-resumo-pct">{pctGeral}%</div>
-          </div>
-
-          {itemAtivo ? (
-            <div className="tv-ativo">
-              <div className="tv-ativo-tag">PRODUZINDO AGORA</div>
-              <div className="tv-ativo-nome">{itemAtivo.produto}</div>
-              <div className="tv-ativo-setor">{itemAtivo.categoria}</div>
-              <div className="tv-ativo-linha">
-                <div className="tv-ativo-contagem">{itemAtivo.feitos} <span>/ {itemAtivo.metaLotes} receitas</span></div>
-                {itemAtivo.batidas?.length > 0 && (
-                  <div className="tv-ativo-cronometro">
-                    <div className="tv-cronometro-label">tempo desde a última</div>
-                    <div className="tv-cronometro-valor">{tempoDecorrido(itemAtivo.batidas[itemAtivo.batidas.length - 1])}</div>
-                  </div>
-                )}
-                {velocidadeMedia(itemAtivo) != null && (
-                  <div className="tv-ativo-velocidade">
-                    <div className="tv-cronometro-label">velocidade média</div>
-                    <div className="tv-cronometro-valor">{velocidadeMedia(itemAtivo).toFixed(1)} min</div>
-                  </div>
-                )}
+          {carregando && <div className="status-msg" style={{ color: '#d9bd90' }}>Carregando painel...</div>}
+          {!carregando && !existe && <div className="tv-vazio">Nenhuma produção programada para hoje.</div>}
+          {!carregando && existe && (
+            <>
+              <div className="tv-resumo">
+                <div className="tv-resumo-num">{totalFeito}<span className="tv-resumo-meta"> / {totalProgramado}</span></div>
+                <div className="tv-resumo-label">receitas produzidas hoje</div>
+                <div className="tv-barra-geral"><div className="tv-barra-geral-fill" style={{ width: pctGeral + '%' }}></div></div>
+                <div className="tv-resumo-pct">{pctGeral}%</div>
               </div>
-              <div className="tv-barra-geral tv-barra-ativo"><div className="tv-barra-geral-fill" style={{ width: Math.min(100, Math.round(itemAtivo.feitos / itemAtivo.metaLotes * 100)) + '%' }}></div></div>
-            </div>
-          ) : (
-            <div className="tv-ativo tv-ativo-concluido">
-              <div className="tv-ativo-tag">TUDO CONCLUÍDO</div>
-              <div className="tv-ativo-nome">Programação de hoje finalizada 🎉</div>
-            </div>
+
+              {itemAtivo ? (
+                <div className="tv-ativo">
+                  <div className="tv-ativo-tag">PRODUZINDO AGORA</div>
+                  <div className="tv-ativo-nome">{itemAtivo.produto}</div>
+                  <div className="tv-ativo-setor">{itemAtivo.categoria}</div>
+                  <div className="tv-ativo-linha">
+                    <div className="tv-ativo-contagem">{itemAtivo.feitos} <span>/ {itemAtivo.metaLotes} receitas</span></div>
+                    {itemAtivo.batidas?.length > 0 && (
+                      <div className="tv-ativo-cronometro">
+                        <div className="tv-cronometro-label">tempo desde a última</div>
+                        <div className="tv-cronometro-valor">{tempoDecorrido(itemAtivo.batidas[itemAtivo.batidas.length - 1])}</div>
+                      </div>
+                    )}
+                    {velocidadeMedia(itemAtivo) != null && (
+                      <div className="tv-ativo-velocidade">
+                        <div className="tv-cronometro-label">velocidade média</div>
+                        <div className="tv-cronometro-valor">{velocidadeMedia(itemAtivo).toFixed(1)} min</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="tv-barra-geral tv-barra-ativo"><div className="tv-barra-geral-fill" style={{ width: Math.min(100, Math.round(itemAtivo.feitos / itemAtivo.metaLotes * 100)) + '%' }}></div></div>
+                </div>
+              ) : (
+                <div className="tv-ativo tv-ativo-concluido">
+                  <div className="tv-ativo-tag">TUDO CONCLUÍDO</div>
+                  <div className="tv-ativo-nome">Programação de hoje finalizada 🎉</div>
+                </div>
+              )}
+
+              <div className="tv-grid-setores">
+                {Object.keys(porCategoria).sort().map(cat => (
+                  <div className="tv-setor-col" key={cat}>
+                    <div className="tv-setor-titulo">{cat}</div>
+                    {porCategoria[cat].map((it, i) => {
+                      const concluido = it.feitos >= it.metaLotes;
+                      const ativo = itemAtivo && it === itemAtivo;
+                      return (
+                        <div className={'tv-item-row' + (concluido ? ' tv-item-concluido' : '') + (ativo ? ' tv-item-ativo' : '')} key={i}>
+                          <span className="tv-item-status">{concluido ? '✔' : ativo ? '●' : '—'}</span>
+                          <span className="tv-item-nome">{it.produto}</span>
+                          <span className="tv-item-contagem">{it.feitos}/{it.metaLotes}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </>
           )}
-
-          <div className="tv-grid-setores">
-            {Object.keys(porCategoria).sort().map(cat => (
-              <div className="tv-setor-col" key={cat}>
-                <div className="tv-setor-titulo">{cat}</div>
-                {porCategoria[cat].map((it, i) => {
-                  const concluido = it.feitos >= it.metaLotes;
-                  const ativo = itemAtivo && it === itemAtivo;
-                  return (
-                    <div className={'tv-item-row' + (concluido ? ' tv-item-concluido' : '') + (ativo ? ' tv-item-ativo' : '')} key={i}>
-                      <span className="tv-item-status">{concluido ? '✔' : ativo ? '●' : '—'}</span>
-                      <span className="tv-item-nome">{it.produto}</span>
-                      <span className="tv-item-contagem">{it.feitos}/{it.metaLotes}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
         </>
+      )}
+
+      {/* ── ABA ESTOQUE (nova) ── */}
+      {abaTV === 'estoque' && (
+        <div style={{ padding: '20px 10px' }}>
+          {estoquePA.length === 0 && <div className="tv-vazio">Aguardando dados de estoque...</div>}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
+            {estoquePA.map(item => {
+              const abaixoMin = item.estoqueMinimo > 0 && item.estoqueAtual <= item.estoqueMinimo;
+              const demanda = (item.saida24h || 0) + (item.saida48h || 0);
+              const cobertura = demanda > 0 ? (item.estoqueAtual / demanda) * 100 : null;
+              const emAviso = !abaixoMin && cobertura != null && cobertura < 100;
+              const corBorda = abaixoMin ? '#e11d48' : emAviso ? '#f59e0b' : '#2c3542';
+
+              return (
+                <div key={item.id} style={{ background: '#1D2530', border: `2px solid ${corBorda}`, borderRadius: 14, padding: 16 }}>
+                  <div style={{ fontWeight: 900, color: 'white', fontSize: '1rem', marginBottom: 10 }}>{item.produto}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: abaixoMin ? '#f87171' : emAviso ? '#fbbf24' : '#4ade80' }}>
+                    {item.estoqueAtual} <span style={{ fontSize: '0.9rem', color: '#9ca3af' }}>{item.unidade}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: '0.78rem', color: '#9ca3af' }}>
+                    {item.saida24h != null && <span>24h: <b style={{ color: 'white' }}>{item.saida24h}</b></span>}
+                    {item.saida48h != null && <span>48h: <b style={{ color: 'white' }}>{item.saida48h}</b></span>}
+                  </div>
+                  {abaixoMin && <div style={{ marginTop: 10, background: '#5c1a1a', color: '#f87171', fontWeight: 800, fontSize: '0.75rem', padding: '4px 10px', borderRadius: 20, display: 'inline-block' }}>ABAIXO DO MÍNIMO</div>}
+                  {emAviso && <div style={{ marginTop: 10, background: '#5c3a21', color: '#fbbf24', fontWeight: 800, fontSize: '0.75rem', padding: '4px 10px', borderRadius: 20, display: 'inline-block' }}>COBRE {cobertura.toFixed(0)}%</div>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       )}
     </div>
   );
