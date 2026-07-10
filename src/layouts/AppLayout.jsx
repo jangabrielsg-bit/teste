@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../services/auth';
 import GlobalTicker from '../components/GlobalTicker';
+import AlertasSistema from '../components/AlertasSistema';
 import Home from '../pages/Home';
 import Lider from '../pages/Lider';
 import Operador from '../pages/Operador';
@@ -8,7 +9,6 @@ import Embaladora from '../pages/Embaladora';
 import Expedicao from '../pages/Expedicao';
 import Estoque from '../pages/Estoque';
 import Fechamento from '../pages/Fechamento';
-import Relatorio from '../pages/Relatorio';
 import LivroProducao from '../pages/LivroProducao';
 import Produtos from '../pages/Produtos';
 import PCP from '../pages/PCP';
@@ -20,7 +20,6 @@ const nomesTelas = {
   'operador': 'Painel de Produção',
   'embaladora': 'Embaladora',
   'resumo_pcp': 'Painel TV (Resumos)',
-  'relatorio': 'Relatório',
   'fechamento': 'Fechamento de Produção',
   'livro': 'Livro de Produção',
   'produtos': 'Produtos e Setores',
@@ -32,6 +31,7 @@ const nomesTelas = {
 export default function AppLayout() {
   const { currentUser, logout } = useAuth();
   const s = currentUser?.setor;
+  const isPcp = s === 'pcp';
 
   const [tela, setTela] = useState(() => {
     try {
@@ -39,7 +39,6 @@ export default function AppLayout() {
     } catch { return 'inicio'; }
   });
 
-  // Tela cheia do painel TV
   if (tela === 'painel') return <PainelTV sair={() => setTela('inicio')} />;
   if (tela === 'resumo_pcp') return <ResumoPCP sair={() => setTela('inicio')} />;
 
@@ -59,6 +58,7 @@ export default function AppLayout() {
           <h2>{tela === 'inicio' ? 'Fábrica / PCP' : (nomesTelas[tela] || 'Painel')}</h2>
         </div>
         <div className="user-area">
+          {isPcp && <AlertasSistema />}
           <span style={{ fontWeight: 700, color: 'var(--marrom)', textTransform: 'capitalize' }}>{s}</span>
           <button onClick={logout}><i className="ph ph-sign-out" style={{ fontSize: '1.3rem' }}></i>Sair</button>
         </div>
@@ -73,7 +73,6 @@ export default function AppLayout() {
         {tela === 'expedicao' && <Expedicao />}
         {tela === 'estoque' && <Estoque />}
         {tela === 'fechamento' && <Fechamento />}
-        {tela === 'relatorio' && <Relatorio />}
         {tela === 'livro' && <LivroProducao />}
         {tela === 'produtos' && <Produtos />}
         {tela === 'pcp' && <PCP />}
