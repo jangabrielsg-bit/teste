@@ -4,7 +4,6 @@ const MENU_ITEMS = [
   { id: 'lider', label: 'Conferência de Receitas', icon: 'ph-users', bg: '#fff3d6', color: '#d99d0b', perfis: ['lider','pcp'] },
   { id: 'operador', label: 'Produção', icon: 'ph-cooking-pot', bg: '#fff7ed', color: '#ea580c', perfis: ['lider','producao','pcp'] },
   { id: 'embaladora', label: 'Embaladora', icon: 'ph-package', bg: '#fdf2f8', color: '#db2777', perfis: ['embaladora','pcp'] },
-  { id: 'relatorio', label: 'Relatório', icon: 'ph-chart-line-up', bg: '#eff6ff', color: '#2563eb', perfis: ['lider','pcp'] },
   { id: 'fechamento', label: 'Fechamento', icon: 'ph-check-circle', bg: '#f0fdf4', color: '#16a34a', perfis: ['lider','pcp'] },
   { id: 'livro', label: 'Livro de Produção', icon: 'ph-book-open', bg: '#faf5ff', color: '#9333ea', perfis: ['lider','pcp'] },
   { id: 'produtos', label: 'Produtos', icon: 'ph-package', bg: '#fefce8', color: '#ca8a04', perfis: ['pcp'] },
@@ -35,14 +34,6 @@ export default function Home({ ir }) {
             <span className="label">{item.label}</span>
           </button>
         ))}
-        {(s === 'expedicao' || s === 'pcp') && (
-          <button className="menu-card" onClick={() => window.location.href = 'https://jangabrielsg-bit.github.io/expedicao/'}>
-            <div className="icon-circle" style={{ background: '#f3f4f6', color: '#6b7280' }}>
-              <i className="ph ph-truck"></i>
-            </div>
-            <span className="label">App Expedição / Estoque</span>
-          </button>
-        )}
       </div>
     </div>
   );
