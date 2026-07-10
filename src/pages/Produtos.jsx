@@ -18,9 +18,9 @@ export default function Produtos() {
   async function adicionar() {
     if (!nome.trim() || !categoria.trim()) { alert('Preencha nome e setor.'); return; }
     setSalvando(true);
-    try { 
+    try {
       const payload = {
-        nome: nome.trim(), 
+        nome: nome.trim(),
         categoria: categoria.trim(),
         estoqueMinAcabado: parseFloat(minPA) || 0,
         estoqueMaxAcabado: parseFloat(maxPA) || 0,
@@ -33,16 +33,27 @@ export default function Produtos() {
         await addDoc(collection(db, 'produtos'), payload);
       }
       setNome(''); setCategoria(''); setMinPA(''); setMaxPA(''); setMinMP(''); setMaxMP(''); setEditandoId(null);
+    } catch (e) {
+      // Erro completo exposto — se for "permission-denied", é regra do Firestore bloqueando update.
+      console.error('Erro ao salvar produto:', e);
+      alert(`Erro ao salvar (${e.code || 'desconhecido'}): ${e.message}\n\nSe o erro mencionar "permission" ou "insufficient", as regras do Firestore precisam liberar update na coleção "produtos".`);
+    } finally {
+      setSalvando(false);
     }
-    catch (e) { alert('Erro: ' + e.message); }
-    finally { setSalvando(false); }
   }
 
   function cancelarEdicao() {
     setNome(''); setCategoria(''); setMinPA(''); setMaxPA(''); setMinMP(''); setMaxMP(''); setEditandoId(null);
   }
 
-  async function remover(id) { if (!confirm('Remover este produto?')) return; await deleteDoc(doc(db, 'produtos', id)); }
+  async function remover(id) {
+    if (!confirm('Remover este produto?')) return;
+    try {
+      await deleteDoc(doc(db, 'produtos', id));
+    } catch (e) {
+      alert(`Erro ao remover (${e.code || 'desconhecido'}): ${e.message}`);
+    }
+  }
 
   const porCategoria = {};
   produtos.forEach(p => { const cat = p.categoria || 'Sem setor'; if (!porCategoria[cat]) porCategoria[cat] = []; porCategoria[cat].push(p); });
@@ -54,7 +65,7 @@ export default function Produtos() {
         <input className="input-texto" placeholder="Nome do produto (ex: Coxinha de Frango)" value={nome} onChange={e => setNome(e.target.value)} />
         <input className="input-texto" placeholder="Setor (ex: Massas, Recheios, Empanados)" value={categoria} onChange={e => setCategoria(e.target.value)} list="lista-setores" style={{ marginTop: 8 }} />
         <datalist id="lista-setores">{categoriasExistentes.map(c => <option key={c} value={c} />)}</datalist>
-        
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
           <div style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
             <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', marginBottom: 4 }}>ESTOQUE ACABADO (kg/und)</div>
