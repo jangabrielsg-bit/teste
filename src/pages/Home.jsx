@@ -1,6 +1,7 @@
 import { useAuth } from '../services/auth';
 
 const MENU_ITEMS = [
+  { id: 'programacao', label: 'Programação', icon: 'ph-calendar-check', bg: '#eef2ff', color: '#4338ca', perfis: ['pcp','lider','expedicao'] },
   { id: 'lider', label: 'Conferência de Receitas', icon: 'ph-users', bg: '#fff3d6', color: '#d99d0b', perfis: ['lider','pcp'] },
   { id: 'operador', label: 'Produção', icon: 'ph-cooking-pot', bg: '#fff7ed', color: '#ea580c', perfis: ['lider','producao','pcp'] },
   { id: 'embaladora', label: 'Embaladora', icon: 'ph-package', bg: '#fdf2f8', color: '#db2777', perfis: ['embaladora','pcp'] },
