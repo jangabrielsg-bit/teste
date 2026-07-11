@@ -3,6 +3,7 @@ import { useAuth } from '../services/auth';
 import GlobalTicker from '../components/GlobalTicker';
 import AlertasSistema from '../components/AlertasSistema';
 import Home from '../pages/Home';
+import Programacao from '../pages/Programacao';
 import Lider from '../pages/Lider';
 import Operador from '../pages/Operador';
 import Embaladora from '../pages/Embaladora';
@@ -16,6 +17,7 @@ import PainelTV from '../pages/PainelTV';
 import ResumoPCP from '../pages/ResumoPCP';
 
 const nomesTelas = {
+  'programacao': 'Programação',
   'lider': 'Conferência de Receitas',
   'operador': 'Painel de Produção',
   'embaladora': 'Embaladora',
@@ -67,6 +69,7 @@ export default function AppLayout() {
       {/* Main Content */}
       <main className="app-main">
         {tela === 'inicio' && <Home ir={setTela} />}
+        {tela === 'programacao' && <Programacao />}
         {tela === 'lider' && <Lider />}
         {tela === 'operador' && <Operador />}
         {tela === 'embaladora' && <Embaladora />}
