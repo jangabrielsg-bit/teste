@@ -1,13 +1,68 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { useAuth } from '../services/auth';
 import { hojeISO, paraISO, formatarDataBR, formatarKg } from '../services/utils';
 
+// ── Modal de correção manual de rendimento ────────────────────────
+function ModalCorrigirRendimento({ item, aoSalvar, aoFechar, salvando }) {
+  const [valor, setValor] = useState(item.rendimentoUnit || '');
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={aoFechar}>
+      <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 24 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 18 }}>
+          <div>
+            <div style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--marrom)' }}>Corrigir rendimento</div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--marrom-claro)', marginTop: 2 }}>{item.produto}</div>
+          </div>
+          <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
+        </div>
+
+        <div style={{ background: 'var(--warning-soft)', borderRadius: 10, padding: 12, marginBottom: 16, fontSize: '0.8rem', color: 'var(--marrom)' }}>
+          Use quando a bridge estava fora do ar e o rendimento veio zerado ou incorreto do Winthor. Isso corrige apenas este produto, nesta data.
+        </div>
+
+        <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>
+          Rendimento por receita (kg)
+        </label>
+        <input
+          type="number"
+          step="0.01"
+          min="0"
+          className="input-texto"
+          value={valor}
+          onChange={e => setValor(e.target.value)}
+          placeholder="Ex: 4.50"
+          autoFocus
+        />
+
+        <div style={{ marginTop: 10, fontSize: '0.78rem', color: 'var(--marrom-claro)' }}>
+          {item.feitos} receita{item.feitos > 1 ? 's' : ''} realizada{item.feitos > 1 ? 's' : ''} × {valor || 0} kg = <strong>{formatarKg((parseFloat(valor) || 0) * item.feitos)} kg</strong>
+        </div>
+
+        <button
+          onClick={() => { if (!valor || isNaN(parseFloat(valor))) { alert('Insira um valor válido.'); return; } aoSalvar(parseFloat(valor)); }}
+          disabled={salvando}
+          style={{ width: '100%', marginTop: 18, padding: 15, borderRadius: 12, border: 'none', background: 'var(--marrom)', color: 'white', fontWeight: 900, fontSize: '0.95rem', cursor: 'pointer' }}
+        >
+          {salvando ? 'Salvando...' : 'Salvar correção'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function PCP() {
+  const { currentUser } = useAuth();
+  const isPcp = currentUser?.setor === 'pcp';
+
   const [dataAlvo, setDataAlvo] = useState(hojeISO());
   const [carregando, setCarregando] = useState(true);
   const [registros, setRegistros] = useState([]);
   const [itensProducao, setItensProducao] = useState([]);
+  const [modalCorrigir, setModalCorrigir] = useState(null); // { codigo, produto, rendimentoUnit, feitos }
+  const [salvandoCorrecao, setSalvandoCorrecao] = useState(false);
 
   useEffect(() => {
     setCarregando(true);
@@ -29,6 +84,23 @@ export default function PCP() {
     setDataAlvo(paraISO(d));
   }
 
+  async function salvarCorrecaoRendimento(novoValor) {
+    setSalvandoCorrecao(true);
+    try {
+      const novaLista = itensProducao.map(it =>
+        it.codigo === modalCorrigir.codigo
+          ? { ...it, rendimentoTeorico: novoValor, rendimentoCorrigidoManualmente: true, rendimentoCorrigidoEm: new Date().toISOString() }
+          : it
+      );
+      await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLista });
+      setModalCorrigir(null);
+    } catch (e) {
+      alert('Erro ao salvar correção: ' + e.message);
+    } finally {
+      setSalvandoCorrecao(false);
+    }
+  }
+
   if (carregando) return <div className="status-msg">Buscando dados...</div>;
 
   // ── Real: agrupa entradas da câmara por código de produto ──
@@ -44,7 +116,6 @@ export default function PCP() {
   });
 
   // ── Teórico: fórmula do fechamento do líder ──
-  // teorico = rendimento Winthor × receitas realizadas − perdas + pé de massa
   const teoricoPorCodigo = {};
   itensProducao.forEach(it => {
     if (!it.codigo) return;
@@ -62,29 +133,23 @@ export default function PCP() {
       rendimentoUnit: it.rendimentoTeorico || 0,
       finalizado: !!it.finalizado,
       ops: it.ops || [],
+      corrigidoManualmente: !!it.rendimentoCorrigidoManualmente,
     };
   });
 
-  // ── União: um card por produto que apareceu em qualquer um dos lados ──
   const codigos = Array.from(new Set([...Object.keys(teoricoPorCodigo), ...Object.keys(realPorCodigo)]));
   const lista = codigos
     .map(cod => {
       const t = teoricoPorCodigo[cod] || null;
       const r = realPorCodigo[cod] || null;
-      // Ignora itens programados que ainda não produziram nada nem entraram na câmara
       if ((!t || t.feitos === 0) && !r) return null;
       return { codigo: cod, teorico: t, real: r };
     })
     .filter(Boolean)
-    .sort((a, b) => {
-      const nomeA = a.teorico?.produto || '';
-      const nomeB = b.teorico?.produto || '';
-      return nomeA.localeCompare(nomeB, 'pt-BR');
-    });
+    .sort((a, b) => (a.teorico?.produto || '').localeCompare(b.teorico?.produto || '', 'pt-BR'));
 
   return (
     <div className="container">
-      {/* Navegação de data */}
       <div className="toolbar toolbar-data">
         <button className="arrow-btn" onClick={() => mudarDia(-1)}>‹</button>
         <div className="toolbar-data-centro">
@@ -104,7 +169,6 @@ export default function PCP() {
         const valorTeorico = t?.teorico ?? null;
         const valorReal = r?.pesoTotal ?? null;
 
-        // Divergência real vs teórico
         let divPct = null;
         if (valorTeorico != null && valorTeorico > 0 && valorReal != null) {
           divPct = ((valorReal - valorTeorico) / valorTeorico) * 100;
@@ -116,10 +180,10 @@ export default function PCP() {
 
         const nomeProduto = t?.produto || registros.find(x => x.codigoProduto === codigo)?.produto || codigo;
         const ops = t?.ops?.length ? t.ops : (r ? Array.from(r.ops) : []);
+        const rendimentoSuspeito = t && t.feitos > 0 && t.rendimentoUnit === 0;
 
         return (
           <div className="card" key={codigo} style={{ padding: 0, overflow: 'hidden' }}>
-            {/* Cabeçalho */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '16px 18px 12px' }}>
               <div>
                 <div className="nome">{nomeProduto}</div>
@@ -133,14 +197,36 @@ export default function PCP() {
               }
             </div>
 
-            {/* Painel duplo: Teórico × Real */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--border-suave)' }}>
 
               {/* Teórico (Líder) */}
               <div style={{ padding: '14px 18px', borderRight: '1px solid var(--border-suave)' }}>
-                <div style={{ fontSize: '0.64rem', fontWeight: 800, color: 'var(--marrom-claro)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
-                  <i className="ph ph-clipboard-text" style={{ marginRight: 4 }}></i>Teórico (Líder)
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <div style={{ fontSize: '0.64rem', fontWeight: 800, color: 'var(--marrom-claro)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <i className="ph ph-clipboard-text" style={{ marginRight: 4 }}></i>Teórico (Líder)
+                  </div>
+                  {isPcp && t && t.feitos > 0 && (
+                    <button
+                      onClick={() => setModalCorrigir({ codigo, produto: nomeProduto, rendimentoUnit: t.rendimentoUnit, feitos: t.feitos })}
+                      title="Corrigir rendimento manualmente"
+                      style={{ background: 'none', border: 'none', color: rendimentoSuspeito ? 'var(--danger)' : 'var(--marrom-claro)', cursor: 'pointer', fontSize: '0.9rem', padding: 2 }}
+                    >
+                      <i className="ph ph-pencil-simple"></i>
+                    </button>
+                  )}
                 </div>
+
+                {rendimentoSuspeito && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--danger-soft)', color: 'var(--danger)', fontSize: '0.68rem', fontWeight: 700, padding: '3px 8px', borderRadius: 20, marginBottom: 6 }}>
+                    <i className="ph ph-warning-circle"></i> Rendimento zerado — bridge fora do ar?
+                  </div>
+                )}
+                {t?.corrigidoManualmente && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'var(--info-soft)', color: 'var(--info)', fontSize: '0.68rem', fontWeight: 700, padding: '3px 8px', borderRadius: 20, marginBottom: 6 }}>
+                    <i className="ph ph-pencil-simple"></i> Corrigido manualmente
+                  </div>
+                )}
+
                 {valorTeorico != null && t.feitos > 0
                   ? <>
                       <div style={{ fontSize: '1.35rem', fontWeight: 900, color: 'var(--marrom)', fontVariantNumeric: 'tabular-nums' }}>
@@ -176,7 +262,6 @@ export default function PCP() {
               </div>
             </div>
 
-            {/* Rodapé: divergência */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 18px', borderTop: '1px solid var(--border-suave)', background: '#fdfcfa' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--marrom-claro)' }}>Divergência Real × Teórico</span>
               <span style={{ fontWeight: 900, fontSize: '0.9rem', color: divCor, background: divBg, padding: '4px 12px', borderRadius: 20, fontVariantNumeric: 'tabular-nums' }}>
@@ -186,6 +271,15 @@ export default function PCP() {
           </div>
         );
       })}
+
+      {modalCorrigir && (
+        <ModalCorrigirRendimento
+          item={modalCorrigir}
+          aoSalvar={salvarCorrecaoRendimento}
+          aoFechar={() => setModalCorrigir(null)}
+          salvando={salvandoCorrecao}
+        />
+      )}
     </div>
   );
 }
