@@ -1,4 +1,4 @@
-import { collection, getDocs, query, where, doc, writeBatch, increment, setDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, query, where, doc, writeBatch, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from './firebase';
 
 // ── Normalização de texto (compara nomes ignorando acentos/caixa/pontuação) ──
@@ -23,6 +23,29 @@ function tokens(txt) {
   return normalizar(txt).split(' ').filter(t => t && !STOPWORDS.has(t));
 }
 
+function normalizarCodigo(cod) {
+  return (cod ?? '').toString().trim().replace(/^0+(?=\d)/, ''); // tira zeros à esquerda
+}
+
+// ── Multi-tenant: os dados reais moram em users/{masterUid}/..., não na raiz.
+// (mesmo padrão já usado em Expedicao.jsx para inventory/batches). Ler a raiz
+// direto é o que causava "Missing or insufficient permissions" — as regras do
+// Firestore só liberam a subcoleção do masterUid. ──
+let cacheMasterUid = null;
+let cacheMasterUidEm = 0;
+
+async function obterMasterUid() {
+  const agora = Date.now();
+  if (cacheMasterUid && (agora - cacheMasterUidEm) < TTL_CACHE_MS) return cacheMasterUid;
+  const cDoc = await getDoc(doc(dbEstoqueOS, 'global_settings', 'company_db'));
+  if (!cDoc.exists() || !cDoc.data().masterUid) {
+    throw new Error('Configuração da empresa (masterUid) não encontrada em global_settings/company_db.');
+  }
+  cacheMasterUid = cDoc.data().masterUid;
+  cacheMasterUidEm = agora;
+  return cacheMasterUid;
+}
+
 // ── Cache em memória — evita reler `recipes` e `inventory` a cada +1 ──
 let cacheReceitas = null;
 let cacheReceitasEm = 0;
@@ -33,7 +56,8 @@ const TTL_CACHE_MS = 10 * 60 * 1000; // 10 minutos
 async function carregarReceitas() {
   const agora = Date.now();
   if (cacheReceitas && (agora - cacheReceitasEm) < TTL_CACHE_MS) return cacheReceitas;
-  const snap = await getDocs(collection(dbEstoqueOS, 'recipes'));
+  const mUid = await obterMasterUid();
+  const snap = await getDocs(collection(dbEstoqueOS, 'users', mUid, 'recipes'));
   const lista = [];
   snap.forEach(d => lista.push({ id: d.id, ...d.data() }));
   cacheReceitas = lista;
@@ -44,7 +68,8 @@ async function carregarReceitas() {
 async function carregarInventoryMap() {
   const agora = Date.now();
   if (cacheInventory && (agora - cacheInventoryEm) < TTL_CACHE_MS) return cacheInventory;
-  const snap = await getDocs(collection(dbEstoqueOS, 'inventory'));
+  const mUid = await obterMasterUid();
+  const snap = await getDocs(collection(dbEstoqueOS, 'users', mUid, 'inventory'));
   const mapa = {};
   snap.forEach(d => { mapa[d.id] = { id: d.id, ...d.data() }; });
   cacheInventory = mapa;
@@ -65,37 +90,55 @@ export async function obterInventoryMap() {
   return carregarInventoryMap();
 }
 
-// ── Encontra a ficha técnica de um produto pelo nome ────────────────
-// ANTES: só igualdade exata → falhava silenciosamente quando o nome no Winthor
-// diferia do nome da receita ("PAO FRANCES" vs "Pão Francês 50g").
-// AGORA: 3 níveis de tolerância, do mais estrito ao mais permissivo.
-// Retorna a receita ou null.
-export async function buscarReceitaPorNomeProduto(nomeProduto) {
-  if (!nomeProduto) return null;
+// ── Encontra a ficha técnica de um produto — CÓDIGO OFICIAL primeiro ──
+// O código do Winthor é a chave confiável (não muda, não tem sinônimo).
+// O nome só entra como fallback por assimilação, para receitas que ainda
+// não foram vinculadas por código no cadastro.
+//
+// Ordem de busca:
+//   1) receita.codigo === código oficial do Winthor        (vínculo forte)
+//   2) nome — igualdade exata (normalizada)
+//   3) nome — um contém o outro ("pao frances" ⊂ "pao frances 50g")
+//   4) nome — todas as palavras-chave do produto batem na receita
+export async function buscarReceitaPorCodigoOuNome(codigo, nomeProduto) {
   const receitas = await carregarReceitas();
+
+  // Nível 1 — código oficial (Winthor). Aceita variações de campo
+  // (codigo/codigoWinthor/code) porque o cadastro pode ter evoluído.
+  const codAlvo = normalizarCodigo(codigo);
+  if (codAlvo) {
+    const porCodigo = receitas.find(r => {
+      const candidatos = [r.codigo, r.codigoWinthor, r.code].map(normalizarCodigo);
+      return candidatos.includes(codAlvo);
+    });
+    if (porCodigo) return { receita: porCodigo, vinculo: 'codigo' };
+  }
+
+  if (!nomeProduto) return { receita: null, vinculo: null };
+  const receitasNome = receitas;
   const alvo = normalizar(nomeProduto);
-  if (!alvo) return null;
+  if (!alvo) return { receita: null, vinculo: null };
 
-  // Nível 1 — igualdade exata (normalizada)
-  const exata = receitas.find(r => normalizar(r.name) === alvo);
-  if (exata) return exata;
+  // Nível 2 — igualdade exata (normalizada)
+  const exata = receitasNome.find(r => normalizar(r.name) === alvo);
+  if (exata) return { receita: exata, vinculo: 'nome_exato' };
 
-  // Nível 2 — um nome contém o outro ("pao frances" ⊂ "pao frances 50g")
-  const contida = receitas.find(r => {
+  // Nível 3 — um nome contém o outro ("pao frances" ⊂ "pao frances 50g")
+  const contida = receitasNome.find(r => {
     const n = normalizar(r.name);
     return n && (n.includes(alvo) || alvo.includes(n));
   });
-  if (contida) return contida;
+  if (contida) return { receita: contida, vinculo: 'nome_parcial' };
 
-  // Nível 3 — melhor sobreposição de palavras significativas.
+  // Nível 4 — melhor sobreposição de palavras significativas.
   // Exige que TODAS as palavras-chave do produto estejam na receita
   // (evita casar "PAO FRANCES" com "PAO DE QUEIJO" por acaso).
   const tokensAlvo = tokens(nomeProduto);
-  if (tokensAlvo.length === 0) return null;
+  if (tokensAlvo.length === 0) return { receita: null, vinculo: null };
 
   let melhor = null;
   let melhorScore = 0;
-  for (const r of receitas) {
+  for (const r of receitasNome) {
     const tokensReceita = new Set(tokens(r.name));
     if (tokensReceita.size === 0) continue;
     const acertos = tokensAlvo.filter(t => tokensReceita.has(t)).length;
@@ -103,18 +146,37 @@ export async function buscarReceitaPorNomeProduto(nomeProduto) {
     if (score > melhorScore) { melhorScore = score; melhor = r; }
   }
   // Só aceita se casou TODAS as palavras-chave do produto
-  return melhorScore >= 1 ? melhor : null;
+  if (melhorScore >= 1) return { receita: melhor, vinculo: 'nome_assimilado' };
+  return { receita: null, vinculo: null };
+}
+
+// Retrocompatível: mesma assinatura antiga, só por nome (sem código).
+export async function buscarReceitaPorNomeProduto(nomeProduto) {
+  const { receita } = await buscarReceitaPorCodigoOuNome(null, nomeProduto);
+  return receita;
 }
 
 // ── Diagnóstico: por que um produto não achou receita? ──────────────
 // Usado pela UI para mostrar um aviso útil ao operador em vez de falhar em silêncio.
-export async function diagnosticarProduto(nomeProduto) {
-  const receita = await buscarReceitaPorNomeProduto(nomeProduto);
+export async function diagnosticarProduto(nomeProduto, codigo = null) {
+  let receita, vinculo;
+  try {
+    ({ receita, vinculo } = await buscarReceitaPorCodigoOuNome(codigo, nomeProduto));
+  } catch (e) {
+    return {
+      ok: false,
+      motivo: 'ERRO_LEITURA',
+      mensagem: `Falha ao ler a ficha técnica: ${e.message}`,
+    };
+  }
+
   if (!receita) {
     return {
       ok: false,
       motivo: 'SEM_RECEITA',
-      mensagem: `Nenhuma ficha técnica encontrada para "${nomeProduto}". A matéria-prima NÃO está sendo baixada.`,
+      mensagem: codigo
+        ? `Nenhuma ficha técnica encontrada para "${nomeProduto}" (código ${codigo}). A matéria-prima NÃO está sendo baixada.`
+        : `Nenhuma ficha técnica encontrada para "${nomeProduto}". A matéria-prima NÃO está sendo baixada.`,
     };
   }
   if (!receita.ingredients?.length) {
@@ -130,11 +192,12 @@ export async function diagnosticarProduto(nomeProduto) {
     return {
       ok: true,
       receita,
+      vinculo,
       motivo: 'SEM_FARINHA',
       mensagem: `A receita "${receita.name}" não tem nenhum insumo marcado como trocável pelo operador.`,
     };
   }
-  return { ok: true, receita, farinhas, motivo: null, mensagem: null };
+  return { ok: true, receita, vinculo, farinhas, motivo: null, mensagem: null };
 }
 
 // ── Identifica insumos que o operador pode trocar manualmente ───────
@@ -177,8 +240,9 @@ export async function identificarIngredientesFarinha(receita) {
 
 // ── Lista os lotes disponíveis de um insumo, em ordem FEFO ──────────
 export async function listarLotesDisponiveis(productId) {
+  const mUid = await obterMasterUid();
   const snap = await getDocs(
-    query(collection(dbEstoqueOS, 'batches'), where('productId', '==', productId))
+    query(collection(dbEstoqueOS, 'users', mUid, 'batches'), where('productId', '==', productId))
   );
   const lotes = [];
   snap.forEach(d => {
@@ -233,6 +297,7 @@ export async function definirLoteForcado(dataISO, productId, lote, operador) {
 // O lote forçado fura a fila; se acabar no meio da batelada, o sistema
 // completa automaticamente com o próximo lote em ordem FEFO.
 export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotesForcados = {}, contexto = {}) {
+  const mUid = await obterMasterUid();
   const inventoryMap = await carregarInventoryMap();
   const consumos = [];
   let incompleto = false;
@@ -246,7 +311,7 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
     // Busca todos os lotes desse insumo. Filtra quantidade/validade EM MEMÓRIA
     // de propósito — evita exigir índice composto no Firestore.
     const snapLotes = await getDocs(
-      query(collection(dbEstoqueOS, 'batches'), where('productId', '==', ingrediente.productId))
+      query(collection(dbEstoqueOS, 'users', mUid, 'batches'), where('productId', '==', ingrediente.productId))
     );
     const lotes = [];
     snapLotes.forEach(d => {
@@ -303,7 +368,7 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
   let houveEscrita = false;
   consumos.forEach(c => {
     c.lotes.forEach(l => {
-      batch.update(doc(dbEstoqueOS, 'batches', l.loteId), { quantity: increment(-l.quantidade) });
+      batch.update(doc(dbEstoqueOS, 'users', mUid, 'batches', l.loteId), { quantity: increment(-l.quantidade) });
       houveEscrita = true;
     });
   });
@@ -399,11 +464,12 @@ export function resumirOrigemMP(consumoMP) {
 // ── Reverte um consumo (usado quando o operador desfaz uma batida) ──
 export async function reverterConsumoFEFO(consumoRegistrado) {
   if (!consumoRegistrado?.consumos?.length) return;
+  const mUid = await obterMasterUid();
   const batch = writeBatch(dbEstoqueOS);
   let houveEscrita = false;
   consumoRegistrado.consumos.forEach(c => {
     (c.lotes || []).forEach(l => {
-      batch.update(doc(dbEstoqueOS, 'batches', l.loteId), { quantity: increment(l.quantidade) });
+      batch.update(doc(dbEstoqueOS, 'users', mUid, 'batches', l.loteId), { quantity: increment(l.quantidade) });
       houveEscrita = true;
     });
   });
