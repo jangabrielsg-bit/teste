@@ -1,9 +1,26 @@
-import { collection, getDocs, query, where, doc, writeBatch, increment, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, query, where, doc, writeBatch, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from './firebase';
 
-// ── Normalização de texto (compara nomes ignorando acentos/caixa) ──
+// ── Normalização de texto (compara nomes ignorando acentos/caixa/pontuação) ──
 function normalizar(txt) {
-  return (txt || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+  return (txt || '')
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')   // remove acentos
+    .replace(/[^a-z0-9\s]/gi, ' ')      // pontuação vira espaço (ex: "FAR." → "FAR ")
+    .replace(/\s+/g, ' ')               // colapsa espaços
+    .toLowerCase()
+    .trim();
+}
+
+// Palavras que não ajudam a identificar o produto (ruído de cadastro do Winthor)
+const STOPWORDS = new Set([
+  'pao', 'de', 'da', 'do', 'com', 'e', 'a', 'o', 'kg', 'g', 'un', 'und', 'unid',
+  'cx', 'pct', 'congelado', 'congelados', 'resfriado', 'fatiado', 'sem', 'tipo',
+]);
+
+function tokens(txt) {
+  return normalizar(txt).split(' ').filter(t => t && !STOPWORDS.has(t));
 }
 
 // ── Cache em memória — evita reler `recipes` e `inventory` a cada +1 ──
@@ -36,70 +53,186 @@ async function carregarInventoryMap() {
 }
 
 // Força recarregar na próxima chamada (útil após edições manuais de ficha técnica)
-export function invalidarCacheReceitas() { cacheReceitas = null; cacheInventory = null; }
+export function invalidarCacheReceitas() {
+  cacheReceitas = null;
+  cacheInventory = null;
+  cacheReceitasEm = 0;
+  cacheInventoryEm = 0;
+}
 
 // Acesso público ao mapa de insumos (usado pela UI de troca de lote)
 export async function obterInventoryMap() {
   return carregarInventoryMap();
 }
 
-// ── Identifica ingredientes de farinha numa receita (único insumo que ──
-// ── o operador pode trocar manualmente durante a produção)          ──
+// ── Encontra a ficha técnica de um produto pelo nome ────────────────
+// ANTES: só igualdade exata → falhava silenciosamente quando o nome no Winthor
+// diferia do nome da receita ("PAO FRANCES" vs "Pão Francês 50g").
+// AGORA: 3 níveis de tolerância, do mais estrito ao mais permissivo.
+// Retorna a receita ou null.
+export async function buscarReceitaPorNomeProduto(nomeProduto) {
+  if (!nomeProduto) return null;
+  const receitas = await carregarReceitas();
+  const alvo = normalizar(nomeProduto);
+  if (!alvo) return null;
+
+  // Nível 1 — igualdade exata (normalizada)
+  const exata = receitas.find(r => normalizar(r.name) === alvo);
+  if (exata) return exata;
+
+  // Nível 2 — um nome contém o outro ("pao frances" ⊂ "pao frances 50g")
+  const contida = receitas.find(r => {
+    const n = normalizar(r.name);
+    return n && (n.includes(alvo) || alvo.includes(n));
+  });
+  if (contida) return contida;
+
+  // Nível 3 — melhor sobreposição de palavras significativas.
+  // Exige que TODAS as palavras-chave do produto estejam na receita
+  // (evita casar "PAO FRANCES" com "PAO DE QUEIJO" por acaso).
+  const tokensAlvo = tokens(nomeProduto);
+  if (tokensAlvo.length === 0) return null;
+
+  let melhor = null;
+  let melhorScore = 0;
+  for (const r of receitas) {
+    const tokensReceita = new Set(tokens(r.name));
+    if (tokensReceita.size === 0) continue;
+    const acertos = tokensAlvo.filter(t => tokensReceita.has(t)).length;
+    const score = acertos / tokensAlvo.length;
+    if (score > melhorScore) { melhorScore = score; melhor = r; }
+  }
+  // Só aceita se casou TODAS as palavras-chave do produto
+  return melhorScore >= 1 ? melhor : null;
+}
+
+// ── Diagnóstico: por que um produto não achou receita? ──────────────
+// Usado pela UI para mostrar um aviso útil ao operador em vez de falhar em silêncio.
+export async function diagnosticarProduto(nomeProduto) {
+  const receita = await buscarReceitaPorNomeProduto(nomeProduto);
+  if (!receita) {
+    return {
+      ok: false,
+      motivo: 'SEM_RECEITA',
+      mensagem: `Nenhuma ficha técnica encontrada para "${nomeProduto}". A matéria-prima NÃO está sendo baixada.`,
+    };
+  }
+  if (!receita.ingredients?.length) {
+    return {
+      ok: false,
+      receita,
+      motivo: 'RECEITA_VAZIA',
+      mensagem: `A ficha técnica "${receita.name}" não tem ingredientes cadastrados.`,
+    };
+  }
+  const farinhas = await identificarIngredientesFarinha(receita);
+  if (farinhas.length === 0) {
+    return {
+      ok: true,
+      receita,
+      motivo: 'SEM_FARINHA',
+      mensagem: `A receita "${receita.name}" não tem nenhum insumo marcado como trocável pelo operador.`,
+    };
+  }
+  return { ok: true, receita, farinhas, motivo: null, mensagem: null };
+}
+
+// ── Identifica insumos que o operador pode trocar manualmente ───────
+// ANTES: `nome.includes('farinha')` hardcoded → não pegava "FAR. MEDALHA DE OURO",
+// "TRIGO ESPECIAL", etc, e quebrava sempre que o cadastro mudava.
+// AGORA: prioriza um flag explícito no `inventory`, e só cai na heurística
+// de nome se ninguém tiver marcado nada.
+//
+//   👉 Recomendado: no Firestore, em `inventory/{id}`, adicione:
+//        trocavelPeloOperador: true
+//      nos insumos que o operador abre saco a saco (farinhas, principalmente).
+const PALAVRAS_FARINHA = ['farinha', 'far', 'trigo'];
+
+function pareceFarinha(nome) {
+  const t = tokens(nome);
+  return t.some(tok => PALAVRAS_FARINHA.includes(tok));
+}
+
 export async function identificarIngredientesFarinha(receita) {
   if (!receita?.ingredients?.length) return [];
   const inventoryMap = await carregarInventoryMap();
-  return receita.ingredients
-    .map(ing => ({ productId: ing.productId, nome: (inventoryMap[ing.productId]?.name || '') }))
-    .filter(ing => normalizar(ing.nome).includes('farinha'));
+
+  const candidatos = receita.ingredients.map(ing => {
+    const info = inventoryMap[ing.productId] || {};
+    return {
+      productId: ing.productId,
+      nome: info.name || 'Insumo desconhecido',
+      unidade: info.unit || 'kg',
+      trocavel: info.trocavelPeloOperador === true,
+    };
+  });
+
+  // 1º) Se algum insumo foi explicitamente marcado, respeita só os marcados.
+  const marcados = candidatos.filter(c => c.trocavel);
+  if (marcados.length > 0) return marcados;
+
+  // 2º) Senão, cai na heurística de nome (retrocompatível).
+  return candidatos.filter(c => pareceFarinha(c.nome));
 }
 
 // ── Lista os lotes disponíveis de um insumo, em ordem FEFO ──────────
-// (usado pelo modal de troca manual de lote de farinha)
 export async function listarLotesDisponiveis(productId) {
-  const snap = await getDocs(query(collection(dbEstoqueOS, 'batches'), where('productId', '==', productId)));
+  const snap = await getDocs(
+    query(collection(dbEstoqueOS, 'batches'), where('productId', '==', productId))
+  );
   const lotes = [];
   snap.forEach(d => {
     const dados = d.data();
     if ((dados.quantity || 0) > 0) lotes.push({ id: d.id, ...dados });
   });
-  lotes.sort((a, b) => {
+  return ordenarFEFO(lotes);
+}
+
+// FEFO: validade crescente. Lotes sem validade vão para o FIM da fila
+// (não se consome às cegas um lote sem data quando há lotes datados vencendo).
+function ordenarFEFO(lotes) {
+  return [...lotes].sort((a, b) => {
     const va = a.expiryDate || a.validade || '9999-12-31';
     const vb = b.expiryDate || b.validade || '9999-12-31';
-    return va.localeCompare(vb);
+    return String(va).localeCompare(String(vb));
   });
-  return lotes;
+}
+
+function numeroDoLote(lote) {
+  return lote.batchNumber || lote.code || lote.number || lote.id;
 }
 
 // ── Define manualmente qual lote de um insumo deve ser usado agora ──
-// Fica salvo no próprio documento do dia (producaoDiaria), com timestamp
-// da troca — vale para qualquer receita que use esse mesmo insumo no dia.
+// BUG CORRIGIDO: usava updateDoc com caminho pontilhado (`lotesForcados.${productId}`).
+// Isso estourava se (a) o doc do dia ainda não existisse, ou (b) o productId
+// contivesse um ponto. Agora usa setDoc + merge com objeto aninhado.
 export async function definirLoteForcado(dataISO, productId, lote, operador) {
-  const campo = `lotesForcados.${productId}`;
-  await updateDoc(doc(db, 'producaoDiaria', dataISO), {
-    [campo]: {
-      loteId: lote.id,
-      loteNumero: lote.batchNumber || lote.code || lote.number || lote.id,
-      validade: lote.expiryDate || lote.validade || null,
-      selecionadoEm: new Date().toISOString(),
-      selecionadoPor: operador || null,
+  await setDoc(
+    doc(db, 'producaoDiaria', dataISO),
+    {
+      lotesForcados: {
+        [productId]: {
+          loteId: lote.id,
+          loteNumero: numeroDoLote(lote),
+          validade: lote.expiryDate || lote.validade || null,
+          selecionadoEm: new Date().toISOString(),
+          selecionadoPor: operador || null,
+        },
+      },
     },
-  });
-}
-
-// ── Encontra a ficha técnica de um produto pelo nome ────────────────
-export async function buscarReceitaPorNomeProduto(nomeProduto) {
-  const receitas = await carregarReceitas();
-  const alvo = normalizar(nomeProduto);
-  return receitas.find(r => normalizar(r.name) === alvo) || null;
+    { merge: true }
+  );
 }
 
 // ── Consome os ingredientes de uma receita via FEFO ─────────────────
-// multiplicador = quantas "receitas/lotes" essa batida representa (normalmente 1)
-// lotesForcados = { [productId]: { loteId, ... } } — override manual (ex: farinha)
-//   O lote forçado entra primeiro na fila; se acabar no meio da batelada,
-//   o sistema segue automaticamente para o próximo lote em ordem FEFO.
-// Retorna { consumos: [...], incompleto: bool } para registrar rastreabilidade
-export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotesForcados = {}) {
+// receita       — ficha técnica (com .ingredients e, idealmente, .yield/.rendimento)
+// multiplicador — quantas receitas essa batida representa (default 1)
+// lotesForcados — { [productId]: { loteId, ... } } override manual do operador
+// contexto      — { numeroOP, produto, operador } → gravado para rastreabilidade
+//
+// O lote forçado fura a fila; se acabar no meio da batelada, o sistema
+// completa automaticamente com o próximo lote em ordem FEFO.
+export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotesForcados = {}, contexto = {}) {
   const inventoryMap = await carregarInventoryMap();
   const consumos = [];
   let incompleto = false;
@@ -110,8 +243,8 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
 
     const infoMP = inventoryMap[ingrediente.productId] || { name: 'Insumo desconhecido', unit: 'kg' };
 
-    // Busca todos os lotes desse insumo (filtra quantidade/validade em memória —
-    // evita exigir índice composto no Firestore)
+    // Busca todos os lotes desse insumo. Filtra quantidade/validade EM MEMÓRIA
+    // de propósito — evita exigir índice composto no Firestore.
     const snapLotes = await getDocs(
       query(collection(dbEstoqueOS, 'batches'), where('productId', '==', ingrediente.productId))
     );
@@ -121,40 +254,33 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
       if ((dados.quantity || 0) > 0) lotes.push({ id: d.id, ...dados });
     });
 
-    // FEFO: ordena por validade crescente (lotes sem validade vão para o final da fila)
-    lotes.sort((a, b) => {
-      const va = a.expiryDate || a.validade || '9999-12-31';
-      const vb = b.expiryDate || b.validade || '9999-12-31';
-      return va.localeCompare(vb);
-    });
+    let filaConsumo = ordenarFEFO(lotes);
 
-    // Se há um lote forçado manualmente para esse insumo (ex: farinha em uso),
-    // ele fura a fila e vai para o topo — o resto segue em ordem FEFO normal.
+    // Lote forçado pelo operador vai para o topo da fila; o resto segue FEFO.
     const forcado = lotesForcados?.[ingrediente.productId];
-    let filaConsumo = lotes;
     if (forcado?.loteId) {
-      const idxForcado = lotes.findIndex(l => l.id === forcado.loteId);
-      if (idxForcado > 0) {
-        const [loteForcado] = lotes.splice(idxForcado, 1);
-        filaConsumo = [loteForcado, ...lotes];
+      const idx = filaConsumo.findIndex(l => l.id === forcado.loteId);
+      if (idx > 0) {
+        const [loteForcado] = filaConsumo.splice(idx, 1);
+        filaConsumo = [loteForcado, ...filaConsumo];
       }
-      // Se idxForcado === 0, já está na frente (ou -1: lote esgotado/sumiu → segue FEFO puro)
+      // idx === 0 → já está na frente. idx === -1 → lote esgotou/sumiu, segue FEFO puro.
     }
 
     let restante = necessario;
     const consumidosDesteIngrediente = [];
 
     for (const lote of filaConsumo) {
-      if (restante <= 0) break;
+      if (restante <= 0.0001) break;
       const disponivel = lote.quantity || 0;
       const retirar = Math.min(disponivel, restante);
       if (retirar <= 0) continue;
       consumidosDesteIngrediente.push({
         loteId: lote.id,
-        loteNumero: lote.batchNumber || lote.code || lote.number || lote.id,
+        loteNumero: numeroDoLote(lote),
         validade: lote.expiryDate || lote.validade || null,
         quantidade: retirar,
-        forcadoManualmente: !!(forcado?.loteId === lote.id),
+        forcadoManualmente: forcado?.loteId === lote.id,
       });
       restante -= retirar;
     }
@@ -167,35 +293,122 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
       unidade: infoMP.unit || 'kg',
       necessario,
       atendido: necessario - restante,
-      faltou: restante,
+      faltou: restante > 0.0001 ? restante : 0,
       lotes: consumidosDesteIngrediente,
     });
   }
 
-  // Grava os descontos em batch — increment() é seguro para concorrência
-  const lote = writeBatch(dbEstoqueOS);
+  // Grava os descontos em batch — increment() é seguro para concorrência.
+  const batch = writeBatch(dbEstoqueOS);
   let houveEscrita = false;
   consumos.forEach(c => {
     c.lotes.forEach(l => {
-      lote.update(doc(dbEstoqueOS, 'batches', l.loteId), { quantity: increment(-l.quantidade) });
+      batch.update(doc(dbEstoqueOS, 'batches', l.loteId), { quantity: increment(-l.quantidade) });
       houveEscrita = true;
     });
   });
-  if (houveEscrita) await lote.commit();
+  if (houveEscrita) await batch.commit();
 
-  return { consumos, incompleto, receitaNome: receita.name };
+  // Estoque mudou → invalida cache de inventory para não servir saldo velho.
+  cacheInventory = null;
+  cacheInventoryEm = 0;
+
+  return {
+    consumos,
+    incompleto,
+    receitaNome: receita.name,
+    receitaId: receita.id || null,
+    multiplicador,
+    // ── Rastreabilidade: amarra o consumo à Ordem de Produção ──
+    ops: contexto.ops || [],
+    codigo: contexto.codigo || null,
+    produto: contexto.produto || null,
+    operador: contexto.operador || null,
+  };
+}
+
+// ── Genealogia: consolida TODAS as batidas de um item de produção ───
+// Recebe o array `consumoMP` de um item de producaoDiaria (uma entrada por batida)
+// e devolve, por insumo, os lotes que entraram e quanto de cada um.
+//
+// É este objeto que a Expedição grava dentro do lote de PA, fechando a corrente:
+//   lote de farinha → batida → lote de PA → cliente
+export function resumirOrigemMP(consumoMP) {
+  if (!Array.isArray(consumoMP) || consumoMP.length === 0) return null;
+
+  const porInsumo = {};   // productId → { nomeMP, unidade, lotes: { loteId → {...} } }
+  const opsSet = new Set();
+  let batidas = 0;
+  let algumIncompleto = false;
+
+  for (const batida of consumoMP) {
+    batidas++;
+    if (batida.incompleto) algumIncompleto = true;
+    if (batida.numeroOP) opsSet.add(batida.numeroOP);
+    (batida.ops || []).forEach(op => opsSet.add(op));
+
+    for (const c of (batida.consumos || [])) {
+      if (!porInsumo[c.productId]) {
+        porInsumo[c.productId] = {
+          productId: c.productId,
+          nomeMP: c.nomeMP,
+          unidade: c.unidade || 'kg',
+          totalConsumido: 0,
+          lotes: {},
+        };
+      }
+      const alvo = porInsumo[c.productId];
+
+      for (const l of (c.lotes || [])) {
+        if (!alvo.lotes[l.loteId]) {
+          alvo.lotes[l.loteId] = {
+            loteId: l.loteId,
+            loteNumero: l.loteNumero,
+            validade: l.validade || null,
+            quantidade: 0,
+            forcadoManualmente: false,
+          };
+        }
+        alvo.lotes[l.loteId].quantidade += l.quantidade || 0;
+        // Se em QUALQUER batida esse lote foi escolha manual, marca como manual.
+        if (l.forcadoManualmente) alvo.lotes[l.loteId].forcadoManualmente = true;
+        alvo.totalConsumido += l.quantidade || 0;
+      }
+    }
+  }
+
+  return {
+    batidas,
+    incompleto: algumIncompleto,
+    ops: Array.from(opsSet),
+    // Achata para array — Firestore não gosta de chaves dinâmicas profundas
+    insumos: Object.values(porInsumo).map(i => ({
+      productId: i.productId,
+      nomeMP: i.nomeMP,
+      unidade: i.unidade,
+      totalConsumido: Number(i.totalConsumido.toFixed(4)),
+      lotes: Object.values(i.lotes).map(l => ({
+        ...l,
+        quantidade: Number(l.quantidade.toFixed(4)),
+      })),
+    })),
+    consolidadoEm: new Date().toISOString(),
+  };
 }
 
 // ── Reverte um consumo (usado quando o operador desfaz uma batida) ──
 export async function reverterConsumoFEFO(consumoRegistrado) {
   if (!consumoRegistrado?.consumos?.length) return;
-  const lote = writeBatch(dbEstoqueOS);
+  const batch = writeBatch(dbEstoqueOS);
   let houveEscrita = false;
   consumoRegistrado.consumos.forEach(c => {
-    c.lotes.forEach(l => {
-      lote.update(doc(dbEstoqueOS, 'batches', l.loteId), { quantity: increment(l.quantidade) });
+    (c.lotes || []).forEach(l => {
+      batch.update(doc(dbEstoqueOS, 'batches', l.loteId), { quantity: increment(l.quantidade) });
       houveEscrita = true;
     });
   });
-  if (houveEscrita) await lote.commit();
+  if (houveEscrita) await batch.commit();
+
+  cacheInventory = null;
+  cacheInventoryEm = 0;
 }
