@@ -119,18 +119,25 @@ export default function Operador() {
 
   function mudarDia(delta) { const d = new Date(dataAlvo + 'T12:00:00'); d.setDate(d.getDate() + delta); setDataAlvo(paraISO(d)); }
 
-  const chaveProdutos = itens.map(it => it.produto).join('|');
+  const chaveProdutos = itens.map(it => `${it.codigo || ''}::${it.produto}`).join('|');
 
   useEffect(() => {
     let ativo = true;
     (async () => {
-      const nomesUnicos = Array.from(new Set(itens.map(it => it.produto).filter(Boolean)));
+      // Único por combinação código+nome — produtos diferentes podem ter nomes
+      // parecidos, mas o código do Winthor nunca se repete indevidamente.
+      const unicos = new Map();
+      itens.forEach(it => {
+        if (!it.produto) return;
+        unicos.set(`${it.codigo || ''}::${it.produto}`, { codigo: it.codigo || null, produto: it.produto });
+      });
+
       const mapa = {};
-      for (const nome of nomesUnicos) {
+      for (const { codigo, produto } of unicos.values()) {
         try {
-          mapa[nome] = await diagnosticarProduto(nome);
+          mapa[produto] = await diagnosticarProduto(produto, codigo);
         } catch (e) {
-          mapa[nome] = { ok: false, motivo: 'ERRO', mensagem: 'Falha ao ler a ficha técnica: ' + e.message };
+          mapa[produto] = { ok: false, motivo: 'ERRO', mensagem: 'Falha ao ler a ficha técnica: ' + e.message };
         }
       }
       if (ativo) setDiagPorItem(mapa);
@@ -316,6 +323,14 @@ export default function Operador() {
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.7rem', color: '#b91c1c', lineHeight: 1.4 }}>
             <strong>⚠️ Sem ficha técnica.</strong> A matéria-prima não está sendo baixada nem rastreada para este produto.
             <div style={{ fontSize: '0.65rem', marginTop: 2, opacity: 0.85 }}>{diag.mensagem}</div>
+          </div>
+        )}
+
+        {/* ── Vínculo só por assimilação de nome — menos confiável que o código oficial ── */}
+        {diag?.receita && (diag.vinculo === 'nome_parcial' || diag.vinculo === 'nome_assimilado') && (
+          <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.68rem', color: '#92400e', lineHeight: 1.4 }}>
+            ⚠️ Ficha técnica <strong>{diag.receita.name}</strong> vinculada por assimilação de nome, não pelo código oficial ({item.codigo || 's/ código'}).
+            Recomenda-se cadastrar o código Winthor na receita para um vínculo mais confiável.
           </div>
         )}
 
