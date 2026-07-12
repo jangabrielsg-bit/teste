@@ -10,17 +10,30 @@ function chaveMes(ano, mes) { return `${ano}-${String(mes + 1).padStart(2, '0')}
 function isoDia(ano, mes, dia) { return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`; }
 
 // ── Agrega o consumo de matéria-prima (todas as batidas) por insumo ──
+// Preserva `forcadoManualmente` e a falta de estoque — dados de auditoria que
+// a versão anterior descartava silenciosamente.
 function agregarConsumoMP(consumoMP) {
   if (!consumoMP || consumoMP.length === 0) return [];
   const porInsumo = {};
   consumoMP.forEach(evento => {
     (evento.consumos || []).forEach(c => {
-      if (!porInsumo[c.nomeMP]) porInsumo[c.nomeMP] = { nomeMP: c.nomeMP, unidade: c.unidade, total: 0, lotes: {} };
+      if (!porInsumo[c.nomeMP]) {
+        porInsumo[c.nomeMP] = { nomeMP: c.nomeMP, unidade: c.unidade, total: 0, faltou: 0, lotes: {} };
+      }
       porInsumo[c.nomeMP].total += c.atendido || 0;
+      porInsumo[c.nomeMP].faltou += c.faltou || 0;
       (c.lotes || []).forEach(l => {
         const chaveLote = l.loteNumero || l.loteId;
-        if (!porInsumo[c.nomeMP].lotes[chaveLote]) porInsumo[c.nomeMP].lotes[chaveLote] = { loteNumero: chaveLote, validade: l.validade, qtd: 0 };
+        if (!porInsumo[c.nomeMP].lotes[chaveLote]) {
+          porInsumo[c.nomeMP].lotes[chaveLote] = {
+            loteNumero: chaveLote,
+            validade: l.validade,
+            qtd: 0,
+            forcadoManualmente: false,   // ← preservado agora
+          };
+        }
         porInsumo[c.nomeMP].lotes[chaveLote].qtd += l.quantidade || 0;
+        if (l.forcadoManualmente) porInsumo[c.nomeMP].lotes[chaveLote].forcadoManualmente = true;
       });
     });
   });
@@ -28,24 +41,57 @@ function agregarConsumoMP(consumoMP) {
 }
 
 // ── Bloco visual: rastreabilidade de matéria-prima de um item ──────
-function RastreabilidadeMP({ consumoMP }) {
+// Amarra explicitamente OP ↔ lotes de MP. É o casamento que o app faz:
+// a OP vem crua do Winthor (sem lote de MP) e ganha aqui os lotes consumidos.
+function RastreabilidadeMP({ consumoMP, ops }) {
   const agregado = agregarConsumoMP(consumoMP);
-  if (agregado.length === 0) return null;
+
+  if (agregado.length === 0) {
+    return (
+      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)', fontSize: '0.7rem', color: '#b91c1c' }}>
+        <i className="ph ph-warning-circle" style={{ marginRight: 4 }}></i>
+        Sem rastreabilidade de matéria-prima
+        {ops?.length > 0 && <> — a OP {ops.join(', ')} não tem lotes de MP vinculados.</>}
+      </div>
+    );
+  }
+
+  const algumaFalta = agregado.some(ins => ins.faltou > 0.0001);
+
   return (
     <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)' }}>
       <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--marrom-claro)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
-        <i className="ph ph-package-check" style={{ marginRight: 4 }}></i>Matéria-prima consumida (FEFO)
+        <i className="ph ph-link" style={{ marginRight: 4 }}></i>
+        {ops?.length > 0 ? <>OP {ops.join(', ')} ← matéria-prima</> : <>Matéria-prima consumida (FEFO)</>}
       </div>
+
       {agregado.map((ins, i) => (
-        <div key={i} style={{ fontSize: '0.75rem', color: 'var(--marrom)', marginBottom: 2 }}>
+        <div key={i} style={{ fontSize: '0.75rem', color: 'var(--marrom)', marginBottom: 3 }}>
           <strong>{ins.nomeMP}</strong>: {formatarKg(ins.total)} {ins.unidade}
+          {ins.faltou > 0.0001 && (
+            <span style={{ color: '#b45309', fontWeight: 700 }}> · faltaram {formatarKg(ins.faltou)} {ins.unidade}</span>
+          )}
           {ins.lotes.length > 0 && (
-            <span style={{ color: 'var(--marrom-claro)' }}>
-              {' '}({ins.lotes.map(l => `Lote ${l.loteNumero}${l.validade ? ` · val. ${l.validade}` : ''}: ${formatarKg(l.qtd)}`).join(' | ')})
-            </span>
+            <div style={{ color: 'var(--marrom-claro)', fontSize: '0.7rem', marginTop: 1, paddingLeft: 8 }}>
+              {ins.lotes.map((l, j) => (
+                <span key={j} style={{ marginRight: 8, whiteSpace: 'nowrap' }}>
+                  Lote <strong>{l.loteNumero}</strong>
+                  {l.validade ? ` · val. ${l.validade}` : ''}
+                  {': '}{formatarKg(l.qtd)}
+                  {l.forcadoManualmente && (
+                    <span title="Lote escolhido manualmente pelo operador (fora da ordem FEFO)" style={{ color: '#b45309', fontWeight: 800 }}> ✋</span>
+                  )}
+                </span>
+              ))}
+            </div>
           )}
         </div>
       ))}
+
+      <div style={{ fontSize: '0.62rem', color: 'var(--marrom-claro)', marginTop: 4, opacity: 0.8 }}>
+        ✋ = troca manual do operador · demais lotes seguiram FEFO automático
+        {algumaFalta && ' · ⚠️ rastreabilidade parcial (estoque insuficiente em alguma batida)'}
+      </div>
     </div>
   );
 }
@@ -158,6 +204,8 @@ export default function LivroProducao() {
     try {
       const XLSX = await import('xlsx');
       const linhas = [];
+      const linhasRastreio = [];   // ← uma linha por lote de MP (auditoria)
+
       Object.entries(dadosMes)
         .sort(([a], [b]) => a.localeCompare(b))
         .forEach(([data, itens]) => {
@@ -168,13 +216,47 @@ export default function LivroProducao() {
               'Receitas Programadas': it.metaLotes, 'Receitas Realizadas': it.feitos,
               'Massa Perdida Produção (kg)': it.massaPerdidaProd, 'Massa Perdida Embalagem (kg)': it.massaPerdidaEmb,
               'Pé de Massa (kg)': it.peDeMassa, 'Fechamento': it.finalizado ? 'Sim' : 'Não',
+              'Rastreabilidade MP': (it.consumoMP || []).length > 0 ? 'Sim' : 'NÃO',
             });
+
+            // ── Aba 2: o casamento OP ↔ lote de matéria-prima ──
+            const agregado = agregarConsumoMP(it.consumoMP);
+            if (agregado.length === 0) {
+              linhasRastreio.push({
+                'Data': formatarDataBR(data),
+                'OPs Winthor': (it.ops || []).join(', '),
+                'Código': it.codigo,
+                'Produto': it.produto,
+                'Matéria-prima': '— SEM RASTREABILIDADE —',
+                'Lote MP': '', 'Validade MP': '', 'Qtd Consumida': '', 'Unid.': '',
+                'Origem do Lote': '',
+              });
+            } else {
+              agregado.forEach(ins => {
+                ins.lotes.forEach(l => {
+                  linhasRastreio.push({
+                    'Data': formatarDataBR(data),
+                    'OPs Winthor': (it.ops || []).join(', '),
+                    'Código': it.codigo,
+                    'Produto': it.produto,
+                    'Matéria-prima': ins.nomeMP,
+                    'Lote MP': l.loteNumero,
+                    'Validade MP': l.validade || '',
+                    'Qtd Consumida': Number((l.qtd || 0).toFixed(3)),
+                    'Unid.': ins.unidade || 'kg',
+                    'Origem do Lote': l.forcadoManualmente ? 'MANUAL (operador)' : 'FEFO automático',
+                  });
+                });
+              });
+            }
           });
         });
+
       if (linhas.length === 0) { alert('Nenhum dado neste mês para exportar.'); return; }
-      const ws = XLSX.utils.json_to_sheet(linhas);
+
       const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Livro de Produção');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhas), 'Livro de Produção');
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(linhasRastreio), 'Rastreabilidade MP');
       XLSX.writeFile(wb, `livro_producao_${chave}.xlsx`);
     } catch (e) { alert('Erro ao exportar: ' + e.message); }
   }
@@ -269,7 +351,7 @@ export default function LivroProducao() {
               <div className="livro-linha">Programadas: {l.metaLotes} · Realizadas: {l.feitos}</div>
               <div className="livro-linha">Perda produção: {formatarKg(l.massaPerdidaProd)} kg · Perda embalagem: {formatarKg(l.massaPerdidaEmb)} kg</div>
               {l.peDeMassa > 0 && <div className="livro-linha">Pé de massa: {formatarKg(l.peDeMassa)} kg</div>}
-              <RastreabilidadeMP consumoMP={l.consumoMP} />
+              <RastreabilidadeMP consumoMP={l.consumoMP} ops={l.ops} />
             </div>
           ))}
         </>
@@ -303,7 +385,7 @@ export default function LivroProducao() {
                         <div className="livro-linha">Programadas: {l.metaLotes} · Realizadas: {l.feitos}</div>
                         <div className="livro-linha">Perda produção: {formatarKg(l.massaPerdidaProd)} kg · Perda embalagem: {formatarKg(l.massaPerdidaEmb)} kg</div>
                         {l.peDeMassa > 0 && <div className="livro-linha">Pé de massa: {formatarKg(l.peDeMassa)} kg</div>}
-                        <RastreabilidadeMP consumoMP={l.consumoMP} />
+                        <RastreabilidadeMP consumoMP={l.consumoMP} ops={l.ops} />
                       </div>
                     ))}
                   </div>
