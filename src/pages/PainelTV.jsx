@@ -57,6 +57,17 @@ export default function PainelTV({ sair }) {
     return (new Date(b[b.length - 1]).getTime() - new Date(b[0]).getTime()) / 60000 / (b.length - 1);
   }
 
+  // ── Lotes usados na ÚLTIMA batida deste item ──────────────────────
+  // Não faz nenhuma leitura extra ao Firestore: o consumoMP[] já vem dentro
+  // de producaoDiaria, que o onSnapshot acima já está escutando. Ou seja,
+  // isso atualiza sozinho a cada +1 do operador — não precisa esperar o
+  // fechamento do dia para ver os lotes na TV.
+  function ultimaBatidaMP(item) {
+    const historico = item.consumoMP || [];
+    if (historico.length === 0) return null;
+    return historico[historico.length - 1];
+  }
+
   const totalProgramado = itens.reduce((s, it) => s + (it.metaLotes || 0), 0);
   const totalFeito = itens.reduce((s, it) => s + (it.feitos || 0), 0);
   const pctGeral = totalProgramado > 0 ? Math.round(totalFeito / totalProgramado * 100) : 0;
@@ -114,6 +125,35 @@ export default function PainelTV({ sair }) {
                     )}
                   </div>
                   <div className="tv-barra-geral tv-barra-ativo"><div className="tv-barra-geral-fill" style={{ width: Math.min(100, Math.round(itemAtivo.feitos / itemAtivo.metaLotes * 100)) + '%' }}></div></div>
+
+                  {/* ── Lotes de MP da última batida — atualiza em tempo real ── */}
+                  {(() => {
+                    const ultima = ultimaBatidaMP(itemAtivo);
+                    if (!ultima) return null;
+                    return (
+                      <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.12)' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#d9bd90', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                          Lotes em uso — última batida
+                          {ultima.incompleto && <span style={{ color: '#f87171', marginLeft: 8 }}>⚠ estoque insuficiente</span>}
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                          {(ultima.consumos || []).map((c, i) => (
+                            <div key={i} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '6px 12px' }}>
+                              <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{c.nomeMP}</div>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white' }}>
+                                {(c.lotes || []).map((l, j) => (
+                                  <span key={j} style={{ marginRight: 8 }}>
+                                    Lote {l.loteNumero}
+                                    {l.forcadoManualmente && <span title="Troca manual do operador" style={{ color: '#fbbf24' }}> ✋</span>}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               ) : (
                 <div className="tv-ativo tv-ativo-concluido">
@@ -136,6 +176,9 @@ export default function PainelTV({ sair }) {
                           <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                             <span className="tv-item-status">{concluido ? '✔' : ativo ? '●' : '—'}</span>
                             <span className="tv-item-nome">{it.produto}</span>
+                            {it.consumoMP?.length > 0 && (
+                              <span title="Matéria-prima rastreada" style={{ fontSize: '0.65rem', marginLeft: 6, opacity: 0.7 }}>📦</span>
+                            )}
                             <span className="tv-item-contagem">{it.feitos}/{it.metaLotes}</span>
                           </div>
                           {(vel != null || ultimaBatida) && !concluido && (
