@@ -4,6 +4,7 @@ import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarKg } from '../services/utils';
 import { useAuth } from '../services/auth';
 import { useProdutos } from '../services/hooks';
+import { resumirOrigemMP } from '../services/consumoMP';
 import ModalTeclado from '../components/ModalTeclado';
 
 export default function Expedicao() {
@@ -105,6 +106,21 @@ export default function Expedicao() {
     if (!nomeOperador.trim()) return alert('Informe seu nome!');
     localStorage.setItem('nomeOperador', nomeOperador.trim());
     const itemProg = producaoHoje[produtoIdx];
+
+    // ── Genealogia: puxa os lotes de MP consumidos nas batidas deste item ──
+    // É aqui que a corrente se fecha: farinha → batida → esta patinha de PA.
+    const origemMP = resumirOrigemMP(itemProg.consumoMP);
+
+    if (!origemMP) {
+      const seguir = window.confirm(
+        `⚠️ SEM RASTREIO DE MATÉRIA-PRIMA\n\n` +
+        `"${itemProg.produto}" não tem nenhum consumo de MP registrado nas batidas de hoje.\n\n` +
+        `Este lote de PA entrará na câmara SEM genealogia — não será possível saber ` +
+        `de quais lotes de farinha ele veio.\n\nAdicionar mesmo assim?`
+      );
+      if (!seguir) return;
+    }
+
     setListaEntrada(prev => [...prev, {
       operador:    nomeOperador.trim(),
       nome:        itemProg.produto,
@@ -116,6 +132,7 @@ export default function Expedicao() {
       qtd:         parseFloat(qtd),
       und,
       validade,
+      origemMP,                       // ← NOVO: genealogia dos lotes de MP
     }]);
     setQtd('');
     alert('Patinha adicionada para conferência!');
@@ -140,6 +157,7 @@ export default function Expedicao() {
           validade:    item.validade,
           dataEntrada: item.dataEntrada,
           ops:         item.ops,
+          origemMP:    item.origemMP || null,   // ← genealogia MP
           isTeste:     false,
         });
 
@@ -194,6 +212,13 @@ export default function Expedicao() {
             ops:          item.ops,
             operador:     item.operador,
             ativo:        true,   // false quando consumido/ajustado
+
+            // ── GENEALOGIA: de quais lotes de MP este lote de PA veio ──
+            // Fecha a rastreabilidade ponta a ponta:
+            //   lote de farinha → batida → este lote de PA → cliente
+            origemMP:        item.origemMP || null,
+            rastreioCompleto: !!item.origemMP && !item.origemMP.incompleto,
+
             registradoEm: new Date().toISOString(),
           });
         }
@@ -306,19 +331,50 @@ export default function Expedicao() {
             ? <div className="status-msg">Nenhuma patinha na lista.</div>
             : <div>
                 {listaEntrada.map((item, idx) => (
-                  <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, background: '#fafafa', border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontWeight: 700, color: 'var(--marrom)' }}>{item.nome}</div>
-                      <div style={{ fontSize: '0.78rem', color: '#999', marginTop: 2 }}>
-                        Lote: {item.lote} | Val: {item.validade}
-                        {item.codigo && <span style={{ marginLeft: 8, background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '1px 7px', borderRadius: 8, fontWeight: 700 }}>COD {item.codigo}</span>}
-                        {item.ops?.length > 0 && <span style={{ marginLeft: 6, color: '#a78355' }}>OP: {item.ops.join(', ')}</span>}
+                  <div key={idx} style={{ padding: 14, background: '#fafafa', border: '1px solid var(--border-suave)', borderRadius: 14, marginBottom: 10 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'var(--marrom)' }}>{item.nome}</div>
+                        <div style={{ fontSize: '0.78rem', color: '#999', marginTop: 2 }}>
+                          Lote: {item.lote} | Val: {item.validade}
+                          {item.codigo && <span style={{ marginLeft: 8, background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '1px 7px', borderRadius: 8, fontWeight: 700 }}>COD {item.codigo}</span>}
+                          {item.ops?.length > 0 && <span style={{ marginLeft: 6, color: '#a78355' }}>OP: {item.ops.join(', ')}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.1rem' }}>{formatarKg(item.qtd)} {item.und}</span>
+                        <button className="remover-btn" onClick={() => setListaEntrada(prev => prev.filter((_, i) => i !== idx))}>✕</button>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.1rem' }}>{formatarKg(item.qtd)} {item.und}</span>
-                      <button className="remover-btn" onClick={() => setListaEntrada(prev => prev.filter((_, i) => i !== idx))}>✕</button>
-                    </div>
+
+                    {/* ── Genealogia: lotes de MP que originaram esta patinha ── */}
+                    {item.origemMP ? (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-suave)' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#15803d', marginBottom: 4 }}>
+                          <i className="ph ph-link" style={{ marginRight: 4 }}></i>
+                          Rastreabilidade ({item.origemMP.batidas} batida{item.origemMP.batidas > 1 ? 's' : ''})
+                        </div>
+                        {item.origemMP.insumos.map(ins => (
+                          <div key={ins.productId} style={{ fontSize: '0.68rem', color: 'var(--marrom-claro)', lineHeight: 1.5 }}>
+                            <strong>{ins.nomeMP}</strong>: {ins.lotes.map(l => (
+                              <span key={l.loteId} style={{ marginRight: 6 }}>
+                                Lote {l.loteNumero} ({l.quantidade.toFixed(2)} {ins.unidade})
+                                {l.forcadoManualmente && <span title="Escolha manual do operador"> ✋</span>}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                        {item.origemMP.incompleto && (
+                          <div style={{ fontSize: '0.65rem', color: '#b45309', marginTop: 4 }}>
+                            ⚠️ Alguma batida teve estoque de MP insuficiente — genealogia parcial.
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-suave)', fontSize: '0.68rem', color: '#b91c1c' }}>
+                        ⚠️ Sem genealogia de matéria-prima — este lote não será rastreável até a farinha.
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
