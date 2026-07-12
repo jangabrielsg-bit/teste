@@ -9,6 +9,47 @@ const DIAS_SEMANA = ['D','S','T','Q','Q','S','S'];
 function chaveMes(ano, mes) { return `${ano}-${String(mes + 1).padStart(2, '0')}`; }
 function isoDia(ano, mes, dia) { return `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`; }
 
+// ── Agrega o consumo de matéria-prima (todas as batidas) por insumo ──
+function agregarConsumoMP(consumoMP) {
+  if (!consumoMP || consumoMP.length === 0) return [];
+  const porInsumo = {};
+  consumoMP.forEach(evento => {
+    (evento.consumos || []).forEach(c => {
+      if (!porInsumo[c.nomeMP]) porInsumo[c.nomeMP] = { nomeMP: c.nomeMP, unidade: c.unidade, total: 0, lotes: {} };
+      porInsumo[c.nomeMP].total += c.atendido || 0;
+      (c.lotes || []).forEach(l => {
+        const chaveLote = l.loteNumero || l.loteId;
+        if (!porInsumo[c.nomeMP].lotes[chaveLote]) porInsumo[c.nomeMP].lotes[chaveLote] = { loteNumero: chaveLote, validade: l.validade, qtd: 0 };
+        porInsumo[c.nomeMP].lotes[chaveLote].qtd += l.quantidade || 0;
+      });
+    });
+  });
+  return Object.values(porInsumo).map(ins => ({ ...ins, lotes: Object.values(ins.lotes) }));
+}
+
+// ── Bloco visual: rastreabilidade de matéria-prima de um item ──────
+function RastreabilidadeMP({ consumoMP }) {
+  const agregado = agregarConsumoMP(consumoMP);
+  if (agregado.length === 0) return null;
+  return (
+    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)' }}>
+      <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--marrom-claro)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+        <i className="ph ph-package-check" style={{ marginRight: 4 }}></i>Matéria-prima consumida (FEFO)
+      </div>
+      {agregado.map((ins, i) => (
+        <div key={i} style={{ fontSize: '0.75rem', color: 'var(--marrom)', marginBottom: 2 }}>
+          <strong>{ins.nomeMP}</strong>: {formatarKg(ins.total)} {ins.unidade}
+          {ins.lotes.length > 0 && (
+            <span style={{ color: 'var(--marrom-claro)' }}>
+              {' '}({ins.lotes.map(l => `Lote ${l.loteNumero}${l.validade ? ` · val. ${l.validade}` : ''}: ${formatarKg(l.qtd)}`).join(' | ')})
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export default function LivroProducao() {
   const hoje = new Date();
   const [ano, setAno] = useState(hoje.getFullYear());
@@ -54,6 +95,7 @@ export default function LivroProducao() {
             massaPerdidaEmb: it.massaPerdidaEmb || 0,
             peDeMassa: it.peDeMassa || 0,
             finalizado: !!it.finalizado,
+            consumoMP: it.consumoMP || [],
           }));
           if (itens.length > 0) doMes[data.data] = itens;
         });
@@ -227,6 +269,7 @@ export default function LivroProducao() {
               <div className="livro-linha">Programadas: {l.metaLotes} · Realizadas: {l.feitos}</div>
               <div className="livro-linha">Perda produção: {formatarKg(l.massaPerdidaProd)} kg · Perda embalagem: {formatarKg(l.massaPerdidaEmb)} kg</div>
               {l.peDeMassa > 0 && <div className="livro-linha">Pé de massa: {formatarKg(l.peDeMassa)} kg</div>}
+              <RastreabilidadeMP consumoMP={l.consumoMP} />
             </div>
           ))}
         </>
@@ -260,6 +303,7 @@ export default function LivroProducao() {
                         <div className="livro-linha">Programadas: {l.metaLotes} · Realizadas: {l.feitos}</div>
                         <div className="livro-linha">Perda produção: {formatarKg(l.massaPerdidaProd)} kg · Perda embalagem: {formatarKg(l.massaPerdidaEmb)} kg</div>
                         {l.peDeMassa > 0 && <div className="livro-linha">Pé de massa: {formatarKg(l.peDeMassa)} kg</div>}
+                        <RastreabilidadeMP consumoMP={l.consumoMP} />
                       </div>
                     ))}
                   </div>
