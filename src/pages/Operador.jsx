@@ -2,24 +2,34 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { hojeISO, paraISO, formatarDataBR } from '../services/utils';
-import { buscarReceitaPorNomeProduto, consumirIngredientesFEFO, reverterConsumoFEFO, identificarIngredientesFarinha, listarLotesDisponiveis, definirLoteForcado } from '../services/consumoMP';
+import {
+  consumirIngredientesFEFO,
+  reverterConsumoFEFO,
+  listarLotesDisponiveis,
+  definirLoteForcado,
+  diagnosticarProduto,
+} from '../services/consumoMP';
 
 // ── Modal: troca manual do lote de farinha em uso ─────────────────
 function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
   const [lotes, setLotes] = useState(null);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState(null);
 
   useEffect(() => {
     let ativo = true;
-    listarLotesDisponiveis(info.productId).then(l => { if (ativo) { setLotes(l); setCarregando(false); } });
+    listarLotesDisponiveis(info.productId)
+      .then(l => { if (ativo) { setLotes(l); setCarregando(false); } })
+      .catch(e => { if (ativo) { setErro(e.message); setCarregando(false); } });
     return () => { ativo = false; };
   }, [info.productId]);
 
   async function escolher(lote) {
     setSalvando(true);
+    setErro(null);
     try { await aoConfirmar(lote); aoFechar(); }
-    catch (e) { alert('Erro ao trocar lote: ' + e.message); }
+    catch (e) { setErro('Erro ao trocar lote: ' + e.message); }
     finally { setSalvando(false); }
   }
 
@@ -34,12 +44,24 @@ function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
           Selecione o saco/lote que está sendo usado agora na masseira. Fica registrado o horário da troca.
         </div>
 
-        {carregando && <div className="status-msg">Carregando lotes disponíveis...</div>}
-        {!carregando && lotes?.length === 0 && <div className="status-msg">Nenhum lote com estoque disponível.</div>}
+        {erro && (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', borderRadius: 10, padding: 12, fontSize: '0.78rem', marginBottom: 12 }}>
+            {erro}
+          </div>
+        )}
 
-        {!carregando && lotes?.map(lote => {
+        {carregando && <div className="status-msg">Carregando lotes disponíveis...</div>}
+        {!carregando && lotes?.length === 0 && (
+          <div className="status-msg">
+            Nenhum lote com estoque disponível para <strong>{info.nome}</strong>.<br />
+            Cadastre a entrada deste insumo no Estoque.
+          </div>
+        )}
+
+        {!carregando && lotes?.map((lote, i) => {
           const numero = lote.batchNumber || lote.code || lote.number || lote.id;
           const ativo = lotesForcadoAtual?.loteId === lote.id;
+          const proximoFEFO = i === 0;
           return (
             <button
               key={lote.id}
@@ -48,13 +70,22 @@ function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
               style={{
                 width: '100%', textAlign: 'left', padding: '12px 16px', borderRadius: 12, marginBottom: 8,
                 border: ativo ? '2px solid var(--amarelo-escuro)' : '1px solid var(--border-forte)',
-                background: ativo ? 'var(--amarelo-claro)' : 'white', cursor: 'pointer',
+                background: ativo ? 'var(--amarelo-claro)' : 'white',
+                cursor: salvando ? 'wait' : 'pointer',
+                opacity: salvando ? 0.6 : 1,
               }}
             >
-              <div style={{ fontWeight: 800, color: 'var(--marrom)', fontSize: '0.92rem' }}>Lote {numero}</div>
+              <div style={{ fontWeight: 800, color: 'var(--marrom)', fontSize: '0.92rem' }}>
+                Lote {numero}
+                {proximoFEFO && !ativo && (
+                  <span style={{ marginLeft: 8, fontSize: '0.65rem', fontWeight: 700, color: '#15803d', background: '#dcfce7', padding: '2px 6px', borderRadius: 6 }}>
+                    PRÓXIMO (FEFO)
+                  </span>
+                )}
+              </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--marrom-claro)', marginTop: 2 }}>
-                {lote.quantity?.toFixed(2)} kg disponível
-                {lote.expiryDate && <> · validade {lote.expiryDate}</>}
+                {(lote.quantity ?? 0).toFixed(2)} kg disponível
+                {(lote.expiryDate || lote.validade) && <> · validade {lote.expiryDate || lote.validade}</>}
                 {ativo && <strong style={{ color: 'var(--amarelo-escuro)' }}> · em uso agora</strong>}
               </div>
             </button>
@@ -76,16 +107,20 @@ export default function Operador() {
   const [tunelHora, setTunelHora] = useState(() => new Date().toTimeString().slice(0, 5));
   const [tunelHoraFim, setTunelHoraFim] = useState(() => { const d = new Date(); d.setMinutes(d.getMinutes() + 35); return d.toTimeString().slice(0, 5); });
   const [salvandoTunel, setSalvandoTunel] = useState(false);
-  const [processandoMP, setProcessandoMP] = useState(null); // índice do item processando consumo, pra desabilitar o botão
-  const [lotesForcados, setLotesForcados] = useState({}); // { productId: { loteId, loteNumero, validade, selecionadoEm } }
-  const [farinhasPorItem, setFarinhasPorItem] = useState({}); // { produtoNome: [{ productId, nome }] }
-  const [modalTrocaLote, setModalTrocaLote] = useState(null); // { productId, nomeInsumo }
+  const [processandoMP, setProcessandoMP] = useState(null);
+  const [lotesForcados, setLotesForcados] = useState({});
+  const [modalTrocaLote, setModalTrocaLote] = useState(null);
   const [nomeOperador] = useState(() => localStorage.getItem('nomeOperador') || '');
+
+  // Diagnóstico por produto: { [produto]: { ok, receita, farinhas, motivo, mensagem } }
+  // Substitui o antigo `farinhasPorItem` — agora guardamos TAMBÉM o motivo da falha,
+  // para nunca mais deixar a rastreabilidade quebrar em silêncio.
+  const [diagPorItem, setDiagPorItem] = useState({});
 
   function mudarDia(delta) { const d = new Date(dataAlvo + 'T12:00:00'); d.setDate(d.getDate() + delta); setDataAlvo(paraISO(d)); }
 
-  // Identifica, para cada produto do dia, se a receita usa farinha —
-  // só farinha pode ser trocada manualmente pelo operador.
+  const chaveProdutos = itens.map(it => it.produto).join('|');
+
   useEffect(() => {
     let ativo = true;
     (async () => {
@@ -93,17 +128,16 @@ export default function Operador() {
       const mapa = {};
       for (const nome of nomesUnicos) {
         try {
-          const receita = await buscarReceitaPorNomeProduto(nome);
-          if (receita) {
-            const farinhas = await identificarIngredientesFarinha(receita);
-            if (farinhas.length > 0) mapa[nome] = farinhas;
-          }
-        } catch (e) { console.error('Erro ao identificar farinha da receita:', nome, e); }
+          mapa[nome] = await diagnosticarProduto(nome);
+        } catch (e) {
+          mapa[nome] = { ok: false, motivo: 'ERRO', mensagem: 'Falha ao ler a ficha técnica: ' + e.message };
+        }
       }
-      if (ativo) setFarinhasPorItem(mapa);
+      if (ativo) setDiagPorItem(mapa);
     })();
     return () => { ativo = false; };
-  }, [itens.map(it => it.produto).join('|')]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveProdutos]);
 
   useEffect(() => {
     setCarregando(true);
@@ -114,7 +148,9 @@ export default function Operador() {
         setItens(snap.data().itens || []);
         setTunelRegistrosDia(snap.data().tunelRegistros || []);
         setLotesForcados(snap.data().lotesForcados || {});
-      } else { setExiste(false); setItens([]); setTunelRegistrosDia([]); setLotesForcados({}); }
+      } else {
+        setExiste(false); setItens([]); setTunelRegistrosDia([]); setLotesForcados({});
+      }
     });
     return unsub;
   }, [dataAlvo]);
@@ -122,23 +158,55 @@ export default function Operador() {
   async function bater(index) {
     const item = itens[index];
     if (item.feitos >= item.metaLotes) return;
-    if (processandoMP === index) return; // evita duplo clique durante o consumo de MP
+    if (processandoMP === index) return;
 
     setProcessandoMP(index);
     let registroConsumo = null;
+    const diag = diagPorItem[item.produto];
 
     try {
-      // ── Rastreabilidade: consome matéria-prima via FEFO, se houver ficha técnica ──
-      const receita = await buscarReceitaPorNomeProduto(item.produto);
-      if (receita) {
-        const resultado = await consumirIngredientesFEFO(receita, 1, lotesForcados);
+      const receita = diag?.receita;
+
+      if (!receita) {
+        // ANTES isso era silencioso. Agora o operador decide conscientemente.
+        const seguir = window.confirm(
+          `⚠️ SEM FICHA TÉCNICA\n\n"${item.produto}" não tem receita cadastrada.\n\n` +
+          `A matéria-prima NÃO será baixada do estoque e esta batida ficará SEM RASTREABILIDADE.\n\n` +
+          `Registrar a produção mesmo assim?`
+        );
+        if (!seguir) { setProcessandoMP(null); return; }
+      } else {
+        // Multiplicador real: quantas receitas cabem numa batida deste item.
+        // Usa o campo do item (vindo da programação) e cai para 1 se não houver.
+        const multiplicador = Number(item.receitasPorBatida) > 0 ? Number(item.receitasPorBatida) : 1;
+
+        const resultado = await consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
+          ops: item.ops || [],            // ← array real vindo da programação Winthor
+          codigo: item.codigo || null,    // ← código Winthor do PA
+          produto: item.produto,
+          operador: nomeOperador || null,
+        });
         registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
+
         if (resultado.incompleto) {
-          alert(`⚠️ Estoque de matéria-prima insuficiente para "${item.produto}".\nA produção foi registrada mesmo assim, mas confira o estoque.`);
+          const faltantes = resultado.consumos
+            .filter(c => c.faltou > 0)
+            .map(c => `• ${c.nomeMP}: faltaram ${c.faltou.toFixed(2)} ${c.unidade}`)
+            .join('\n');
+          alert(
+            `⚠️ ESTOQUE INSUFICIENTE — "${item.produto}"\n\n${faltantes}\n\n` +
+            `A produção foi registrada e o que havia em estoque foi baixado, ` +
+            `mas o saldo ficou negativo em relação à receita. Confira o Estoque.`
+          );
         }
       }
     } catch (e) {
-      console.error('Erro ao consumir matéria-prima (produção seguiu normalmente):', e);
+      console.error('Erro ao consumir matéria-prima:', e);
+      const seguir = window.confirm(
+        `❌ ERRO AO BAIXAR MATÉRIA-PRIMA\n\n${e.message}\n\n` +
+        `Registrar a produção mesmo assim (SEM baixa de estoque)?`
+      );
+      if (!seguir) { setProcessandoMP(null); return; }
     }
 
     const nova = [...itens];
@@ -154,6 +222,7 @@ export default function Operador() {
       await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
     } catch (e) {
       console.error(e);
+      alert('Erro ao salvar a produção: ' + e.message);
     } finally {
       setProcessandoMP(null);
     }
@@ -169,12 +238,18 @@ export default function Operador() {
     const batidas = [...(nova[index].batidas || [])];
     batidas.pop();
 
-    // ── Reverte o consumo de MP da última batida, se houve ──
     const consumoMPAtual = [...(nova[index].consumoMP || [])];
     const ultimoConsumo = consumoMPAtual.pop();
     if (ultimoConsumo) {
-      try { await reverterConsumoFEFO(ultimoConsumo); }
-      catch (e) { console.error('Erro ao reverter consumo de matéria-prima:', e); }
+      try {
+        await reverterConsumoFEFO(ultimoConsumo);
+      } catch (e) {
+        console.error('Erro ao reverter consumo de matéria-prima:', e);
+        alert(
+          `⚠️ A batida foi desfeita, mas a matéria-prima NÃO voltou ao estoque.\n\n` +
+          `${e.message}\n\nCorrija o saldo manualmente no Estoque.`
+        );
+      }
     }
 
     nova[index] = { ...nova[index], feitos: Math.max(0, nova[index].feitos - 1), batidas, consumoMP: consumoMPAtual };
@@ -208,12 +283,23 @@ export default function Operador() {
     const concluido = item.feitos >= item.metaLotes;
     const pct = item.metaLotes > 0 ? Math.min(100, Math.round(item.feitos / item.metaLotes * 100)) : 0;
     const processando = processandoMP === idx;
+    const diag = diagPorItem[item.produto];
+    const farinhas = diag?.farinhas || [];
+    const semRastreio = diag && !diag.receita;
+
     return (
       <div className={'card' + (concluido ? ' concluido' : '')} key={idx}>
         <div className="card-top">
           <div className="nome">{item.produto}</div>
           {concluido && <span className="selo-ok">Concluído</span>}
         </div>
+
+        {item.ops?.length > 0 && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--marrom-claro)', marginTop: -4, marginBottom: 6 }}>
+            OP {item.ops.join(', ')}
+          </div>
+        )}
+
         <div className="contagem-row">
           <div style={{ flex: 1 }}>
             <span className="contagem-num">{item.feitos}<span className="meta"> / {item.metaLotes}</span></span>
@@ -224,21 +310,41 @@ export default function Operador() {
             {processando ? <i className="ph ph-circle-notch" style={{ animation: 'spin 0.6s linear infinite' }}></i> : '+1'}
           </button>
         </div>
+
+        {/* ── AVISO: rastreabilidade quebrada (antes isso era invisível) ── */}
+        {semRastreio && (
+          <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.7rem', color: '#b91c1c', lineHeight: 1.4 }}>
+            <strong>⚠️ Sem ficha técnica.</strong> A matéria-prima não está sendo baixada nem rastreada para este produto.
+            <div style={{ fontSize: '0.65rem', marginTop: 2, opacity: 0.85 }}>{diag.mensagem}</div>
+          </div>
+        )}
+
+        {/* ── Receita OK, mas nenhum insumo trocável configurado ── */}
+        {diag?.receita && farinhas.length === 0 && (
+          <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.68rem', color: '#92400e', lineHeight: 1.4 }}>
+            Receita <strong>{diag.receita.name}</strong> vinculada. Nenhum insumo marcado como trocável pelo operador —
+            todo o consumo segue FEFO automático.
+          </div>
+        )}
+
         {item.consumoMP?.length > 0 && (
           <div style={{ fontSize: '0.68rem', color: 'var(--marrom-claro)', marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)' }}>
             <i className="ph ph-package-check" style={{ marginRight: 4 }}></i>
-            Matéria-prima rastreada nesta batelada ({item.consumoMP.length} lote{item.consumoMP.length > 1 ? 's' : ''} de receita)
+            Matéria-prima rastreada ({item.consumoMP.length} batida{item.consumoMP.length > 1 ? 's' : ''})
           </div>
         )}
-        {(farinhasPorItem[item.produto] || []).map(farinha => {
+
+        {/* ── Troca manual de lote (farinha / insumos trocáveis) ── */}
+        {farinhas.map(farinha => {
           const forcado = lotesForcados[farinha.productId];
           return (
-            <div key={farinha.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)', fontSize: '0.75rem' }}>
-              <div style={{ color: 'var(--marrom)' }}>
+            <div key={farinha.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)', fontSize: '0.75rem' }}>
+              <div style={{ color: 'var(--marrom)', minWidth: 0 }}>
                 🌾 <strong>{farinha.nome}</strong>: {forcado ? `Lote ${forcado.loteNumero}` : 'Automático (FEFO)'}
                 {forcado?.selecionadoEm && (
                   <div style={{ fontSize: '0.65rem', color: 'var(--marrom-claro)' }}>
                     Trocado às {new Date(forcado.selecionadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    {forcado.selecionadoPor ? ` por ${forcado.selecionadoPor}` : ''}
                   </div>
                 )}
               </div>
@@ -327,4 +433,3 @@ export default function Operador() {
     </div>
   );
 }
- 
