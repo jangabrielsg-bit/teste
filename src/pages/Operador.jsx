@@ -174,7 +174,10 @@ export default function Operador() {
           `A matéria-prima NÃO será baixada do estoque e esta batida ficará SEM RASTREABILIDADE.\n\n` +
           `Registrar a produção mesmo assim?`
         );
-        if (!seguir) return; 
+        if (!seguir) {
+          setProcessandoMP(null);
+          return; 
+        }
       } else {
         let timeoutId;
         try {
@@ -194,7 +197,7 @@ export default function Operador() {
             promessaTimeout
           ]);
       
-          clearTimeout(timeoutId); // Sucesso: desliga o despertador
+          clearTimeout(timeoutId); 
           registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
 
           if (resultado.incompleto) {
@@ -209,17 +212,19 @@ export default function Operador() {
             );
           }
         } catch (e) {
-          if (timeoutId) clearTimeout(timeoutId); // Erro: desliga o despertador também
+          if (timeoutId) clearTimeout(timeoutId); 
           console.error('Erro ao consumir matéria-prima:', e);
           const seguir = window.confirm(
             `❌ ERRO AO BAIXAR MATÉRIA-PRIMA\n\n${e.message}\n\n` +
             `Registrar a produção mesmo assim (SEM baixa de estoque)?`
           );
-          if (!seguir) return; 
+          if (!seguir) {
+            setProcessandoMP(null);
+            return; 
+          }
         }
       }
 
-      // Prepara os novos dados
       const nova = [...itens];
       const consumoMPAnterior = nova[index].consumoMP || [];
       nova[index] = {
@@ -229,19 +234,32 @@ export default function Operador() {
         consumoMP: registroConsumo ? [...consumoMPAnterior, registroConsumo] : consumoMPAnterior,
       };
       
-      // Atualiza a tela imediatamente localmente
-      setItens(nova);
+      // 1. SANITIZAÇÃO: Remove silenciosamente qualquer campo `undefined` gerado.
+      // Firebase rejeita objetos com undefined, o que causava o reset ao atualizar a página.
+      const novaLimpa = JSON.parse(JSON.stringify(nova));
       
-      // FIRE-AND-FORGET: Salva no Firebase sem usar 'await'.
-      // Isso impede que lentidão na rede trave a execução e bloqueie a chegada ao 'finally'.
-      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova })
-        .catch(e => {
-          console.error('Falha ao sincronizar produção no fundo:', e);
-        });
+      setItens(novaLimpa);
+
+      // 2. BLINDAGEM DO BANCO DE DADOS: Volta o await, mas com limite de espera
+      let saveTimeoutId;
+      const saveTimeout = new Promise((_, reject) => {
+        saveTimeoutId = setTimeout(() => reject(new Error('A conexão com a internet está muito lenta e atrasou a gravação.')), 8000);
+      });
+
+      try {
+        await Promise.race([
+          updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa }),
+          saveTimeout
+        ]);
+        clearTimeout(saveTimeoutId);
+      } catch (saveErr) {
+        if (saveTimeoutId) clearTimeout(saveTimeoutId);
+        console.error('Falha de sincronização:', saveErr);
+        // O alerta avisa o usuário do problema sem travar o botão permanentemente
+        alert(`⚠️ O progresso foi marcado na tela, mas houve falha na rede ao salvar no banco de dados:\n\n${saveErr.message}\n\nO sistema continuará tentando em segundo plano. Evite atualizar a página.`);
+      }
 
     } finally {
-      // O 'await' foi removido acima, então essa linha agora executa instantaneamente
-      // destravando o botão na tela.
       setProcessandoMP(null);
     }
   }
@@ -261,9 +279,19 @@ export default function Operador() {
       const consumoMPAtual = [...(nova[index].consumoMP || [])];
       const ultimoConsumo = consumoMPAtual.pop();
       if (ultimoConsumo) {
+        let timeoutId;
         try {
-          await reverterConsumoFEFO(ultimoConsumo);
+          const promessaTimeout = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido na devolução ao estoque.')), 10000);
+          });
+
+          await Promise.race([
+            reverterConsumoFEFO(ultimoConsumo),
+            promessaTimeout
+          ]);
+          clearTimeout(timeoutId);
         } catch (e) {
+          if (timeoutId) clearTimeout(timeoutId);
           console.error('Erro ao reverter consumo de matéria-prima:', e);
           alert(
             `⚠️ A batida foi desfeita, mas a matéria-prima NÃO voltou ao estoque.\n\n` +
@@ -274,11 +302,26 @@ export default function Operador() {
 
       nova[index] = { ...nova[index], feitos: Math.max(0, nova[index].feitos - 1), batidas, consumoMP: consumoMPAtual };
       
-      setItens(nova);
+      // Sanitização aplicada também ao desfazer
+      const novaLimpa = JSON.parse(JSON.stringify(nova));
+      setItens(novaLimpa);
 
-      // FIRE-AND-FORGET: Mesmo comportamento da função 'bater'
-      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova })
-        .catch(e => console.error('Erro ao sincronizar reversão no fundo:', e));
+      let saveTimeoutId;
+      const saveTimeout = new Promise((_, reject) => {
+        saveTimeoutId = setTimeout(() => reject(new Error('Conexão instável durante a reversão.')), 8000);
+      });
+
+      try {
+        await Promise.race([
+          updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa }),
+          saveTimeout
+        ]);
+        clearTimeout(saveTimeoutId);
+      } catch (saveErr) {
+        if (saveTimeoutId) clearTimeout(saveTimeoutId);
+        console.error('Falha de sincronização (reversão):', saveErr);
+        alert(`⚠️ O estorno foi feito na tela, mas houve lentidão na nuvem:\n\n${saveErr.message}\n\nEvite atualizar a página por enquanto.`);
+      }
 
     } finally {
       setProcessandoMP(null);
