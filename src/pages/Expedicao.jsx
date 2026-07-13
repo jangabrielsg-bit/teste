@@ -321,11 +321,16 @@ export default function Expedicao() {
       {/* ── Aba Conferência ── */}
       {aba === 1 && (
         <div className="card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 10 }}>
             <h3 className="nome">Conferência de Patinhas</h3>
-            <span style={{ background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '6px 14px', borderRadius: 10, fontWeight: 900, fontSize: '0.9rem' }}>
-              Total: {listaEntrada.reduce((acc, item) => acc + (item.und === 'kg' ? item.qtd : 0), 0).toFixed(2)} kg
-            </span>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <span style={{ background: '#eef2ff', color: '#3730a3', padding: '6px 14px', borderRadius: 10, fontWeight: 900, fontSize: '0.9rem' }}>
+                {listaEntrada.length} pesagem{listaEntrada.length !== 1 ? 's' : ''}
+              </span>
+              <span style={{ background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '6px 14px', borderRadius: 10, fontWeight: 900, fontSize: '0.9rem' }}>
+                Total: {listaEntrada.reduce((acc, item) => acc + (item.und === 'kg' ? item.qtd : 0), 0).toFixed(2)} kg
+              </span>
+            </div>
           </div>
           {listaEntrada.length === 0
             ? <div className="status-msg">Nenhuma patinha na lista.</div>
