@@ -112,9 +112,6 @@ export default function Operador() {
   const [modalTrocaLote, setModalTrocaLote] = useState(null);
   const [nomeOperador] = useState(() => localStorage.getItem('nomeOperador') || '');
 
-  // Diagnóstico por produto: { [produto]: { ok, receita, farinhas, motivo, mensagem } }
-  // Substitui o antigo `farinhasPorItem` — agora guardamos TAMBÉM o motivo da falha,
-  // para nunca mais deixar a rastreabilidade quebrar em silêncio.
   const [diagPorItem, setDiagPorItem] = useState({});
 
   function mudarDia(delta) { const d = new Date(dataAlvo + 'T12:00:00'); d.setDate(d.getDate() + delta); setDataAlvo(paraISO(d)); }
@@ -124,8 +121,6 @@ export default function Operador() {
   useEffect(() => {
     let ativo = true;
     (async () => {
-      // Único por combinação código+nome — produtos diferentes podem ter nomes
-      // parecidos, mas o código do Winthor nunca se repete indevidamente.
       const unicos = new Map();
       itens.forEach(it => {
         if (!it.produto) return;
@@ -143,7 +138,6 @@ export default function Operador() {
       if (ativo) setDiagPorItem(mapa);
     })();
     return () => { ativo = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveProdutos]);
 
   useEffect(() => {
@@ -180,17 +174,16 @@ export default function Operador() {
           `A matéria-prima NÃO será baixada do estoque e esta batida ficará SEM RASTREABILIDADE.\n\n` +
           `Registrar a produção mesmo assim?`
         );
-        if (!seguir) return; // finally vai limpar processandoMP
+        if (!seguir) return; 
       } else {
+        let timeoutId;
         try {
           const multiplicador = Number(item.receitasPorBatida) > 0 ? Number(item.receitasPorBatida) : 1;
           
-          // 1. Criamos um limite de espera (ex: 10 segundos) para forçar uma falha
           const promessaTimeout = new Promise((_, reject) => {
-            setTimeout(() => reject(new Error('Tempo limite excedido na baixa de matéria-prima. O servidor demorou a responder.')), 10000);
+            timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido na baixa de matéria-prima. O servidor demorou a responder.')), 10000);
           });
       
-          // 2. Promise.race avança com o que finalizar primeiro: a baixa real ou o timeout
           const resultado = await Promise.race([
             consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
               ops: item.ops || [],
@@ -201,6 +194,7 @@ export default function Operador() {
             promessaTimeout
           ]);
       
+          clearTimeout(timeoutId); // Sucesso: desliga o despertador
           registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
 
           if (resultado.incompleto) {
@@ -215,17 +209,17 @@ export default function Operador() {
             );
           }
         } catch (e) {
+          if (timeoutId) clearTimeout(timeoutId); // Erro: desliga o despertador também
           console.error('Erro ao consumir matéria-prima:', e);
           const seguir = window.confirm(
             `❌ ERRO AO BAIXAR MATÉRIA-PRIMA\n\n${e.message}\n\n` +
             `Registrar a produção mesmo assim (SEM baixa de estoque)?`
           );
-          if (!seguir) return; // finally vai limpar processandoMP
-          // seguiu sem baixa — registroConsumo permanece null
+          if (!seguir) return; 
         }
       }
 
-      // Grava a batida
+      // Prepara os novos dados
       const nova = [...itens];
       const consumoMPAnterior = nova[index].consumoMP || [];
       nova[index] = {
@@ -234,15 +228,20 @@ export default function Operador() {
         batidas: [...(nova[index].batidas || []), new Date().toISOString()],
         consumoMP: registroConsumo ? [...consumoMPAnterior, registroConsumo] : consumoMPAnterior,
       };
+      
+      // Atualiza a tela imediatamente localmente
       setItens(nova);
-      try {
-        await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
-      } catch (e) {
-        console.error(e);
-        alert('Erro ao salvar a produção: ' + e.message);
-      }
+      
+      // FIRE-AND-FORGET: Salva no Firebase sem usar 'await'.
+      // Isso impede que lentidão na rede trave a execução e bloqueie a chegada ao 'finally'.
+      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova })
+        .catch(e => {
+          console.error('Falha ao sincronizar produção no fundo:', e);
+        });
+
     } finally {
-      // Garante que o botão SEMPRE desbloqueie, independente de qual caminho o código tomou
+      // O 'await' foi removido acima, então essa linha agora executa instantaneamente
+      // destravando o botão na tela.
       setProcessandoMP(null);
     }
   }
@@ -253,30 +252,34 @@ export default function Operador() {
     if (processandoMP === index) return;
 
     setProcessandoMP(index);
-    const nova = [...itens];
-    const batidas = [...(nova[index].batidas || [])];
-    batidas.pop();
 
-    const consumoMPAtual = [...(nova[index].consumoMP || [])];
-    const ultimoConsumo = consumoMPAtual.pop();
-    if (ultimoConsumo) {
-      try {
-        await reverterConsumoFEFO(ultimoConsumo);
-      } catch (e) {
-        console.error('Erro ao reverter consumo de matéria-prima:', e);
-        alert(
-          `⚠️ A batida foi desfeita, mas a matéria-prima NÃO voltou ao estoque.\n\n` +
-          `${e.message}\n\nCorrija o saldo manualmente no Estoque.`
-        );
-      }
-    }
-
-    nova[index] = { ...nova[index], feitos: Math.max(0, nova[index].feitos - 1), batidas, consumoMP: consumoMPAtual };
-    setItens(nova);
     try {
-      await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
-    } catch (e) {
-      console.error(e);
+      const nova = [...itens];
+      const batidas = [...(nova[index].batidas || [])];
+      batidas.pop();
+
+      const consumoMPAtual = [...(nova[index].consumoMP || [])];
+      const ultimoConsumo = consumoMPAtual.pop();
+      if (ultimoConsumo) {
+        try {
+          await reverterConsumoFEFO(ultimoConsumo);
+        } catch (e) {
+          console.error('Erro ao reverter consumo de matéria-prima:', e);
+          alert(
+            `⚠️ A batida foi desfeita, mas a matéria-prima NÃO voltou ao estoque.\n\n` +
+            `${e.message}\n\nCorrija o saldo manualmente no Estoque.`
+          );
+        }
+      }
+
+      nova[index] = { ...nova[index], feitos: Math.max(0, nova[index].feitos - 1), batidas, consumoMP: consumoMPAtual };
+      
+      setItens(nova);
+
+      // FIRE-AND-FORGET: Mesmo comportamento da função 'bater'
+      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova })
+        .catch(e => console.error('Erro ao sincronizar reversão no fundo:', e));
+
     } finally {
       setProcessandoMP(null);
     }
@@ -330,7 +333,6 @@ export default function Operador() {
           </button>
         </div>
 
-        {/* ── AVISO: rastreabilidade quebrada (antes isso era invisível) ── */}
         {semRastreio && (
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.7rem', color: '#b91c1c', lineHeight: 1.4 }}>
             <strong>⚠️ Sem ficha técnica.</strong> A matéria-prima não está sendo baixada nem rastreada para este produto.
@@ -338,7 +340,6 @@ export default function Operador() {
           </div>
         )}
 
-        {/* ── Vínculo só por assimilação de nome — menos confiável que o código oficial ── */}
         {diag?.receita && (diag.vinculo === 'nome_parcial' || diag.vinculo === 'nome_assimilado') && (
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.68rem', color: '#92400e', lineHeight: 1.4 }}>
             ⚠️ Ficha técnica <strong>{diag.receita.name}</strong> vinculada por assimilação de nome, não pelo código oficial ({item.codigo || 's/ código'}).
@@ -346,7 +347,6 @@ export default function Operador() {
           </div>
         )}
 
-        {/* ── Receita OK, mas nenhum insumo trocável configurado ── */}
         {diag?.receita && farinhas.length === 0 && (
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.68rem', color: '#92400e', lineHeight: 1.4 }}>
             Receita <strong>{diag.receita.name}</strong> vinculada. Nenhum insumo marcado como trocável pelo operador —
@@ -361,7 +361,6 @@ export default function Operador() {
           </div>
         )}
 
-        {/* ── Troca manual de lote (farinha / insumos trocáveis) ── */}
         {farinhas.map(farinha => {
           const forcado = lotesForcados[farinha.productId];
           return (
@@ -405,7 +404,6 @@ export default function Operador() {
       {carregando ? <div className="status-msg">Carregando...</div> :
        !existe ? <div className="status-msg">Nenhuma produção programada para esta data.<br />Fale com o líder de produção.</div> :
        <>
-        {/* Registro Túnel */}
         <div className="card" style={{ borderLeftColor: '#2563eb' }}>
           <div className="nome" style={{ marginBottom: 10, color: '#1e40af' }}>
             <i className="ph ph-thermometer-cold" style={{ marginRight: 6 }}></i>Registro Manual do Túnel Helicoidal
@@ -436,7 +434,6 @@ export default function Operador() {
           </button>
         </div>
 
-        {/* Receitas ativas */}
         {ativos.map(({ item, idx }) => {
           const mostrar = item.categoria !== catAnterior;
           catAnterior = item.categoria;
