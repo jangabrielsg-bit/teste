@@ -59,17 +59,31 @@ function Metrica({ label, valor, cor, destaque }) {
 }
 
 // ── Badge de cobertura ─────────────────────────────────────────────
-function BadgeCobertura({ disponivel, demanda }) {
-  if (demanda == null || demanda <= 0) return null;
-  if (disponivel == null) return null;
+// Usa coberturaDias (dias = estoque ÷ média diária real do Winthor) quando
+// disponível. Cai para o cálculo antigo (% da demanda 24+48h) como fallback.
+function BadgeCobertura({ disponivel, demanda, coberturaDias }) {
+  // Caminho 1: coberturaDias vem da bridge (mais preciso — usa média real)
+  if (coberturaDias != null) {
+    let cor, bg, texto, icone;
+    if (coberturaDias >= 3)        { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = `Cobre ${coberturaDias.toFixed(1)} dias`; }
+    else if (coberturaDias >= 2)   { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = `Cobre ${coberturaDias.toFixed(1)} dias`; }
+    else if (coberturaDias >= 1)   { cor = '#92400e'; bg = '#fef3c7'; icone = 'ph-warning';      texto = `Atenção: ${coberturaDias.toFixed(1)} dias`; }
+    else                           { cor = '#991b1b'; bg = '#fef2f2'; icone = 'ph-warning-circle'; texto = `Crítico: < 1 dia`; }
+    return (
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: bg, color: cor, fontSize: '0.75rem', fontWeight: 800, padding: '5px 12px', borderRadius: 20 }}>
+        <i className={`ph ${icone}`}></i> {texto}
+      </div>
+    );
+  }
 
-  const percCobertura = demanda > 0 ? (disponivel / demanda) * 100 : 100;
+  // Caminho 2: fallback pelo percentual da demanda 24+48h
+  if (demanda == null || demanda <= 0 || disponivel == null) return null;
+  const percCobertura = (disponivel / demanda) * 100;
   let cor, bg, texto, icone;
-
-  if (percCobertura >= 130) { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = 'Cobre a demanda'; }
+  if (percCobertura >= 130)      { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = 'Cobre a demanda'; }
   else if (percCobertura >= 100) { cor = '#166534'; bg = '#f0fdf4'; icone = 'ph-check-circle'; texto = 'Cobre (folga baixa)'; }
-  else if (percCobertura >= 60) { cor = '#92400e'; bg = '#fef3c7'; icone = 'ph-warning'; texto = `Cobre ${percCobertura.toFixed(0)}% — atenção`; }
-  else { cor = '#991b1b'; bg = '#fef2f2'; icone = 'ph-warning-circle'; texto = `Insuficiente (${percCobertura.toFixed(0)}%)`; }
+  else if (percCobertura >= 60)  { cor = '#92400e'; bg = '#fef3c7'; icone = 'ph-warning';      texto = `Cobre ${percCobertura.toFixed(0)}% — atenção`; }
+  else                           { cor = '#991b1b'; bg = '#fef2f2'; icone = 'ph-warning-circle'; texto = `Insuficiente (${percCobertura.toFixed(0)}%)`; }
 
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: bg, color: cor, fontSize: '0.75rem', fontWeight: 800, padding: '5px 12px', borderRadius: 20 }}>
@@ -355,11 +369,22 @@ export default function Estoque() {
   function classificar(g) {
     const w = g.winthor;
     if (!w) return 2;
+
+    // ── Prioridade 1: coberturaDias gravada pela bridge (usa média real do Winthor) ──
+    // coberturaDias = estoqueAtual ÷ mediaSaidaDiaria
+    // < 1 dia → crítico | 1–2 dias → aviso | > 2 dias → ok
+    if (w.coberturaDias != null) {
+      if (w.coberturaDias < 1)  return 0; // crítico
+      if (w.coberturaDias < 2)  return 1; // aviso
+      return 2;
+    }
+
+    // ── Fallback: usa saída 24h+48h (comportamento anterior) ──
     const disponivel = w.estoqueAtual ?? 0;
-    const demanda = (w.saida24h || 0) + (w.saida48h || 0);
+    const demanda    = (w.saida24h || 0) + (w.saida48h || 0);
     if (demanda <= 0) return 2;
     const perc = (disponivel / demanda) * 100;
-    if (perc < 60) return 0;
+    if (perc < 60)  return 0;
     if (perc < 100) return 1;
     return 2;
   }
@@ -435,6 +460,23 @@ export default function Estoque() {
                       {demanda != null && demanda > 0 && (
                         <Metrica label="Demanda 24+48h" valor={fmtQtd(demanda, w.unidade)} cor="#a78355" />
                       )}
+                      {/* ── Novos campos vindos do consultarMediaMovi2 ── */}
+                      {w?.rendimentoReal != null && (
+                        <Metrica label="Rendimento" valor={`${w.rendimentoReal} ${w.unidade || 'kg'}/bat.`} cor="#7c3aed" />
+                      )}
+                      {w?.mediaSaidaDiaria != null && w.mediaSaidaDiaria > 0 && (
+                        <Metrica label="Média/dia" valor={fmtQtd(w.mediaSaidaDiaria, w.unidade)} cor="#0369a1" />
+                      )}
+                      {w?.coberturaDias != null && (
+                        <Metrica
+                          label="Cobertura"
+                          valor={`${w.coberturaDias.toFixed(1)} dias`}
+                          cor={w.coberturaDias < 1 ? '#c0392b' : w.coberturaDias < 2 ? '#e67e22' : '#166534'}
+                        />
+                      )}
+                      {w?.batidaSemana != null && w.batidaSemana > 0 && (
+                        <Metrica label="Batidas/sem." valor={w.batidaSemana.toFixed(1)} cor="#92400e" />
+                      )}
                     </>
                   );
 
@@ -459,7 +501,7 @@ export default function Estoque() {
                         </span>
                       }
                       onAjustar={isPcp ? () => setModalAjuste({ codigo, produto, winthor: w, fisico: f }) : null}
-                      coberturaEl={<BadgeCobertura disponivel={disponivelWinthor} demanda={demanda} />}
+                      coberturaEl={<BadgeCobertura disponivel={disponivelWinthor} demanda={demanda} coberturaDias={w?.coberturaDias ?? null} />}
                     />
                   );
                 })}
