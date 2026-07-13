@@ -205,21 +205,19 @@ export default function Operador() {
       // 1. Atualização Otimista: A tela atualiza na mesma hora para não travar o operador
       setItens(novaLimpa);
 
-      // 2. Tenta forçar a gravação e exige confirmação do Firebase
-      try {
-        await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa });
-      } catch (e) {
-        // Se o Firebase recusar (permissão, tamanho, rede), a tela volta atrás e mostra o erro
-        setItens([...itens]); 
-        console.error("Falha no Firebase:", e);
-        alert(`❌ O Firebase recusou o salvamento da batida!\n\nMotivo do erro: ${e.message}\n\nO progresso na tela foi desfeito para garantir consistência.`);
-      }
+      // 2. Dispara a gravação em background (não bloqueia a tela se estiver com internet fraca/offline)
+      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa })
+        .catch(e => {
+          console.error("Falha no Firebase:", e);
+          alert(`❌ Falha ao sincronizar com Firebase: ${e.message}\n\nVerifique sua conexão.`);
+        });
 
     } catch (e) {
       console.error(e);
       alert('Erro inesperado ao processar a batida: ' + e.message);
     } finally {
-      setProcessandoMP(null);
+      // Libera a tela rapidamente para permitir a próxima batida
+      setTimeout(() => setProcessandoMP(null), 400);
     }
   }
 
@@ -245,19 +243,18 @@ export default function Operador() {
       // 1. Atualização Otimista
       setItens(novaLimpa);
 
-      // 2. Confirmação com Firebase
-      try {
-        await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa });
-      } catch (e) {
-        setItens([...itens]);
-        console.error("Falha no Firebase (Estorno):", e);
-        alert(`❌ O Firebase recusou o estorno!\n\nMotivo do erro: ${e.message}\n\nA tela foi revertida.`);
-      }
+      // 2. Confirmação com Firebase em background
+      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa })
+        .catch(e => {
+          console.error("Falha no Firebase (Estorno):", e);
+          alert(`❌ Falha ao estornar na nuvem: ${e.message}\n\nVerifique sua conexão.`);
+        });
 
     } catch (e) {
       console.error(e);
     } finally {
-      setProcessandoMP(null);
+      // Libera a tela rapidamente para permitir a próxima batida
+      setTimeout(() => setProcessandoMP(null), 400);
     }
   }
 
