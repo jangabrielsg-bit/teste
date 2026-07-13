@@ -1,4 +1,4 @@
-import { collection, getDocs, getDoc, query, where, doc, writeBatch, increment, setDoc } from 'firebase/firestore';
+import { collection, getDocs, getDoc, doc, writeBatch, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from './firebase';
 
 // ── Normalização de texto (compara nomes ignorando acentos/caixa/pontuação) ──
@@ -51,7 +51,76 @@ let cacheReceitas = null;
 let cacheReceitasEm = 0;
 let cacheInventory = null;
 let cacheInventoryEm = 0;
+
+// ── Cache de batches (lotes de MP) ──────────────────────────────────
+// PROBLEMA ANTERIOR: cada +1 fazia 1 getDocs(batches) POR ingrediente da receita.
+// Uma receita com 8 ingredientes = 8 leituras por clique = 1.040 leituras em 130 batidas.
+//
+// SOLUÇÃO: carrega TODOS os batches de uma vez e mantém em memória.
+// Após um consumo, só invalida os productIds que foram alterados — na próxima
+// chamada, recarrega apenas esses. O resto do cache continua válido.
+//
+// Resultado: 1 clique = 0 leituras de batches (cache hit) + 1 writeBatch.
+let cacheBatches = null;        // Map<productId, Batch[]>
+let cacheBatchesEm = 0;
 const TTL_CACHE_MS = 10 * 60 * 1000; // 10 minutos
+const produtosInvalidados = new Set(); // productIds com saldo alterado desde o último load
+
+async function carregarTodosBatches() {
+  const agora = Date.now();
+
+  // Recarrega se: cache vazio, TTL expirou, ou há produtos invalidados
+  if (!cacheBatches || (agora - cacheBatchesEm) >= TTL_CACHE_MS || produtosInvalidados.size > 0) {
+    const mUid = await obterMasterUid();
+    const snap = await getDocs(collection(dbEstoqueOS, 'users', mUid, 'batches'));
+    const mapa = new Map();
+    snap.forEach(d => {
+      const dados = d.data();
+      const pid = dados.productId;
+      if (!pid) return;
+      if (!mapa.has(pid)) mapa.set(pid, []);
+      if ((dados.quantity || 0) > 0) mapa.get(pid).push({ id: d.id, ...dados });
+    });
+    cacheBatches = mapa;
+    cacheBatchesEm = agora;
+    produtosInvalidados.clear();
+  }
+
+  return cacheBatches;
+}
+
+function lotesDoIngrediente(batchesMap, productId) {
+  return batchesMap.get(productId) || [];
+}
+
+// Atualiza o cache local após um consumo, sem precisar reler o Firestore
+function atualizarCacheAposConsumo(consumos) {
+  if (!cacheBatches) return;
+  consumos.forEach(c => {
+    c.lotes.forEach(l => {
+      const lista = cacheBatches.get(c.productId);
+      if (!lista) return;
+      const lote = lista.find(b => b.id === l.loteId);
+      if (lote) {
+        lote.quantity = Math.max(0, (lote.quantity || 0) - l.quantidade);
+      }
+    });
+  });
+}
+
+function atualizarCacheAposReversao(consumoRegistrado) {
+  if (!cacheBatches || !consumoRegistrado?.consumos) return;
+  consumoRegistrado.consumos.forEach(c => {
+    c.lotes?.forEach(l => {
+      const lista = cacheBatches.get(c.productId);
+      if (!lista) return;
+      const lote = lista.find(b => b.id === l.loteId);
+      if (lote) {
+        lote.quantity = (lote.quantity || 0) + l.quantidade;
+      }
+    });
+  });
+}
 
 async function carregarReceitas() {
   const agora = Date.now();
@@ -77,12 +146,15 @@ async function carregarInventoryMap() {
   return mapa;
 }
 
-// Força recarregar na próxima chamada (útil após edições manuais de ficha técnica)
+// Força recarregar tudo na próxima chamada
 export function invalidarCacheReceitas() {
   cacheReceitas = null;
   cacheInventory = null;
+  cacheBatches = null;
   cacheReceitasEm = 0;
   cacheInventoryEm = 0;
+  cacheBatchesEm = 0;
+  produtosInvalidados.clear();
 }
 
 // Acesso público ao mapa de insumos (usado pela UI de troca de lote)
@@ -240,15 +312,8 @@ export async function identificarIngredientesFarinha(receita) {
 
 // ── Lista os lotes disponíveis de um insumo, em ordem FEFO ──────────
 export async function listarLotesDisponiveis(productId) {
-  const mUid = await obterMasterUid();
-  const snap = await getDocs(
-    query(collection(dbEstoqueOS, 'users', mUid, 'batches'), where('productId', '==', productId))
-  );
-  const lotes = [];
-  snap.forEach(d => {
-    const dados = d.data();
-    if ((dados.quantity || 0) > 0) lotes.push({ id: d.id, ...dados });
-  });
+  const batchesMap = await carregarTodosBatches();
+  const lotes = lotesDoIngrediente(batchesMap, productId).filter(l => (l.quantity || 0) > 0);
   return ordenarFEFO(lotes);
 }
 
@@ -299,6 +364,10 @@ export async function definirLoteForcado(dataISO, productId, lote, operador) {
 export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotesForcados = {}, contexto = {}) {
   const mUid = await obterMasterUid();
   const inventoryMap = await carregarInventoryMap();
+
+  // Carrega TODOS os batches de uma vez (cache — zero leituras se já carregado)
+  const batchesMap = await carregarTodosBatches();
+
   const consumos = [];
   let incompleto = false;
 
@@ -308,20 +377,11 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
 
     const infoMP = inventoryMap[ingrediente.productId] || { name: 'Insumo desconhecido', unit: 'kg' };
 
-    // Busca todos os lotes desse insumo. Filtra quantidade/validade EM MEMÓRIA
-    // de propósito — evita exigir índice composto no Firestore.
-    const snapLotes = await getDocs(
-      query(collection(dbEstoqueOS, 'users', mUid, 'batches'), where('productId', '==', ingrediente.productId))
-    );
-    const lotes = [];
-    snapLotes.forEach(d => {
-      const dados = d.data();
-      if ((dados.quantity || 0) > 0) lotes.push({ id: d.id, ...dados });
-    });
+    // Lotes do ingrediente — vêm do cache, sem leitura ao Firestore
+    const lotes = lotesDoIngrediente(batchesMap, ingrediente.productId).filter(l => (l.quantity || 0) > 0);
 
     let filaConsumo = ordenarFEFO(lotes);
 
-    // Lote forçado pelo operador vai para o topo da fila; o resto segue FEFO.
     const forcado = lotesForcados?.[ingrediente.productId];
     if (forcado?.loteId) {
       const idx = filaConsumo.findIndex(l => l.id === forcado.loteId);
@@ -329,7 +389,6 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
         const [loteForcado] = filaConsumo.splice(idx, 1);
         filaConsumo = [loteForcado, ...filaConsumo];
       }
-      // idx === 0 → já está na frente. idx === -1 → lote esgotou/sumiu, segue FEFO puro.
     }
 
     let restante = necessario;
@@ -363,7 +422,7 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
     });
   }
 
-  // Grava os descontos em batch — increment() é seguro para concorrência.
+  // Grava os descontos em batch — 1 operação atômica no Firestore
   const batch = writeBatch(dbEstoqueOS);
   let houveEscrita = false;
   consumos.forEach(c => {
@@ -374,9 +433,8 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
   });
   if (houveEscrita) await batch.commit();
 
-  // Estoque mudou → invalida cache de inventory para não servir saldo velho.
-  cacheInventory = null;
-  cacheInventoryEm = 0;
+  // Atualiza cache local sem reler o Firestore
+  atualizarCacheAposConsumo(consumos);
 
   return {
     consumos,
@@ -384,7 +442,6 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
     receitaNome: receita.name,
     receitaId: receita.id || null,
     multiplicador,
-    // ── Rastreabilidade: amarra o consumo à Ordem de Produção ──
     ops: contexto.ops || [],
     codigo: contexto.codigo || null,
     produto: contexto.produto || null,
@@ -475,6 +532,6 @@ export async function reverterConsumoFEFO(consumoRegistrado) {
   });
   if (houveEscrita) await batch.commit();
 
-  cacheInventory = null;
-  cacheInventoryEm = 0;
+  // Atualiza cache local sem reler
+  atualizarCacheAposReversao(consumoRegistrado);
 }
