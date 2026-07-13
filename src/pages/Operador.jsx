@@ -184,12 +184,23 @@ export default function Operador() {
       } else {
         try {
           const multiplicador = Number(item.receitasPorBatida) > 0 ? Number(item.receitasPorBatida) : 1;
-          const resultado = await consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
-            ops: item.ops || [],
-            codigo: item.codigo || null,
-            produto: item.produto,
-            operador: nomeOperador || null,
+          
+          // 1. Criamos um limite de espera (ex: 10 segundos) para forçar uma falha
+          const promessaTimeout = new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Tempo limite excedido na baixa de matéria-prima. O servidor demorou a responder.')), 10000);
           });
+      
+          // 2. Promise.race avança com o que finalizar primeiro: a baixa real ou o timeout
+          const resultado = await Promise.race([
+            consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
+              ops: item.ops || [],
+              codigo: item.codigo || null,
+              produto: item.produto,
+              operador: nomeOperador || null,
+            }),
+            promessaTimeout
+          ]);
+      
           registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
 
           if (resultado.incompleto) {
