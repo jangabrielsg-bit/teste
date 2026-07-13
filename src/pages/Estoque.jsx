@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment, query, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { useAuth } from '../services/auth';
 import { useProdutos } from '../services/hooks';
@@ -25,38 +25,22 @@ function useEstoqueWinthorPA() {
   return { dados, atualizadoEm };
 }
 
-// ── Hook: Mapa codigo → categoria (vem de winthorSugestoes) ──────
-// A coleção estoquePA não grava categoria — ela está em winthorSugestoes.
-// Lemos o documento mais recente e montamos um mapa { codigo: categoria }.
+// ── Hook: Mapa codigo → categoria (fonte: coleção `produtos`) ───────
+// Usa a mesma coleção que o módulo de Produtos já mantém — é a fonte
+// mais confiável porque não depende de OPs programadas nos últimos dias.
 function useCategoriasPA() {
   const [mapa, setMapa] = useState({});
   useEffect(() => {
-    let ativo = true;
-    (async () => {
-      try {
-        // Pega os últimos 7 dias de sugestões para cobrir produtos programados
-        // em dias diferentes (ex: produto só aparece às quartas)
-        const snap = await getDocs(
-          query(collection(db, 'winthorSugestoes'), orderBy('data', 'desc'), limit(7))
-        );
-        const resultado = {};
-        snap.forEach(d => {
-          const { categorias } = d.data();
-          if (!categorias) return;
-          Object.entries(categorias).forEach(([cat, itens]) => {
-            itens.forEach(it => {
-              if (it.codigo && !resultado[it.codigo]) {
-                resultado[it.codigo] = cat;
-              }
-            });
-          });
-        });
-        if (ativo) setMapa(resultado);
-      } catch (e) {
-        console.error('Erro ao carregar categorias PA:', e);
-      }
-    })();
-    return () => { ativo = false; };
+    return onSnapshot(collection(db, 'produtos'), snap => {
+      const resultado = {};
+      snap.forEach(d => {
+        const dado = d.data();
+        // O doc pode ter `codigo` como campo ou usar o próprio id
+        const cod = dado.codigo || d.id;
+        if (cod && dado.categoria) resultado[cod] = dado.categoria;
+      });
+      setMapa(resultado);
+    });
   }, []);
   return mapa;
 }
