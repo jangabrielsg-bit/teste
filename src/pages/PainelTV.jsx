@@ -74,6 +74,18 @@ export default function PainelTV({ sair }) {
   const ordenados = [...itens].sort((a, b) => (a.ordem || 0) - (b.ordem || 0));
   const itemAtivo = ordenados.find(it => it.feitos < it.metaLotes) || null;
 
+  // ── Métricas gerais do dia (todas as receitas, não só o item ativo) ──
+  // Junta TODAS as batidas de TODOS os itens num único timeline para achar
+  // a última batida do dia inteiro e a velocidade média geral.
+  const todasBatidas = itens.flatMap(it => it.batidas || []).sort();
+  const ultimaBatidaGeral = todasBatidas.length > 0 ? todasBatidas[todasBatidas.length - 1] : null;
+  const velocidadeGeral = (() => {
+    if (todasBatidas.length < 2) return null;
+    const minutos = (new Date(todasBatidas[todasBatidas.length - 1]).getTime() - new Date(todasBatidas[0]).getTime()) / 60000;
+    if (minutos <= 0) return null;
+    return (todasBatidas.length - 1) / minutos; // receitas por minuto
+  })();
+
   const porCategoria = {};
   ordenados.forEach(it => { const cat = it.categoria || 'Sem setor'; if (!porCategoria[cat]) porCategoria[cat] = []; porCategoria[cat].push(it); });
 
@@ -102,6 +114,24 @@ export default function PainelTV({ sair }) {
                 <div className="tv-resumo-label">receitas produzidas hoje</div>
                 <div className="tv-barra-geral"><div className="tv-barra-geral-fill" style={{ width: pctGeral + '%' }}></div></div>
                 <div className="tv-resumo-pct">{pctGeral}%</div>
+              </div>
+
+              {/* ── Velocidade geral e última batida — todo o dia, não só o item ativo ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 18 }}>
+                <div style={{ background: '#1D2530', border: '1px solid #2c3542', borderRadius: 14, padding: '14px 18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Velocidade geral</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: 'white', marginTop: 4 }}>
+                    {velocidadeGeral != null ? velocidadeGeral.toFixed(2) : '—'}
+                    <span style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: 700 }}> receitas/min</span>
+                  </div>
+                </div>
+                <div style={{ background: '#1D2530', border: '1px solid #2c3542', borderRadius: 14, padding: '14px 18px', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Última receita na masseira</div>
+                  <div style={{ fontSize: '1.8rem', fontWeight: 900, color: ultimaBatidaGeral ? '#4ade80' : '#6b7280', marginTop: 4 }}>
+                    {ultimaBatidaGeral ? tempoDecorrido(ultimaBatidaGeral) : '—:—'}
+                    {ultimaBatidaGeral && <span style={{ fontSize: '0.9rem', color: '#9ca3af', fontWeight: 700 }}> atrás</span>}
+                  </div>
+                </div>
               </div>
 
               {itemAtivo ? (
