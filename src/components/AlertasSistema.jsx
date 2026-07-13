@@ -120,6 +120,28 @@ export default function AlertasSistema() {
   const lotesPA = useLotesFisicosPA();
   const { itensMP } = useEstoqueMP();
 
+  // ── Alertas de cobertura 48h (gravados pela bridge via calcularAlertasEstoque) ──
+  // Usa a média real do Winthor (consultarMediaMovi2). Cada doc em alertasEstoque
+  // tem: { produto, estoqueAtual, cobertura48h, semCobertura48h, abaixoDoMinimo,
+  //        mediaSaidaDiaria, rendimentoReal, horasAteMinimo, status }
+  const [alertas48h, setAlertas48h] = useState([]);
+  useEffect(() => {
+    return onSnapshot(collection(db, 'alertasEstoque'), snap => {
+      const lista = [];
+      snap.forEach(d => {
+        const dado = d.data();
+        // Só mostra alertas ativos (não resolvidos)
+        if (dado.status !== 'resolvido') lista.push({ id: d.id, ...dado });
+      });
+      // Ordena: abaixo do mínimo primeiro, depois por horas até o mínimo
+      lista.sort((a, b) => {
+        if (a.abaixoDoMinimo !== b.abaixoDoMinimo) return a.abaixoDoMinimo ? -1 : 1;
+        return (a.horasAteMinimo || 0) - (b.horasAteMinimo || 0);
+      });
+      setAlertas48h(lista);
+    });
+  }, []);
+
   // ── Abaixo do mínimo: PA (Winthor) + MP (físico OS) ──
   const abaixoMinimo = useMemo(() => {
     const doPA = estoquePA
@@ -166,8 +188,8 @@ export default function AlertasSistema() {
     return [...doPA, ...doMP].sort((a, b) => a.dias - b.dias);
   }, [lotesPA, itensMP]);
 
-  const totalAlertas = abaixoMinimo.length + validades.length;
-  const temCritico = abaixoMinimo.some(a => a.atual <= 0) || validades.some(v => v.dias < 0);
+  const totalAlertas = abaixoMinimo.length + validades.length + alertas48h.length;
+  const temCritico = abaixoMinimo.some(a => a.atual <= 0) || validades.some(v => v.dias < 0) || alertas48h.some(a => a.abaixoDoMinimo);
 
   return (
     <>
@@ -224,9 +246,9 @@ export default function AlertasSistema() {
               <button onClick={() => setAberto(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }}>✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0, overflow: 'hidden', flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, overflow: 'hidden', flex: 1 }}>
 
-              {/* ── Coluna: Abaixo do mínimo (PA + MP) ── */}
+              {/* ── Coluna 1: Abaixo do mínimo (PA + MP) ── */}
               <div style={{ borderRight: '1px solid var(--border-suave)', overflowY: 'auto', padding: 16 }}>
                 <div style={{ background: '#fef3e2', color: '#c2410c', fontWeight: 800, fontSize: '0.8rem', padding: '8px 14px', borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ph ph-warning"></i> ABAIXO DO MÍNIMO ({abaixoMinimo.length})
@@ -249,7 +271,60 @@ export default function AlertasSistema() {
                 ))}
               </div>
 
-              {/* ── Coluna: Validades (PA + MP) ── */}
+              {/* ── Coluna 2: Cobertura 48h (alertasEstoque — bridge com média real) ── */}
+              <div style={{ borderRight: '1px solid var(--border-suave)', overflowY: 'auto', padding: 16 }}>
+                <div style={{ background: '#f0f9ff', color: '#0369a1', fontWeight: 800, fontSize: '0.8rem', padding: '8px 14px', borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ph ph-clock-countdown"></i> COBERTURA 48H ({alertas48h.length})
+                </div>
+                {alertas48h.length === 0 && (
+                  <div className="status-msg" style={{ padding: '20px 0' }}>
+                    Todos os produtos cobrem as próximas 48h.
+                  </div>
+                )}
+                {alertas48h.map(alerta => {
+                  const critico = alerta.abaixoDoMinimo || (alerta.horasAteMinimo != null && alerta.horasAteMinimo < 24);
+                  const cor = critico ? '#c0392b' : '#e67e22';
+                  const bg  = critico ? '#fef2f2' : '#fff7ed';
+                  return (
+                    <div key={alerta.id} style={{ borderLeft: `4px solid ${cor}`, background: '#fafafa', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                      <div style={{ fontWeight: 800, color: 'var(--marrom)', fontSize: '0.88rem', marginBottom: 4 }}>
+                        {alerta.produto}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#999', lineHeight: 1.6 }}>
+                          <div>Estoque: <strong>{alerta.estoqueAtual} {alerta.unidade}</strong></div>
+                          {alerta.mediaSaidaDiaria > 0 && (
+                            <div>Média/dia: <strong>{alerta.mediaSaidaDiaria.toFixed(1)} {alerta.unidade}</strong></div>
+                          )}
+                          {alerta.rendimentoReal > 0 && (
+                            <div>Rendimento: <strong>{alerta.rendimentoReal} {alerta.unidade}/bat.</strong></div>
+                          )}
+                          {alerta.fonteMedia === 'winthor_media' && (
+                            <div style={{ color: '#0369a1', fontSize: '0.65rem', marginTop: 2 }}>
+                              <i className="ph ph-check" style={{ marginRight: 2 }}></i>Média real Winthor
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontWeight: 900, color: cor, fontSize: '1rem' }}>
+                            {alerta.horasAteMinimo === Infinity || alerta.horasAteMinimo == null
+                              ? '∞'
+                              : `${alerta.horasAteMinimo.toFixed(0)}h`}
+                          </div>
+                          <div style={{ fontSize: '0.65rem', color: '#999' }}>até o mínimo</div>
+                        </div>
+                      </div>
+                      {alerta.abaixoDoMinimo && (
+                        <div style={{ marginTop: 6, background: '#fef2f2', color: '#c0392b', fontSize: '0.68rem', fontWeight: 800, padding: '3px 8px', borderRadius: 6, display: 'inline-block' }}>
+                          ABAIXO DO MÍNIMO
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* ── Coluna 3: Validades (PA + MP) ── */}
               <div style={{ overflowY: 'auto', padding: 16 }}>
                 <div style={{ background: '#fde8e8', color: '#c0392b', fontWeight: 800, fontSize: '0.8rem', padding: '8px 14px', borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
                   <i className="ph ph-clock"></i> VALIDADES (PRÓX. {DIAS_JANELA_VALIDADE} DIAS) ({validades.length})
