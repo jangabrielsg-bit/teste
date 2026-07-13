@@ -235,23 +235,66 @@ export default function PainelTV({ sair }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
             {estoquePA.map(item => {
               const abaixoMin = item.estoqueMinimo > 0 && item.estoqueAtual <= item.estoqueMinimo;
-              const demanda = (item.saida24h || 0) + (item.saida48h || 0);
-              const cobertura = demanda > 0 ? (item.estoqueAtual / demanda) * 100 : null;
-              const emAviso = !abaixoMin && cobertura != null && cobertura < 100;
+              const demanda   = (item.saida24h || 0) + (item.saida48h || 0);
+
+              // Cobertura em dias — usa média real do Winthor se disponível,
+              // senão estima pelo saida24h+48h (fallback compatível)
+              const coberturaDias = item.coberturaDias ?? (
+                item.mediaSaidaDiaria > 0
+                  ? item.estoqueAtual / item.mediaSaidaDiaria
+                  : demanda > 0 ? (item.estoqueAtual / demanda) * 2 : null
+              );
+
+              const emAviso  = !abaixoMin && coberturaDias != null && coberturaDias < 2;
               const corBorda = abaixoMin ? '#e11d48' : emAviso ? '#f59e0b' : '#2c3542';
+              const corEstoque = abaixoMin ? '#f87171' : emAviso ? '#fbbf24' : '#4ade80';
 
               return (
                 <div key={item.id} style={{ background: '#1D2530', border: `2px solid ${corBorda}`, borderRadius: 14, padding: 16 }}>
                   <div style={{ fontWeight: 900, color: 'white', fontSize: '1rem', marginBottom: 10 }}>{item.produto}</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: abaixoMin ? '#f87171' : emAviso ? '#fbbf24' : '#4ade80' }}>
+
+                  {/* Saldo atual */}
+                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: corEstoque }}>
                     {item.estoqueAtual} <span style={{ fontSize: '0.9rem', color: '#9ca3af' }}>{item.unidade}</span>
                   </div>
-                  <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: '0.78rem', color: '#9ca3af' }}>
+
+                  {/* Métricas de saída */}
+                  <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: '0.78rem', color: '#9ca3af', flexWrap: 'wrap' }}>
                     {item.saida24h != null && <span>24h: <b style={{ color: 'white' }}>{item.saida24h}</b></span>}
                     {item.saida48h != null && <span>48h: <b style={{ color: 'white' }}>{item.saida48h}</b></span>}
+                    {item.mediaSaidaDiaria > 0 && (
+                      <span>Média/dia: <b style={{ color: 'white' }}>{item.mediaSaidaDiaria.toFixed(0)}</b></span>
+                    )}
                   </div>
-                  {abaixoMin && <div style={{ marginTop: 10, background: '#5c1a1a', color: '#f87171', fontWeight: 800, fontSize: '0.75rem', padding: '4px 10px', borderRadius: 20, display: 'inline-block' }}>ABAIXO DO MÍNIMO</div>}
-                  {emAviso && <div style={{ marginTop: 10, background: '#5c3a21', color: '#fbbf24', fontWeight: 800, fontSize: '0.75rem', padding: '4px 10px', borderRadius: 20, display: 'inline-block' }}>COBRE {cobertura.toFixed(0)}%</div>}
+
+                  {/* Cobertura em dias */}
+                  {coberturaDias != null && (
+                    <div style={{ marginTop: 10, padding: '6px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#9ca3af' }}>Cobertura</span>
+                      <span style={{ fontWeight: 900, color: corEstoque, fontSize: '0.95rem' }}>
+                        {coberturaDias < 0.1 ? '< 0.1' : coberturaDias.toFixed(1)} dias
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Rendimento por batida */}
+                  {item.rendimentoReal > 0 && (
+                    <div style={{ marginTop: 6, fontSize: '0.72rem', color: '#9ca3af' }}>
+                      Rendimento: <b style={{ color: 'white' }}>{item.rendimentoReal} {item.unidade}/bat.</b>
+                      {item.batidaSemana > 0 && <span> · {item.batidaSemana.toFixed(1)} bat/sem</span>}
+                    </div>
+                  )}
+
+                  {abaixoMin && (
+                    <div style={{ marginTop: 10, background: '#5c1a1a', color: '#f87171', fontWeight: 800, fontSize: '0.75rem', padding: '4px 10px', borderRadius: 20, display: 'inline-block' }}>
+                      ABAIXO DO MÍNIMO
+                    </div>
+                  )}
+                  {emAviso && !abaixoMin && (
+                    <div style={{ marginTop: 10, background: '#5c3a21', color: '#fbbf24', fontWeight: 800, fontSize: '0.75rem', padding: '4px 10px', borderRadius: 20, display: 'inline-block' }}>
+                      COBRE {coberturaDias.toFixed(1)} DIAS
+                    </div>
+                  )}
                 </div>
               );
             })}
