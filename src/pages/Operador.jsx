@@ -168,69 +168,70 @@ export default function Operador() {
     if (processandoMP === index) return;
 
     setProcessandoMP(index);
-    let registroConsumo = null;
-    const diag = diagPorItem[item.produto];
 
     try {
+      let registroConsumo = null;
+      const diag = diagPorItem[item.produto];
       const receita = diag?.receita;
 
       if (!receita) {
-        // ANTES isso era silencioso. Agora o operador decide conscientemente.
         const seguir = window.confirm(
           `⚠️ SEM FICHA TÉCNICA\n\n"${item.produto}" não tem receita cadastrada.\n\n` +
           `A matéria-prima NÃO será baixada do estoque e esta batida ficará SEM RASTREABILIDADE.\n\n` +
           `Registrar a produção mesmo assim?`
         );
-        if (!seguir) { setProcessandoMP(null); return; }
+        if (!seguir) return; // finally vai limpar processandoMP
       } else {
-        // Multiplicador real: quantas receitas cabem numa batida deste item.
-        // Usa o campo do item (vindo da programação) e cai para 1 se não houver.
-        const multiplicador = Number(item.receitasPorBatida) > 0 ? Number(item.receitasPorBatida) : 1;
+        try {
+          const multiplicador = Number(item.receitasPorBatida) > 0 ? Number(item.receitasPorBatida) : 1;
+          const resultado = await consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
+            ops: item.ops || [],
+            codigo: item.codigo || null,
+            produto: item.produto,
+            operador: nomeOperador || null,
+          });
+          registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
 
-        const resultado = await consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
-          ops: item.ops || [],            // ← array real vindo da programação Winthor
-          codigo: item.codigo || null,    // ← código Winthor do PA
-          produto: item.produto,
-          operador: nomeOperador || null,
-        });
-        registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
-
-        if (resultado.incompleto) {
-          const faltantes = resultado.consumos
-            .filter(c => c.faltou > 0)
-            .map(c => `• ${c.nomeMP}: faltaram ${c.faltou.toFixed(2)} ${c.unidade}`)
-            .join('\n');
-          alert(
-            `⚠️ ESTOQUE INSUFICIENTE — "${item.produto}"\n\n${faltantes}\n\n` +
-            `A produção foi registrada e o que havia em estoque foi baixado, ` +
-            `mas o saldo ficou negativo em relação à receita. Confira o Estoque.`
+          if (resultado.incompleto) {
+            const faltantes = resultado.consumos
+              .filter(c => c.faltou > 0)
+              .map(c => `• ${c.nomeMP}: faltaram ${c.faltou.toFixed(2)} ${c.unidade}`)
+              .join('\n');
+            alert(
+              `⚠️ ESTOQUE INSUFICIENTE — "${item.produto}"\n\n${faltantes}\n\n` +
+              `A produção foi registrada e o que havia em estoque foi baixado, ` +
+              `mas o saldo ficou negativo em relação à receita. Confira o Estoque.`
+            );
+          }
+        } catch (e) {
+          console.error('Erro ao consumir matéria-prima:', e);
+          const seguir = window.confirm(
+            `❌ ERRO AO BAIXAR MATÉRIA-PRIMA\n\n${e.message}\n\n` +
+            `Registrar a produção mesmo assim (SEM baixa de estoque)?`
           );
+          if (!seguir) return; // finally vai limpar processandoMP
+          // seguiu sem baixa — registroConsumo permanece null
         }
       }
-    } catch (e) {
-      console.error('Erro ao consumir matéria-prima:', e);
-      const seguir = window.confirm(
-        `❌ ERRO AO BAIXAR MATÉRIA-PRIMA\n\n${e.message}\n\n` +
-        `Registrar a produção mesmo assim (SEM baixa de estoque)?`
-      );
-      if (!seguir) { setProcessandoMP(null); return; }
-    }
 
-    const nova = [...itens];
-    const consumoMPAnterior = nova[index].consumoMP || [];
-    nova[index] = {
-      ...nova[index],
-      feitos: nova[index].feitos + 1,
-      batidas: [...(nova[index].batidas || []), new Date().toISOString()],
-      consumoMP: registroConsumo ? [...consumoMPAnterior, registroConsumo] : consumoMPAnterior,
-    };
-    setItens(nova);
-    try {
-      await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
-    } catch (e) {
-      console.error(e);
-      alert('Erro ao salvar a produção: ' + e.message);
+      // Grava a batida
+      const nova = [...itens];
+      const consumoMPAnterior = nova[index].consumoMP || [];
+      nova[index] = {
+        ...nova[index],
+        feitos: nova[index].feitos + 1,
+        batidas: [...(nova[index].batidas || []), new Date().toISOString()],
+        consumoMP: registroConsumo ? [...consumoMPAnterior, registroConsumo] : consumoMPAnterior,
+      };
+      setItens(nova);
+      try {
+        await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
+      } catch (e) {
+        console.error(e);
+        alert('Erro ao salvar a produção: ' + e.message);
+      }
     } finally {
+      // Garante que o botão SEMPRE desbloqueie, independente de qual caminho o código tomou
       setProcessandoMP(null);
     }
   }
