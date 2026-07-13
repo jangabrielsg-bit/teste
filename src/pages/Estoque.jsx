@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment } from 'firebase/firestore';
+import { useState, useEffect, useMemo } from 'react';
+import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment, query, orderBy, limit } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { useAuth } from '../services/auth';
 import { useProdutos } from '../services/hooks';
@@ -23,6 +23,42 @@ function useEstoqueWinthorPA() {
     });
   }, []);
   return { dados, atualizadoEm };
+}
+
+// ── Hook: Mapa codigo → categoria (vem de winthorSugestoes) ──────
+// A coleção estoquePA não grava categoria — ela está em winthorSugestoes.
+// Lemos o documento mais recente e montamos um mapa { codigo: categoria }.
+function useCategoriasPA() {
+  const [mapa, setMapa] = useState({});
+  useEffect(() => {
+    let ativo = true;
+    (async () => {
+      try {
+        // Pega os últimos 7 dias de sugestões para cobrir produtos programados
+        // em dias diferentes (ex: produto só aparece às quartas)
+        const snap = await getDocs(
+          query(collection(db, 'winthorSugestoes'), orderBy('data', 'desc'), limit(7))
+        );
+        const resultado = {};
+        snap.forEach(d => {
+          const { categorias } = d.data();
+          if (!categorias) return;
+          Object.entries(categorias).forEach(([cat, itens]) => {
+            itens.forEach(it => {
+              if (it.codigo && !resultado[it.codigo]) {
+                resultado[it.codigo] = cat;
+              }
+            });
+          });
+        });
+        if (ativo) setMapa(resultado);
+      } catch (e) {
+        console.error('Erro ao carregar categorias PA:', e);
+      }
+    })();
+    return () => { ativo = false; };
+  }, []);
+  return mapa;
 }
 
 // ── Hook: Estoque PA Físico (entradas da expedição) ───────────────
@@ -293,10 +329,14 @@ export default function Estoque() {
 
   const [estoqueAtual, setEstoqueAtual] = useState([]);
   const [termoBusca, setTermoBusca]     = useState('');
-  const [subAba, setSubAba]             = useState('acabado');
-  const [modalLotes, setModalLotes]     = useState(null);
-  const [modalAjuste, setModalAjuste]   = useState(null);
+  const [subAba, setSubAba]                 = useState('acabado');
+  const [modalLotes, setModalLotes]         = useState(null);
+  const [modalAjuste, setModalAjuste]       = useState(null);
   const [categoriaAtiva, setCategoriaAtiva] = useState('Todas');
+  // ordenacao: 'critico' | 'estoque_asc' | 'estoque_desc' | 'media_desc' | 'cobertura_asc' | 'nome'
+  const [ordenacao, setOrdenacao]           = useState('critico');
+
+  const categoriasPA = useCategoriasPA();
 
   const [estoqueWinthorSistema, setEstoqueWinthorSistema] = useState({});
   const [estoqueMP, setEstoqueMP]       = useState([]);
@@ -359,20 +399,23 @@ export default function Estoque() {
     const w = winthorPA[codigo];
     const f = fisicoPA[codigo];
     const lotesGrp = lotesPorCodigo[codigo] || lotesPorCodigo[w?.produto] || null;
-    // categoria vem do estoquePA gravado pela bridge (campo `categoria`)
-    const categoria = w?.categoria || f?.categoria || 'Sem categoria';
+    // Categoria: pega de winthorSugestoes (fonte correta) — estoquePA não tem esse campo
+    const categoria = categoriasPA[codigo] || w?.categoria || f?.categoria || 'Sem categoria';
     return { codigo, produto: w?.produto || f?.produto || codigo, winthor: w || null, fisico: f || null, lotesGrp, categoria };
   });
 
-  // Categorias únicas para os chips de filtro
-  const categorias = ['Todas', ...Array.from(new Set(listaAcabado.map(g => g.categoria))).sort((a, b) => a.localeCompare(b, 'pt-BR'))];
+  // Categorias únicas (derivadas após enriquecer com categoriasPA)
+  const categorias = useMemo(() => (
+    ['Todas', ...Array.from(new Set(listaAcabado.map(g => g.categoria))).sort((a, b) => a.localeCompare(b, 'pt-BR'))]
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [JSON.stringify(listaAcabado.map(g => g.categoria).sort())]);
 
   if (termoBusca && subAba === 'acabado') {
     const t = termoBusca.toLowerCase();
     listaAcabado = listaAcabado.filter(g => g.produto.toLowerCase().includes(t) || g.codigo.toLowerCase().includes(t));
   }
 
-  // Filtro por categoria (só quando não há busca ativa)
+  // Filtro por categoria (desativado quando há busca ativa)
   if (!termoBusca && categoriaAtiva !== 'Todas') {
     listaAcabado = listaAcabado.filter(g => g.categoria === categoriaAtiva);
   }
@@ -380,17 +423,11 @@ export default function Estoque() {
   function classificar(g) {
     const w = g.winthor;
     if (!w) return 2;
-
-    // ── Prioridade 1: coberturaDias gravada pela bridge (usa média real do Winthor) ──
-    // coberturaDias = estoqueAtual ÷ mediaSaidaDiaria
-    // < 1 dia → crítico | 1–2 dias → aviso | > 2 dias → ok
     if (w.coberturaDias != null) {
-      if (w.coberturaDias < 1)  return 0; // crítico
-      if (w.coberturaDias < 2)  return 1; // aviso
+      if (w.coberturaDias < 1) return 0;
+      if (w.coberturaDias < 2) return 1;
       return 2;
     }
-
-    // ── Fallback: usa saída 24h+48h (comportamento anterior) ──
     const disponivel = w.estoqueAtual ?? 0;
     const demanda    = (w.saida24h || 0) + (w.saida48h || 0);
     if (demanda <= 0) return 2;
@@ -400,10 +437,27 @@ export default function Estoque() {
     return 2;
   }
 
+  // Ordenação selecionável pelo usuário
   listaAcabado.sort((a, b) => {
-    const nA = classificar(a), nB = classificar(b);
-    if (nA !== nB) return nA - nB;
-    return a.produto.localeCompare(b.produto, 'pt-BR');
+    switch (ordenacao) {
+      case 'estoque_asc':
+        return (a.winthor?.estoqueAtual ?? 0) - (b.winthor?.estoqueAtual ?? 0);
+      case 'estoque_desc':
+        return (b.winthor?.estoqueAtual ?? 0) - (a.winthor?.estoqueAtual ?? 0);
+      case 'media_desc':
+        return (b.winthor?.mediaSaidaDiaria ?? 0) - (a.winthor?.mediaSaidaDiaria ?? 0);
+      case 'cobertura_asc':
+        // Sem cobertura vai para o final
+        return (a.winthor?.coberturaDias ?? 9999) - (b.winthor?.coberturaDias ?? 9999);
+      case 'nome':
+        return a.produto.localeCompare(b.produto, 'pt-BR');
+      case 'critico':
+      default: {
+        const nA = classificar(a), nB = classificar(b);
+        if (nA !== nB) return nA - nB;
+        return a.produto.localeCompare(b.produto, 'pt-BR');
+      }
+    }
   });
 
   const totalCriticos = listaAcabado.filter(g => classificar(g) === 0).length;
@@ -442,44 +496,60 @@ export default function Estoque() {
           <ChipsResumo criticos={totalCriticos} avisos={totalAvisos} atualizadoEm={paAtualizadoEm} labelFonte="Winthor" />
         )}
 
-        {/* ── Chips de categoria — só aparecem na aba PA e sem busca ativa ── */}
+        {/* ── Chips de categoria ── */}
         {subAba === 'acabado' && !termoBusca && categorias.length > 2 && (
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
             {categorias.map(cat => {
               const ativa = categoriaAtiva === cat;
               const count = cat === 'Todas'
-                ? listaAcabado.length + (categoriaAtiva !== 'Todas' ? 0 : 0) // usa o total antes do filtro
+                ? Array.from(todasChaves).length
                 : Array.from(todasChaves).filter(cod => {
                     const w = winthorPA[cod]; const f = fisicoPA[cod];
-                    return (w?.categoria || f?.categoria || 'Sem categoria') === cat;
+                    return (categoriasPA[cod] || w?.categoria || f?.categoria || 'Sem categoria') === cat;
                   }).length;
               return (
-                <button
-                  key={cat}
-                  onClick={() => setCategoriaAtiva(cat)}
-                  style={{
-                    padding: '6px 14px', borderRadius: 20, border: '1.5px solid',
-                    borderColor: ativa ? 'var(--amarelo-escuro)' : 'var(--border-forte)',
-                    background: ativa ? 'var(--amarelo)' : 'white',
-                    color: ativa ? 'var(--marrom)' : 'var(--marrom-claro)',
-                    fontWeight: ativa ? 800 : 600, fontSize: '0.78rem',
-                    cursor: 'pointer', transition: 'all 0.12s',
-                  }}
-                >
-                  {cat}
-                  <span style={{ marginLeft: 5, fontWeight: 900, opacity: 0.7 }}>
-                    {cat === 'Todas'
-                      ? Array.from(todasChaves).length
-                      : count}
-                  </span>
+                <button key={cat} onClick={() => setCategoriaAtiva(cat)} style={{
+                  padding: '6px 14px', borderRadius: 20, border: '1.5px solid',
+                  borderColor: ativa ? 'var(--amarelo-escuro)' : 'var(--border-forte)',
+                  background: ativa ? 'var(--amarelo)' : 'white',
+                  color: ativa ? 'var(--marrom)' : 'var(--marrom-claro)',
+                  fontWeight: ativa ? 800 : 600, fontSize: '0.78rem',
+                  cursor: 'pointer', transition: 'all 0.12s',
+                }}>
+                  {cat} <span style={{ fontWeight: 900, opacity: 0.7 }}>{count}</span>
                 </button>
               );
             })}
           </div>
         )}
 
-        <div style={{ marginBottom: 16 }}>
-          <input type="text" className="input-texto" placeholder="Buscar por nome ou código..." value={termoBusca} onChange={e => setTermoBusca(e.target.value)} />
+        {/* ── Busca + Ordenação ── */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+          <input
+            type="text" className="input-texto"
+            placeholder="Buscar por nome ou código..."
+            value={termoBusca}
+            onChange={e => setTermoBusca(e.target.value)}
+            style={{ flex: 1 }}
+          />
+          {subAba === 'acabado' && (
+            <select
+              value={ordenacao}
+              onChange={e => setOrdenacao(e.target.value)}
+              style={{
+                padding: '10px 12px', borderRadius: 10, border: '1px solid var(--border-forte)',
+                background: 'white', color: 'var(--marrom)', fontWeight: 700,
+                fontSize: '0.8rem', cursor: 'pointer', flexShrink: 0,
+              }}
+            >
+              <option value="critico">⚠ Mais críticos</option>
+              <option value="cobertura_asc">📅 Menor cobertura</option>
+              <option value="media_desc">📈 Maior saída/dia</option>
+              <option value="estoque_asc">📦 Menor estoque</option>
+              <option value="estoque_desc">📦 Maior estoque</option>
+              <option value="nome">🔤 Alfabético</option>
+            </select>
+          )}
         </div>
 
         {/* ── ABA: PRODUTO ACABADO ── */}
