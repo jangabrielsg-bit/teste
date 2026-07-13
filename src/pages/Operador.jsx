@@ -2,9 +2,8 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { hojeISO, paraISO, formatarDataBR } from '../services/utils';
+// Removemos consumirIngredientesFEFO e reverterConsumoFEFO
 import {
-  consumirIngredientesFEFO,
-  reverterConsumoFEFO,
   listarLotesDisponiveis,
   definirLoteForcado,
   diagnosticarProduto,
@@ -41,7 +40,7 @@ function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
           <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
         </div>
         <div style={{ fontSize: '0.78rem', color: 'var(--marrom-claro)', marginBottom: 16 }}>
-          Selecione o saco/lote que está sendo usado agora na masseira. Fica registrado o horário da troca.
+          Selecione o saco/lote que está sendo usado agora na masseira. Fica registrado o horário da troca para rastreabilidade.
         </div>
 
         {erro && (
@@ -54,7 +53,7 @@ function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
         {!carregando && lotes?.length === 0 && (
           <div className="status-msg">
             Nenhum lote com estoque disponível para <strong>{info.nome}</strong>.<br />
-            Cadastre a entrada deste insumo no Estoque.
+            Cadastre a entrada deste insumo no Estoque para visualizá-lo aqui.
           </div>
         )}
 
@@ -164,65 +163,34 @@ export default function Operador() {
     setProcessandoMP(index);
 
     try {
-      let registroConsumo = null;
       const diag = diagPorItem[item.produto];
       const receita = diag?.receita;
+      let registroConsumo = null;
 
+      // Cria apenas o histórico de rastreabilidade, sem consumir estoque
       if (!receita) {
         const seguir = window.confirm(
           `⚠️ SEM FICHA TÉCNICA\n\n"${item.produto}" não tem receita cadastrada.\n\n` +
-          `A matéria-prima NÃO será baixada do estoque e esta batida ficará SEM RASTREABILIDADE.\n\n` +
-          `Registrar a produção mesmo assim?`
+          `Esta batida ficará SEM RASTREABILIDADE de lotes.\n\nRegistrar a produção mesmo assim?`
         );
         if (!seguir) {
           setProcessandoMP(null);
-          return; 
+          return;
         }
       } else {
-        let timeoutId;
-        try {
-          const multiplicador = Number(item.receitasPorBatida) > 0 ? Number(item.receitasPorBatida) : 1;
-          
-          const promessaTimeout = new Promise((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido na baixa de matéria-prima. O servidor demorou a responder.')), 10000);
-          });
-      
-          const resultado = await Promise.race([
-            consumirIngredientesFEFO(receita, multiplicador, lotesForcados, {
-              ops: item.ops || [],
-              codigo: item.codigo || null,
-              produto: item.produto,
-              operador: nomeOperador || null,
-            }),
-            promessaTimeout
-          ]);
-      
-          clearTimeout(timeoutId); 
-          registroConsumo = { ...resultado, timestamp: new Date().toISOString() };
+        const farinhas = diag?.farinhas || [];
+        const consumosRastreio = farinhas.map(f => {
+          const forcado = lotesForcados[f.productId];
+          return {
+            nomeMP: f.nome,
+            lote: forcado ? forcado.loteNumero : 'Automático'
+          };
+        });
 
-          if (resultado.incompleto) {
-            const faltantes = resultado.consumos
-              .filter(c => c.faltou > 0)
-              .map(c => `• ${c.nomeMP}: faltaram ${c.faltou.toFixed(2)} ${c.unidade}`)
-              .join('\n');
-            alert(
-              `⚠️ ESTOQUE INSUFICIENTE — "${item.produto}"\n\n${faltantes}\n\n` +
-              `A produção foi registrada e o que havia em estoque foi baixado, ` +
-              `mas o saldo ficou negativo em relação à receita. Confira o Estoque.`
-            );
-          }
-        } catch (e) {
-          if (timeoutId) clearTimeout(timeoutId); 
-          console.error('Erro ao consumir matéria-prima:', e);
-          const seguir = window.confirm(
-            `❌ ERRO AO BAIXAR MATÉRIA-PRIMA\n\n${e.message}\n\n` +
-            `Registrar a produção mesmo assim (SEM baixa de estoque)?`
-          );
-          if (!seguir) {
-            setProcessandoMP(null);
-            return; 
-          }
-        }
+        registroConsumo = {
+          timestamp: new Date().toISOString(),
+          consumos: consumosRastreio
+        };
       }
 
       const nova = [...itens];
@@ -234,31 +202,16 @@ export default function Operador() {
         consumoMP: registroConsumo ? [...consumoMPAnterior, registroConsumo] : consumoMPAnterior,
       };
       
-      // 1. SANITIZAÇÃO: Remove silenciosamente qualquer campo `undefined` gerado.
-      // Firebase rejeita objetos com undefined, o que causava o reset ao atualizar a página.
       const novaLimpa = JSON.parse(JSON.stringify(nova));
-      
       setItens(novaLimpa);
 
-      // 2. BLINDAGEM DO BANCO DE DADOS: Volta o await, mas com limite de espera
-      let saveTimeoutId;
-      const saveTimeout = new Promise((_, reject) => {
-        saveTimeoutId = setTimeout(() => reject(new Error('A conexão com a internet está muito lenta e atrasou a gravação.')), 8000);
-      });
+      // Salva no banco de dados em segundo plano
+      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa })
+        .catch(e => console.warn('A conexão está lenta. O dado será sincronizado quando houver rede.', e));
 
-      try {
-        await Promise.race([
-          updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa }),
-          saveTimeout
-        ]);
-        clearTimeout(saveTimeoutId);
-      } catch (saveErr) {
-        if (saveTimeoutId) clearTimeout(saveTimeoutId);
-        console.error('Falha de sincronização:', saveErr);
-        // O alerta avisa o usuário do problema sem travar o botão permanentemente
-        alert(`⚠️ O progresso foi marcado na tela, mas houve falha na rede ao salvar no banco de dados:\n\n${saveErr.message}\n\nO sistema continuará tentando em segundo plano. Evite atualizar a página.`);
-      }
-
+    } catch (e) {
+      console.error(e);
+      alert('Erro ao registrar a produção: ' + e.message);
     } finally {
       setProcessandoMP(null);
     }
@@ -276,53 +229,21 @@ export default function Operador() {
       const batidas = [...(nova[index].batidas || [])];
       batidas.pop();
 
+      // Remove apenas o registro de rastreabilidade visual (não há estoque para devolver)
       const consumoMPAtual = [...(nova[index].consumoMP || [])];
-      const ultimoConsumo = consumoMPAtual.pop();
-      if (ultimoConsumo) {
-        let timeoutId;
-        try {
-          const promessaTimeout = new Promise((_, reject) => {
-            timeoutId = setTimeout(() => reject(new Error('Tempo limite excedido na devolução ao estoque.')), 10000);
-          });
-
-          await Promise.race([
-            reverterConsumoFEFO(ultimoConsumo),
-            promessaTimeout
-          ]);
-          clearTimeout(timeoutId);
-        } catch (e) {
-          if (timeoutId) clearTimeout(timeoutId);
-          console.error('Erro ao reverter consumo de matéria-prima:', e);
-          alert(
-            `⚠️ A batida foi desfeita, mas a matéria-prima NÃO voltou ao estoque.\n\n` +
-            `${e.message}\n\nCorrija o saldo manualmente no Estoque.`
-          );
-        }
-      }
+      consumoMPAtual.pop();
 
       nova[index] = { ...nova[index], feitos: Math.max(0, nova[index].feitos - 1), batidas, consumoMP: consumoMPAtual };
       
-      // Sanitização aplicada também ao desfazer
       const novaLimpa = JSON.parse(JSON.stringify(nova));
       setItens(novaLimpa);
 
-      let saveTimeoutId;
-      const saveTimeout = new Promise((_, reject) => {
-        saveTimeoutId = setTimeout(() => reject(new Error('Conexão instável durante a reversão.')), 8000);
-      });
+      // Sincroniza em segundo plano
+      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa })
+        .catch(e => console.warn('A conexão está lenta. O estorno será sincronizado em breve.', e));
 
-      try {
-        await Promise.race([
-          updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa }),
-          saveTimeout
-        ]);
-        clearTimeout(saveTimeoutId);
-      } catch (saveErr) {
-        if (saveTimeoutId) clearTimeout(saveTimeoutId);
-        console.error('Falha de sincronização (reversão):', saveErr);
-        alert(`⚠️ O estorno foi feito na tela, mas houve lentidão na nuvem:\n\n${saveErr.message}\n\nEvite atualizar a página por enquanto.`);
-      }
-
+    } catch (e) {
+      console.error(e);
     } finally {
       setProcessandoMP(null);
     }
@@ -378,7 +299,7 @@ export default function Operador() {
 
         {semRastreio && (
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.7rem', color: '#b91c1c', lineHeight: 1.4 }}>
-            <strong>⚠️ Sem ficha técnica.</strong> A matéria-prima não está sendo baixada nem rastreada para este produto.
+            <strong>⚠️ Sem ficha técnica.</strong> O apontamento será feito sem a rastreabilidade dos lotes de matéria-prima.
             <div style={{ fontSize: '0.65rem', marginTop: 2, opacity: 0.85 }}>{diag.mensagem}</div>
           </div>
         )}
@@ -386,21 +307,14 @@ export default function Operador() {
         {diag?.receita && (diag.vinculo === 'nome_parcial' || diag.vinculo === 'nome_assimilado') && (
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.68rem', color: '#92400e', lineHeight: 1.4 }}>
             ⚠️ Ficha técnica <strong>{diag.receita.name}</strong> vinculada por assimilação de nome, não pelo código oficial ({item.codigo || 's/ código'}).
-            Recomenda-se cadastrar o código Winthor na receita para um vínculo mais confiável.
-          </div>
-        )}
-
-        {diag?.receita && farinhas.length === 0 && (
-          <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.68rem', color: '#92400e', lineHeight: 1.4 }}>
-            Receita <strong>{diag.receita.name}</strong> vinculada. Nenhum insumo marcado como trocável pelo operador —
-            todo o consumo segue FEFO automático.
+            Recomenda-se cadastrar o código Winthor na receita.
           </div>
         )}
 
         {item.consumoMP?.length > 0 && (
           <div style={{ fontSize: '0.68rem', color: 'var(--marrom-claro)', marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)' }}>
             <i className="ph ph-package-check" style={{ marginRight: 4 }}></i>
-            Matéria-prima rastreada ({item.consumoMP.length} batida{item.consumoMP.length > 1 ? 's' : ''})
+            Lotes rastreados ({item.consumoMP.length} registro{item.consumoMP.length > 1 ? 's' : ''})
           </div>
         )}
 
@@ -409,7 +323,7 @@ export default function Operador() {
           return (
             <div key={farinha.productId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)', fontSize: '0.75rem' }}>
               <div style={{ color: 'var(--marrom)', minWidth: 0 }}>
-                🌾 <strong>{farinha.nome}</strong>: {forcado ? `Lote ${forcado.loteNumero}` : 'Automático (FEFO)'}
+                🌾 <strong>{farinha.nome}</strong>: {forcado ? `Lote ${forcado.loteNumero}` : 'Automático'}
                 {forcado?.selecionadoEm && (
                   <div style={{ fontSize: '0.65rem', color: 'var(--marrom-claro)' }}>
                     Trocado às {new Date(forcado.selecionadoEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
