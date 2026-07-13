@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { hojeISO, paraISO, formatarDataBR } from '../services/utils';
-// Removemos consumirIngredientesFEFO e reverterConsumoFEFO
 import {
   listarLotesDisponiveis,
   definirLoteForcado,
@@ -167,7 +166,6 @@ export default function Operador() {
       const receita = diag?.receita;
       let registroConsumo = null;
 
-      // Cria apenas o histórico de rastreabilidade, sem consumir estoque
       if (!receita) {
         const seguir = window.confirm(
           `⚠️ SEM FICHA TÉCNICA\n\n"${item.produto}" não tem receita cadastrada.\n\n` +
@@ -203,15 +201,23 @@ export default function Operador() {
       };
       
       const novaLimpa = JSON.parse(JSON.stringify(nova));
+      
+      // 1. Atualização Otimista: A tela atualiza na mesma hora para não travar o operador
       setItens(novaLimpa);
 
-      // Salva no banco de dados em segundo plano
-      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa })
-        .catch(e => console.warn('A conexão está lenta. O dado será sincronizado quando houver rede.', e));
+      // 2. Tenta forçar a gravação e exige confirmação do Firebase
+      try {
+        await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa });
+      } catch (e) {
+        // Se o Firebase recusar (permissão, tamanho, rede), a tela volta atrás e mostra o erro
+        setItens([...itens]); 
+        console.error("Falha no Firebase:", e);
+        alert(`❌ O Firebase recusou o salvamento da batida!\n\nMotivo do erro: ${e.message}\n\nO progresso na tela foi desfeito para garantir consistência.`);
+      }
 
     } catch (e) {
       console.error(e);
-      alert('Erro ao registrar a produção: ' + e.message);
+      alert('Erro inesperado ao processar a batida: ' + e.message);
     } finally {
       setProcessandoMP(null);
     }
@@ -229,18 +235,24 @@ export default function Operador() {
       const batidas = [...(nova[index].batidas || [])];
       batidas.pop();
 
-      // Remove apenas o registro de rastreabilidade visual (não há estoque para devolver)
       const consumoMPAtual = [...(nova[index].consumoMP || [])];
       consumoMPAtual.pop();
 
       nova[index] = { ...nova[index], feitos: Math.max(0, nova[index].feitos - 1), batidas, consumoMP: consumoMPAtual };
       
       const novaLimpa = JSON.parse(JSON.stringify(nova));
+      
+      // 1. Atualização Otimista
       setItens(novaLimpa);
 
-      // Sincroniza em segundo plano
-      updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa })
-        .catch(e => console.warn('A conexão está lenta. O estorno será sincronizado em breve.', e));
+      // 2. Confirmação com Firebase
+      try {
+        await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: novaLimpa });
+      } catch (e) {
+        setItens([...itens]);
+        console.error("Falha no Firebase (Estorno):", e);
+        alert(`❌ O Firebase recusou o estorno!\n\nMotivo do erro: ${e.message}\n\nA tela foi revertida.`);
+      }
 
     } catch (e) {
       console.error(e);
