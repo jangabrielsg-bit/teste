@@ -296,6 +296,7 @@ export default function Estoque() {
   const [subAba, setSubAba]             = useState('acabado');
   const [modalLotes, setModalLotes]     = useState(null);
   const [modalAjuste, setModalAjuste]   = useState(null);
+  const [categoriaAtiva, setCategoriaAtiva] = useState('Todas');
 
   const [estoqueWinthorSistema, setEstoqueWinthorSistema] = useState({});
   const [estoqueMP, setEstoqueMP]       = useState([]);
@@ -358,12 +359,22 @@ export default function Estoque() {
     const w = winthorPA[codigo];
     const f = fisicoPA[codigo];
     const lotesGrp = lotesPorCodigo[codigo] || lotesPorCodigo[w?.produto] || null;
-    return { codigo, produto: w?.produto || f?.produto || codigo, winthor: w || null, fisico: f || null, lotesGrp };
+    // categoria vem do estoquePA gravado pela bridge (campo `categoria`)
+    const categoria = w?.categoria || f?.categoria || 'Sem categoria';
+    return { codigo, produto: w?.produto || f?.produto || codigo, winthor: w || null, fisico: f || null, lotesGrp, categoria };
   });
+
+  // Categorias únicas para os chips de filtro
+  const categorias = ['Todas', ...Array.from(new Set(listaAcabado.map(g => g.categoria))).sort((a, b) => a.localeCompare(b, 'pt-BR'))];
 
   if (termoBusca && subAba === 'acabado') {
     const t = termoBusca.toLowerCase();
     listaAcabado = listaAcabado.filter(g => g.produto.toLowerCase().includes(t) || g.codigo.toLowerCase().includes(t));
+  }
+
+  // Filtro por categoria (só quando não há busca ativa)
+  if (!termoBusca && categoriaAtiva !== 'Todas') {
+    listaAcabado = listaAcabado.filter(g => g.categoria === categoriaAtiva);
   }
 
   function classificar(g) {
@@ -417,10 +428,10 @@ export default function Estoque() {
           <h3 className="nome">Painel de Estoque</h3>
           {isPcp && (
             <div style={{ display: 'flex', background: '#f3f4f6', borderRadius: 8, padding: 4 }}>
-              <button onClick={() => { setSubAba('acabado'); setTermoBusca(''); }} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAba === 'acabado' ? 'white' : 'transparent', color: subAba === 'acabado' ? 'var(--marrom)' : '#999', boxShadow: subAba === 'acabado' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+              <button onClick={() => { setSubAba('acabado'); setTermoBusca(''); setCategoriaAtiva('Todas'); }} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAba === 'acabado' ? 'white' : 'transparent', color: subAba === 'acabado' ? 'var(--marrom)' : '#999', boxShadow: subAba === 'acabado' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                 🧊 Produto Acabado
               </button>
-              <button onClick={() => { setSubAba('mp'); setTermoBusca(''); }} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAba === 'mp' ? 'white' : 'transparent', color: subAba === 'mp' ? 'var(--marrom)' : '#999', boxShadow: subAba === 'mp' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
+              <button onClick={() => { setSubAba('mp'); setTermoBusca(''); setCategoriaAtiva('Todas'); }} style={{ padding: '8px 16px', borderRadius: 6, fontWeight: 700, fontSize: '0.85rem', border: 'none', cursor: 'pointer', background: subAba === 'mp' ? 'white' : 'transparent', color: subAba === 'mp' ? 'var(--marrom)' : '#999', boxShadow: subAba === 'mp' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none' }}>
                 📦 Matéria Prima
               </button>
             </div>
@@ -429,6 +440,42 @@ export default function Estoque() {
 
         {subAba === 'acabado' && (
           <ChipsResumo criticos={totalCriticos} avisos={totalAvisos} atualizadoEm={paAtualizadoEm} labelFonte="Winthor" />
+        )}
+
+        {/* ── Chips de categoria — só aparecem na aba PA e sem busca ativa ── */}
+        {subAba === 'acabado' && !termoBusca && categorias.length > 2 && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
+            {categorias.map(cat => {
+              const ativa = categoriaAtiva === cat;
+              const count = cat === 'Todas'
+                ? listaAcabado.length + (categoriaAtiva !== 'Todas' ? 0 : 0) // usa o total antes do filtro
+                : Array.from(todasChaves).filter(cod => {
+                    const w = winthorPA[cod]; const f = fisicoPA[cod];
+                    return (w?.categoria || f?.categoria || 'Sem categoria') === cat;
+                  }).length;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setCategoriaAtiva(cat)}
+                  style={{
+                    padding: '6px 14px', borderRadius: 20, border: '1.5px solid',
+                    borderColor: ativa ? 'var(--amarelo-escuro)' : 'var(--border-forte)',
+                    background: ativa ? 'var(--amarelo)' : 'white',
+                    color: ativa ? 'var(--marrom)' : 'var(--marrom-claro)',
+                    fontWeight: ativa ? 800 : 600, fontSize: '0.78rem',
+                    cursor: 'pointer', transition: 'all 0.12s',
+                  }}
+                >
+                  {cat}
+                  <span style={{ marginLeft: 5, fontWeight: 900, opacity: 0.7 }}>
+                    {cat === 'Todas'
+                      ? Array.from(todasChaves).length
+                      : count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         )}
 
         <div style={{ marginBottom: 16 }}>
