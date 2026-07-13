@@ -15,6 +15,7 @@ import Produtos from '../pages/Produtos';
 import PCP from '../pages/PCP';
 import PainelTV from '../pages/PainelTV';
 import ResumoPCP from '../pages/ResumoPCP';
+import MovimentacaoPA from '../pages/MovimentacaoPA';
 
 const nomesTelas = {
   'programacao': 'Programação',
@@ -27,7 +28,8 @@ const nomesTelas = {
   'produtos': 'Produtos e Setores',
   'pcp': 'Lançamentos PCP Winthor',
   'expedicao': 'Expedição / Balança',
-  'estoque': 'Gestão de Estoques'
+  'estoque': 'Gestão de Estoques',
+  'movimentacao': 'Movimentação PA',
 };
 
 export default function AppLayout() {
@@ -79,6 +81,7 @@ export default function AppLayout() {
         {tela === 'livro' && <LivroProducao />}
         {tela === 'produtos' && <Produtos />}
         {tela === 'pcp' && <PCP />}
+        {tela === 'movimentacao' && <MovimentacaoPA />}
       </main>
 
       {/* Bottom Navigation */}
@@ -109,6 +112,11 @@ export default function AppLayout() {
         {s === 'pcp' && (
           <button className={tela === 'pcp' ? 'active' : ''} onClick={() => setTela('pcp')}>
             <i className="ph ph-chart-bar"></i>PCP
+          </button>
+        )}
+        {(s === 'pcp' || s === 'expedicao') && (
+          <button className={tela === 'movimentacao' ? 'active' : ''} onClick={() => setTela('movimentacao')}>
+            <i className="ph ph-arrow-down-up"></i>Movim.
           </button>
         )}
       </nav>
