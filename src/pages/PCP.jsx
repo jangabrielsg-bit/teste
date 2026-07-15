@@ -89,6 +89,8 @@ export default function PCP() {
       setSolicitandoSync(false);
     }
   }
+
+  useEffect(() => {
     setCarregando(true);
     const unsubExp = onSnapshot(doc(db, 'expedicaoDiaria', dataAlvo), snap => {
       if (snap.exists() && snap.data().registros) setRegistros(snap.data().registros);
