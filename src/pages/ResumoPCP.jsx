@@ -13,6 +13,20 @@ export default function ResumoPCP({ sair }) {
   const agora = new Date();
 
   useEffect(() => {
+    let versaoAtual = null;
+    const unsub = onSnapshot(doc(db, 'bridge', 'versao'), snap => {
+      if (!snap.exists()) return;
+      const v = snap.data().valor;
+      if (versaoAtual === null) { versaoAtual = v; return; }
+      if (v !== versaoAtual) {
+        console.log(`🔄 Nova versão detectada (${versaoAtual} → ${v}). Recarregando...`);
+        setTimeout(() => window.location.reload(), 2000);
+      }
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
     const unsubProd = onSnapshot(doc(db, 'producaoDiaria', dataAlvo), s => {
       if (s.exists()) { setProdDiaria(s.data().itens || []); setTunel(s.data().tunelRegistros || []); }
       else { setProdDiaria([]); setTunel([]); }
@@ -76,14 +90,38 @@ export default function ResumoPCP({ sair }) {
             <div style={{ display: 'grid', gap: 16 }}>
               {prodDiaria.map((item, idx) => {
                 const perc = item.metaLotes ? Math.min(100, Math.round(((item.feitos || 0) / item.metaLotes) * 100)) : 0;
+                const concluido = (item.feitos || 0) >= item.metaLotes;
+                const batidas = item.batidas || [];
+                const vel = batidas.length >= 2
+                  ? (new Date(batidas.at(-1)).getTime() - new Date(batidas[0]).getTime()) / 60000 / (batidas.length - 1)
+                  : null;
+                const ub = batidas.at(-1);
+                const seg = ub ? Math.max(0, Math.floor((new Date().getTime() - new Date(ub).getTime()) / 1000)) : null;
+                const tempoUltima = seg != null ? `${String(Math.floor(seg/60)).padStart(2,'0')}:${String(seg%60).padStart(2,'0')}` : null;
                 return (
-                  <div key={idx} style={{ background: '#4A2E1A', borderRadius: 16, padding: 20, border: '1px solid #734A2A' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
-                      <div style={{ fontWeight: 700, color: 'white', fontSize: '1.1rem' }}>{item.produto}</div>
-                      <div style={{ fontFamily: 'monospace', color: '#D0B29E' }}><span style={{ fontSize: '1.5rem', fontWeight: 900, color: '#F6BE00' }}>{item.feitos || 0}</span> / {item.metaLotes}</div>
+                  <div key={idx} style={{ background: '#4A2E1A', borderRadius: 16, padding: 20, border: `1px solid ${concluido ? '#15803d' : '#734A2A'}`, borderLeft: `4px solid ${concluido ? '#15803d' : '#F6BE00'}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <div>
+                        <div style={{ fontWeight: 700, color: 'white', fontSize: '1.1rem' }}>{item.produto}</div>
+                        <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {vel != null && !concluido && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#3D2515', border: '1px solid #734A2A', borderRadius: 20, padding: '3px 10px', fontSize: '0.78rem', fontWeight: 700, color: '#F6BE00' }}>
+                              ⚡ {vel.toFixed(1)} <span style={{ color: '#D0B29E', fontWeight: 400 }}>rec/min</span>
+                            </span>
+                          )}
+                          {tempoUltima && !concluido && (
+                            <span style={{ fontSize: '0.72rem', color: '#D0B29E' }}>🕐 há {tempoUltima}</span>
+                          )}
+                          {concluido && <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4ade80' }}>✔ Concluído</span>}
+                        </div>
+                      </div>
+                      <div style={{ fontFamily: 'monospace', color: '#D0B29E', textAlign: 'right', flexShrink: 0 }}>
+                        <span style={{ fontSize: '1.8rem', fontWeight: 900, color: concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
+                        <span style={{ fontSize: '1rem' }}> / {item.metaLotes}</span>
+                      </div>
                     </div>
                     <div style={{ width: '100%', background: '#3D2515', borderRadius: 20, height: 10, overflow: 'hidden' }}>
-                      <div style={{ background: '#F6BE00', height: '100%', width: `${perc}%`, transition: 'width 1s' }}></div>
+                      <div style={{ background: concluido ? '#15803d' : '#F6BE00', height: '100%', width: `${perc}%`, transition: 'width 1s' }}></div>
                     </div>
                   </div>
                 );
