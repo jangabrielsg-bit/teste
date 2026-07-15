@@ -303,17 +303,30 @@ export default function PainelTV({ sair }) {
                 const ub = item.batidas?.at(-1);
                 return (
                   <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      {/* Nome + velocidade */}
                       <div>
                         <div style={{ fontWeight: 700, color: 'white', fontSize: '1.1rem' }}>{item.produto}</div>
-                        <div style={{ fontSize: '0.72rem', color: '#D0B29E', marginTop: 2 }}>
-                          {vel != null && !concluido && <span>⚡ {vel.toFixed(1)} min/rec{ub ? ` · 🕐 há ${tempoDecorrido(ub)}` : ''}</span>}
-                          {concluido && <span style={{ color: '#4ade80', fontWeight: 700 }}>✔ Concluído</span>}
+                        <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 10 }}>
+                          {vel != null && !concluido && (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#3D2515', border: '1px solid #734A2A', borderRadius: 20, padding: '3px 10px', fontSize: '0.78rem', fontWeight: 700, color: '#F6BE00' }}>
+                              ⚡ {vel.toFixed(1)} <span style={{ color: '#D0B29E', fontWeight: 400 }}>rec/min</span>
+                            </span>
+                          )}
+                          {ub && !concluido && (
+                            <span style={{ fontSize: '0.72rem', color: '#D0B29E' }}>
+                              🕐 há {tempoDecorrido(ub)}
+                            </span>
+                          )}
+                          {concluido && (
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4ade80' }}>✔ Concluído</span>
+                          )}
                         </div>
                       </div>
-                      <div style={{ fontFamily: 'monospace', color: '#D0B29E' }}>
-                        <span style={{ fontSize: '1.6rem', fontWeight: 900, color: concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
-                        {' '}/{' '}{item.metaLotes}
+                      {/* Contador */}
+                      <div style={{ textAlign: 'right', fontFamily: 'monospace', flexShrink: 0 }}>
+                        <span style={{ fontSize: '1.8rem', fontWeight: 900, color: concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
+                        <span style={{ color: '#D0B29E', fontSize: '1rem' }}> / {item.metaLotes}</span>
                       </div>
                     </div>
                     <div style={{ background: '#3D2515', borderRadius: 20, height: 12, overflow: 'hidden' }}>
