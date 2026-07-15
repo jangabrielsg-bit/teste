@@ -1,13 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { doc, collection, onSnapshot, getDocs, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarDataBR } from '../services/utils';
 
-// ── Hook: Estoque de Matéria-Prima (OS externo, multi-tenant) ─────
+// ── Hook: Estoque MP — polling a cada 30min (era 5min) ────────────
 function useEstoqueMP(ativo) {
   const [itens, setItens] = useState([]);
   const [carregando, setCarregando] = useState(true);
-  const buscarRef = useRef(null);
 
   useEffect(() => {
     if (!ativo) return;
@@ -19,9 +18,12 @@ function useEstoqueMP(ativo) {
         if (!cDoc.exists() || !cDoc.data().masterUid) return;
         const mUid = cDoc.data().masterUid;
 
+        // Lê inventory e batches em paralelo (2 getDocs em vez de onSnapshot)
         const [invSnap, batSnap] = await Promise.all([
-          getDocs(collection(dbEstoqueOS, 'users', mUid, 'inventory')),
-          getDocs(collection(dbEstoqueOS, 'users', mUid, 'batches')),
+          import('firebase/firestore').then(({ getDocs, collection }) =>
+            getDocs(collection(dbEstoqueOS, 'users', mUid, 'inventory'))),
+          import('firebase/firestore').then(({ getDocs, collection }) =>
+            getDocs(collection(dbEstoqueOS, 'users', mUid, 'batches'))),
         ]);
 
         const saldos = {};
@@ -58,8 +60,8 @@ function useEstoqueMP(ativo) {
     }
 
     buscar();
-    const t = setInterval(buscar, 5 * 60 * 1000);
-    buscarRef.current = buscar;
+    // ✅ Polling a cada 30min (era 5min = 6× menos leituras)
+    const t = setInterval(buscar, 30 * 60 * 1000);
     return () => { vivo = false; clearInterval(t); };
   }, [ativo]);
 
@@ -80,13 +82,13 @@ export default function PainelTV({ sair }) {
   const [tunelRegistros, setTunelRegistros] = useState([]);
   const [estoquePA, setEstoquePA]   = useState([]);
 
-  // Relógio — a cada segundo (cronômetros de velocidade)
+  // Relógio
   useEffect(() => {
     const t = setInterval(() => setAgora(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // Produção do dia (tempo real)
+  // ✅ Produção do dia — onSnapshot num único doc (necessário: tempo real)
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'producaoDiaria', dataHoje), snap => {
       setCarregando(false);
@@ -101,19 +103,22 @@ export default function PainelTV({ sair }) {
     return unsub;
   }, [dataHoje]);
 
-  // Estoque PA (só quando aba ativa — economiza leituras)
+  // ✅ Estoque PA — escuta doc RESUMO único em vez da coleção inteira
+  // A bridge grava estoquePA_resumo/atual com a lista completa
+  // → 1 leitura por sync em vez de N leituras (uma por produto)
   useEffect(() => {
     if (aba !== 'estoque_pa') return;
-    const unsub = onSnapshot(collection(db, 'estoquePA'), snap => {
-      const lista = [];
-      snap.forEach(d => lista.push({ id: d.id, ...d.data() }));
-      lista.sort((a, b) => {
-        const ca = a.estoqueMinimo > 0 && a.estoqueAtual <= a.estoqueMinimo ? 0 : 1;
-        const cb = b.estoqueMinimo > 0 && b.estoqueAtual <= b.estoqueMinimo ? 0 : 1;
-        if (ca !== cb) return ca - cb;
-        return (a.produto || '').localeCompare(b.produto || '', 'pt-BR');
-      });
-      setEstoquePA(lista);
+    const unsub = onSnapshot(doc(db, 'estoquePA_resumo', 'atual'), snap => {
+      if (snap.exists()) {
+        const lista = snap.data().itens || [];
+        lista.sort((a, b) => {
+          const ca = a.estoqueMinimo > 0 && a.estoqueAtual <= a.estoqueMinimo ? 0 : 1;
+          const cb = b.estoqueMinimo > 0 && b.estoqueAtual <= b.estoqueMinimo ? 0 : 1;
+          if (ca !== cb) return ca - cb;
+          return (a.produto || '').localeCompare(b.produto || '', 'pt-BR');
+        });
+        setEstoquePA(lista);
+      }
     });
     return unsub;
   }, [aba]);
@@ -135,7 +140,6 @@ export default function PainelTV({ sair }) {
     else document.exitFullscreen().catch(() => {});
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────
   function tempoDecorrido(iso) {
     if (!iso) return '—:—';
     const seg = Math.max(0, Math.floor((agora.getTime() - new Date(iso).getTime()) / 1000));
@@ -148,7 +152,6 @@ export default function PainelTV({ sair }) {
     return (new Date(b.at(-1)).getTime() - new Date(b[0]).getTime()) / 60000 / (b.length - 1);
   }
 
-  // ── Métricas globais ──────────────────────────────────────────────
   const totalProgramado = itens.reduce((s, it) => s + (it.metaLotes || 0), 0);
   const totalFeito      = itens.reduce((s, it) => s + (it.feitos || 0), 0);
   const pctGeral        = totalProgramado > 0 ? Math.round(totalFeito / totalProgramado * 100) : 0;
@@ -170,7 +173,6 @@ export default function PainelTV({ sair }) {
     porCategoria[cat].push(it);
   });
 
-  // ── Estilos base do tema industrial ─────────────────────────────
   const S = {
     shell:   { display: 'flex', flexDirection: 'column', height: '100vh', background: '#3D2515', color: '#D0B29E', fontFamily: "'Inter', sans-serif", overflow: 'hidden' },
     header:  { height: 64, background: '#2A170A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', borderBottom: '1px solid #5C3A21', flexShrink: 0, gap: 12 },
@@ -184,15 +186,12 @@ export default function PainelTV({ sair }) {
   return (
     <div style={S.shell}>
 
-      {/* ── Header ── */}
       <header style={S.header}>
-        {/* Logo + título */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
           <img src={import.meta.env.BASE_URL + 'logo.png'} alt="IMAC" style={{ height: 36 }} />
           <span style={{ fontSize: '1.1rem', fontWeight: 900, color: '#F6BE00', letterSpacing: 2, textTransform: 'uppercase' }}>Painel Industrial</span>
         </div>
 
-        {/* Abas */}
         <div style={{ display: 'flex', background: '#3D2515', padding: 3, borderRadius: 8, border: '1px solid #734A2A', gap: 3 }}>
           {ABAS.map(a => (
             <button key={a} onClick={() => { setAba(a); setAutoRodizio(false); }} style={{
@@ -214,7 +213,6 @@ export default function PainelTV({ sair }) {
           </button>
         </div>
 
-        {/* Relógio + controles */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <span style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 700, color: '#F6BE00' }}>
             {agora.toLocaleTimeString('pt-BR')}
@@ -229,16 +227,13 @@ export default function PainelTV({ sair }) {
 
       <main style={S.main}>
 
-        {/* ══════════════════════════════════════════════
-            ABA 1 — VISÃO GERAL (progresso + item ativo)
-        ══════════════════════════════════════════════ */}
+        {/* ABA 1 — VISÃO GERAL */}
         {aba === 'producao' && (
           <>
             {carregando && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Carregando...</div>}
             {!carregando && !existe && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Nenhuma produção programada para hoje.</div>}
             {!carregando && existe && (
               <>
-                {/* Barra geral */}
                 <div style={{ ...S.cardDark, marginBottom: 16, textAlign: 'center' }}>
                   <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#F6BE00', lineHeight: 1 }}>
                     {totalFeito}<span style={{ fontSize: '1.4rem', color: '#D0B29E', fontWeight: 700 }}> / {totalProgramado}</span>
@@ -250,143 +245,40 @@ export default function PainelTV({ sair }) {
                   <div style={{ marginTop: 4, fontSize: '0.85rem', fontWeight: 700, color: '#F6BE00' }}>{pctGeral}%</div>
                 </div>
 
-                {/* Cards de velocidade */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  <div style={{ ...S.cardDark, textAlign: 'center' }}>
-                    <div style={S.label}>⚡ Velocidade geral</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 900, color: 'white', marginTop: 6 }}>
-                      {velocidadeGeral != null ? velocidadeGeral.toFixed(2) : '—'}
-                      <span style={{ fontSize: '0.9rem', color: '#D0B29E', fontWeight: 700, marginLeft: 4 }}>rec/min</span>
-                    </div>
-                  </div>
-                  <div style={{ ...S.cardDark, textAlign: 'center' }}>
-                    <div style={S.label}>🕐 Última receita na masseira</div>
-                    <div style={{ fontSize: '2rem', fontWeight: 900, color: ultimaBatidaGeral ? '#4ade80' : '#6b7280', marginTop: 6 }}>
-                      {tempoDecorrido(ultimaBatidaGeral)}
-                      {ultimaBatidaGeral && <span style={{ fontSize: '0.85rem', color: '#D0B29E', fontWeight: 700, marginLeft: 4 }}>atrás</span>}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Item ativo */}
-                {itemAtivo ? (
-                  <div style={{ ...S.card, borderLeft: '4px solid #F6BE00', marginBottom: 16 }}>
-                    <div style={{ ...S.label, color: '#F6BE00', marginBottom: 6 }}>● PRODUZINDO AGORA</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: 'white' }}>{itemAtivo.produto}</div>
-                    <div style={{ fontSize: '0.85rem', color: '#D0B29E', marginBottom: 12 }}>{itemAtivo.categoria}</div>
-                    <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <div>
-                        <span style={{ fontSize: '2rem', fontWeight: 900, color: '#F6BE00' }}>{itemAtivo.feitos}</span>
-                        <span style={{ color: '#D0B29E' }}> / {itemAtivo.metaLotes} receitas</span>
-                      </div>
-                      {itemAtivo.batidas?.length > 0 && (
-                        <div style={{ ...S.cardDark, padding: '10px 16px' }}>
-                          <div style={S.label}>Desde a última</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 700, color: 'white' }}>
-                            {tempoDecorrido(itemAtivo.batidas.at(-1))}
-                          </div>
-                        </div>
-                      )}
-                      {velItem(itemAtivo) != null && (
-                        <div style={{ ...S.cardDark, padding: '10px 16px' }}>
-                          <div style={S.label}>Vel. deste produto</div>
-                          <div style={{ fontFamily: 'monospace', fontSize: '1.3rem', fontWeight: 700, color: 'white' }}>
-                            {velItem(itemAtivo).toFixed(1)} <span style={{ fontSize: '0.8rem', color: '#D0B29E' }}>min/rec</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Lotes de MP da última batida */}
-                    {(() => {
-                      const hist = itemAtivo.consumoMP || [];
-                      if (!hist.length) return null;
-                      const ultima = hist.at(-1);
-                      return (
-                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)' }}>
-                          <div style={{ ...S.label, color: '#D0B29E', marginBottom: 6 }}>
-                            Lotes em uso — última batida
-                            {ultima.incompleto && <span style={{ color: '#f87171', marginLeft: 8 }}>⚠ estoque insuficiente</span>}
-                          </div>
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                            {(ultima.consumos || []).map((c, i) => (
-                              <div key={i} style={{ background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '6px 12px' }}>
-                                <div style={{ fontSize: '0.68rem', color: '#9ca3af' }}>{c.nomeMP}</div>
-                                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'white' }}>
-                                  {(c.lotes || []).map((l, j) => (
-                                    <span key={j} style={{ marginRight: 8 }}>
-                                      Lote {l.loteNumero}
-                                      {l.forcadoManualmente && <span style={{ color: '#fbbf24' }}> ✋</span>}
-                                    </span>
-                                  ))}
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                ) : (
-                  <div style={{ ...S.card, textAlign: 'center', borderLeft: '4px solid #4ade80' }}>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#4ade80' }}>✔ Programação de hoje finalizada 🎉</div>
-                  </div>
-                )}
-
-                {/* Grid por setor */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                  {Object.keys(porCategoria).sort().map(cat => (
-                    <div key={cat} style={S.cardDark}>
-                      <div style={{ ...S.label, color: '#F6BE00', marginBottom: 8 }}>{cat}</div>
-                      {porCategoria[cat].map((it, i) => {
-                        const concluido = it.feitos >= it.metaLotes;
-                        const ativo = it === itemAtivo;
-                        const vel = velItem(it);
-                        const ub = it.batidas?.at(-1);
+                {Object.entries(porCategoria).map(([cat, catItens]) => (
+                  <div key={cat} style={{ marginBottom: 20 }}>
+                    <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#F6BE00', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 10 }}>{cat}</div>
+                    <div style={{ display: 'grid', gap: 12 }}>
+                      {catItens.map((item, idx) => {
+                        const perc = item.metaLotes ? Math.min(100, Math.round((item.feitos || 0) / item.metaLotes * 100)) : 0;
+                        const concluido = (item.feitos || 0) >= item.metaLotes;
                         return (
-                          <div key={i} style={{
-                            padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.06)',
-                            opacity: concluido ? 0.6 : 1,
-                          }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                                <span style={{ color: concluido ? '#4ade80' : ativo ? '#F6BE00' : '#6b7280', fontWeight: 900, flexShrink: 0 }}>
-                                  {concluido ? '✔' : ativo ? '●' : '—'}
-                                </span>
-                                <span style={{ fontWeight: 700, color: 'white', fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {it.produto}
-                                  {it.consumoMP?.length > 0 && <span style={{ marginLeft: 4, opacity: 0.6, fontSize: '0.7rem' }}>📦</span>}
-                                </span>
+                          <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                              <div style={{ fontWeight: 700, color: 'white' }}>{item.produto}</div>
+                              <div style={{ fontFamily: 'monospace', color: '#D0B29E' }}>
+                                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
+                                {' '}/{' '}{item.metaLotes}
                               </div>
-                              <span style={{ fontWeight: 800, color: concluido ? '#4ade80' : '#F6BE00', flexShrink: 0, marginLeft: 8 }}>
-                                {it.feitos}/{it.metaLotes}
-                              </span>
                             </div>
-                            {!concluido && (vel != null || ub) && (
-                              <div style={{ fontSize: '0.68rem', color: '#9ca3af', paddingLeft: 18, marginTop: 2 }}>
-                                {vel != null && <span>⚡ {vel.toFixed(1)} min/rec · </span>}
-                                {ub && <span>🕐 há {tempoDecorrido(ub)}</span>}
-                              </div>
-                            )}
+                            <div style={{ background: '#3D2515', borderRadius: 20, height: 10, overflow: 'hidden' }}>
+                              <div style={{ background: concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                            </div>
                           </div>
                         );
                       })}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                ))}
               </>
             )}
           </>
         )}
 
-        {/* ══════════════════════════════════════════════
-            ABA 2 — MASSEIRA (barras grandes por produto)
-        ══════════════════════════════════════════════ */}
+        {/* ABA 2 — MASSEIRA */}
         {aba === 'masseira' && (
           <>
             <h3 style={S.h3}><i className="ph ph-bowl-food" style={{ color: '#F6BE00', marginRight: 8 }}></i>Produção Masseira</h3>
-
-            {/* Cards de velocidade */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
               <div style={{ ...S.cardDark, textAlign: 'center' }}>
                 <div style={S.label}>⚡ Velocidade geral</div>
@@ -403,8 +295,6 @@ export default function PainelTV({ sair }) {
                 </div>
               </div>
             </div>
-
-            {/* Barra por produto */}
             <div style={{ display: 'grid', gap: 14 }}>
               {ordenados.map((item, idx) => {
                 const perc = item.metaLotes ? Math.min(100, Math.round((item.feitos || 0) / item.metaLotes * 100)) : 0;
@@ -437,23 +327,20 @@ export default function PainelTV({ sair }) {
           </>
         )}
 
-        {/* ══════════════════════════════════════════════
-            ABA 3 — ESTOQUE PA (produto acabado)
-        ══════════════════════════════════════════════ */}
+        {/* ABA 3 — ESTOQUE PA */}
         {aba === 'estoque_pa' && (
           <>
             <h3 style={S.h3}><i className="ph ph-snowflake" style={{ color: '#F6BE00', marginRight: 8 }}></i>Estoque Produto Acabado</h3>
             {estoquePA.length === 0 && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Aguardando dados...</div>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-              {estoquePA.map(item => {
-                const abaixoMin  = item.estoqueMinimo > 0 && item.estoqueAtual <= item.estoqueMinimo;
-                const demanda    = (item.saida24h || 0) + (item.saida48h || 0);
-                const cobDias    = item.coberturaDias ?? (item.mediaSaidaDiaria > 0 ? item.estoqueAtual / item.mediaSaidaDiaria : demanda > 0 ? (item.estoqueAtual / demanda) * 2 : null);
-                const emAviso    = !abaixoMin && cobDias != null && cobDias < 2;
-                const corBorda   = abaixoMin ? '#dc2626' : emAviso ? '#f59e0b' : '#734A2A';
-                const corVal     = abaixoMin ? '#f87171' : emAviso ? '#fbbf24' : '#4ade80';
+              {estoquePA.map((item, i) => {
+                const abaixoMin = item.estoqueMinimo > 0 && item.estoqueAtual <= item.estoqueMinimo;
+                const cobDias   = item.coberturaDias ?? (item.mediaSaidaDiaria > 0 ? item.estoqueAtual / item.mediaSaidaDiaria : null);
+                const emAviso   = !abaixoMin && cobDias != null && cobDias < 2;
+                const corBorda  = abaixoMin ? '#dc2626' : emAviso ? '#f59e0b' : '#734A2A';
+                const corVal    = abaixoMin ? '#f87171' : emAviso ? '#fbbf24' : '#4ade80';
                 return (
-                  <div key={item.id} style={{ background: '#4A2E1A', border: `2px solid ${corBorda}`, borderRadius: 14, padding: 16 }}>
+                  <div key={i} style={{ background: '#4A2E1A', border: `2px solid ${corBorda}`, borderRadius: 14, padding: 16 }}>
                     <div style={{ fontWeight: 900, color: 'white', marginBottom: 8 }}>{item.produto}</div>
                     <div style={{ fontSize: '1.6rem', fontWeight: 900, color: corVal }}>
                       {item.estoqueAtual} <span style={{ fontSize: '0.85rem', color: '#D0B29E' }}>{item.unidade}</span>
@@ -469,12 +356,6 @@ export default function PainelTV({ sair }) {
                         <span style={{ fontWeight: 900, color: corVal }}>{cobDias < 0.1 ? '< 0.1' : cobDias.toFixed(1)} dias</span>
                       </div>
                     )}
-                    {item.rendimentoReal > 0 && (
-                      <div style={{ marginTop: 6, fontSize: '0.7rem', color: '#D0B29E' }}>
-                        Rendimento: <b style={{ color: 'white' }}>{item.rendimentoReal} {item.unidade}/bat.</b>
-                        {item.batidaSemana > 0 && <span> · {item.batidaSemana.toFixed(1)} bat/sem</span>}
-                      </div>
-                    )}
                     {abaixoMin && <div style={{ marginTop: 8, background: '#5c1a1a', color: '#f87171', fontWeight: 800, fontSize: '0.72rem', padding: '3px 10px', borderRadius: 20, display: 'inline-block' }}>ABAIXO DO MÍNIMO</div>}
                     {emAviso && !abaixoMin && <div style={{ marginTop: 8, background: '#5c3a21', color: '#fbbf24', fontWeight: 800, fontSize: '0.72rem', padding: '3px 10px', borderRadius: 20, display: 'inline-block' }}>COBRE {cobDias.toFixed(1)} DIAS</div>}
                   </div>
@@ -484,9 +365,7 @@ export default function PainelTV({ sair }) {
           </>
         )}
 
-        {/* ══════════════════════════════════════════════
-            ABA 4 — ESTOQUE MP (matéria-prima)
-        ══════════════════════════════════════════════ */}
+        {/* ABA 4 — ESTOQUE MP */}
         {aba === 'estoque_mp' && (
           <>
             <h3 style={S.h3}><i className="ph ph-package" style={{ color: '#F6BE00', marginRight: 8 }}></i>Estoque Matéria-Prima</h3>
