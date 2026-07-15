@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../services/auth';
 import { hojeISO, paraISO, formatarDataBR, formatarKg } from '../services/utils';
@@ -63,8 +63,32 @@ export default function PCP() {
   const [itensProducao, setItensProducao] = useState([]);
   const [modalCorrigir, setModalCorrigir] = useState(null); // { codigo, produto, rendimentoUnit, feitos }
   const [salvandoCorrecao, setSalvandoCorrecao] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null);
+  const [solicitandoSync, setSolicitandoSync] = useState(false);
 
+  // Escuta status da bridge em tempo real (só para PCP)
   useEffect(() => {
+    if (!isPcp) return;
+    const unsub = onSnapshot(doc(db, 'bridge', 'status'), snap => {
+      if (snap.exists()) setSyncStatus(snap.data());
+    });
+    return () => unsub();
+  }, [isPcp]);
+
+  async function solicitarSincronizacao() {
+    if (solicitandoSync || syncStatus?.rodando) return;
+    setSolicitandoSync(true);
+    try {
+      await setDoc(doc(db, 'bridge', 'comando'), {
+        acao: 'sincronizar',
+        solicitadoEm: new Date().toISOString(),
+      });
+    } catch (e) {
+      alert('Erro ao solicitar sincronização: ' + e.message);
+    } finally {
+      setSolicitandoSync(false);
+    }
+  }
     setCarregando(true);
     const unsubExp = onSnapshot(doc(db, 'expedicaoDiaria', dataAlvo), snap => {
       if (snap.exists() && snap.data().registros) setRegistros(snap.data().registros);
@@ -160,6 +184,49 @@ export default function PCP() {
       </div>
 
       <div className="cat-heading">Teórico (Líder) × Real (Câmara)</div>
+
+      {/* Botão de sincronização — apenas PCP */}
+      {isPcp && (
+        <div style={{ margin: '0 0 16px', padding: '14px 16px', background: 'white', borderRadius: 14, border: '1px solid var(--border-suave)', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            onClick={solicitarSincronizacao}
+            disabled={solicitandoSync || syncStatus?.rodando}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '10px 18px', borderRadius: 10, border: 'none',
+              background: syncStatus?.rodando ? 'var(--border-suave)' : 'var(--marrom)',
+              color: syncStatus?.rodando ? 'var(--marrom-claro)' : 'white',
+              fontWeight: 800, fontSize: '0.85rem', cursor: syncStatus?.rodando ? 'not-allowed' : 'pointer',
+              whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            <i className={`ph ${syncStatus?.rodando ? 'ph-spinner' : 'ph-arrows-clockwise'}`}
+               style={syncStatus?.rodando ? { animation: 'spin 1s linear infinite' } : {}}></i>
+            {syncStatus?.rodando ? 'Sincronizando...' : 'Sincronizar Winthor'}
+          </button>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {syncStatus ? (
+              <>
+                <div style={{ fontSize: '0.78rem', color: 'var(--marrom)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {syncStatus.mensagem || '—'}
+                </div>
+                {syncStatus.ultimaSincronizacao && (
+                  <div style={{ fontSize: '0.7rem', color: 'var(--marrom-claro)', marginTop: 2 }}>
+                    Última sync: {new Date(syncStatus.ultimaSincronizacao).toLocaleString('pt-BR')}
+                  </div>
+                )}
+                {syncStatus.rodando && syncStatus.progresso > 0 && (
+                  <div style={{ marginTop: 6, height: 4, background: 'var(--border-suave)', borderRadius: 4, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', background: 'var(--marrom)', borderRadius: 4, width: `${syncStatus.progresso}%`, transition: 'width 0.4s ease' }} />
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={{ fontSize: '0.78rem', color: 'var(--marrom-claro)' }}>Bridge não reportou status ainda.</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {lista.length === 0 && (
         <div className="status-msg">Nenhuma produção ou entrada na câmara nesse dia.</div>
