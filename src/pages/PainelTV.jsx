@@ -123,6 +123,23 @@ export default function PainelTV({ sair }) {
     return unsub;
   }, [aba]);
 
+  // ✅ Reload automático via Firestore — escuta bridge/versao
+  // Quando a bridge grava uma versão nova (após deploy ou sync),
+  // o painel recarrega sozinho sem precisar ir até a TV.
+  useEffect(() => {
+    let versaoAtual = null;
+    const unsub = onSnapshot(doc(db, 'bridge', 'versao'), snap => {
+      if (!snap.exists()) return;
+      const v = snap.data().valor;
+      if (versaoAtual === null) { versaoAtual = v; return; } // ignora na primeira leitura
+      if (v !== versaoAtual) {
+        console.log(`🔄 Nova versão detectada (${versaoAtual} → ${v}). Recarregando...`);
+        setTimeout(() => window.location.reload(), 2000); // aguarda 2s para não recarregar no meio de uma animação
+      }
+    });
+    return unsub;
+  }, []);
+
   // Estoque MP
   const { itens: estoqueMP, carregando: carregandoMP } = useEstoqueMP(aba === 'estoque_mp');
 
