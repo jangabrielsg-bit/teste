@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { doc, onSnapshot, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot, getDoc, collection } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarDataBR, formatarHoraData } from '../services/utils';
 import { useMPOcultos } from '../services/hooks';
@@ -105,18 +105,43 @@ export default function PainelTV({ sair }) {
     return unsub;
   }, [dataHoje]);
 
-  // ✅ Patinhas pesadas hoje — mesmo doc de expedicaoDiaria usado no PCP/Expedição
+  // ✅ Patinhas pesadas hoje — confirmadas (expedicaoDiaria) + em andamento
+  // (pesagensEmAndamento, uma sub-sessão por dispositivo pesando agora).
+  // Assim a patinha some no painel no momento da pesagem, não só depois
+  // de o operador clicar em "Confirmar Entrada".
+  const [patinhasConfirmadas, setPatinhasConfirmadas] = useState([]);
+  const [patinhasPendentes, setPatinhasPendentes]     = useState([]);
+
   useEffect(() => {
     const unsub = onSnapshot(doc(db, 'expedicaoDiaria', dataHoje), snap => {
-      if (snap.exists() && snap.data().registros) {
-        const lista = [...snap.data().registros].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-        setPatinhas(lista);
-      } else {
-        setPatinhas([]);
-      }
+      setPatinhasConfirmadas(snap.exists() ? (snap.data().registros || []) : []);
     });
     return unsub;
   }, [dataHoje]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'pesagensEmAndamento', dataHoje, 'sessoes'), snap => {
+      const lista = [];
+      snap.forEach(d => (d.data().itens || []).forEach(it => lista.push(it)));
+      setPatinhasPendentes(lista);
+    });
+    return unsub;
+  }, [dataHoje]);
+
+  useEffect(() => {
+    const pendentesFmt = patinhasPendentes.map(it => ({
+      id: it.id,
+      produto: it.nome,
+      codigoProduto: it.codigo,
+      lote: it.lote,
+      pesoTotal: it.qtd,
+      timestamp: it.timestamp,
+      pendente: true,
+    }));
+    const lista = [...patinhasConfirmadas, ...pendentesFmt]
+      .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+    setPatinhas(lista);
+  }, [patinhasConfirmadas, patinhasPendentes]);
 
   // ✅ Estoque PA — escuta doc RESUMO único em vez da coleção inteira
   // A bridge grava estoquePA_resumo/atual com a lista completa
@@ -381,9 +406,16 @@ export default function PainelTV({ sair }) {
             {patinhas.length === 0 && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Nenhuma patinha pesada ainda hoje.</div>}
             <div style={{ display: 'grid', gap: 10 }}>
               {patinhas.map((r, i) => (
-                <div key={r.id || i} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <div key={r.id || i} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, border: r.pendente ? '1px solid #F6BE00' : undefined }}>
                   <div style={{ minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, color: 'white' }}>{r.produto}</div>
+                    <div style={{ fontWeight: 700, color: 'white', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {r.produto}
+                      {r.pendente && (
+                        <span style={{ fontSize: '0.62rem', fontWeight: 800, color: '#2A170A', background: '#F6BE00', padding: '2px 8px', borderRadius: 20, animation: 'sinoPulseTv 1.4s ease-in-out infinite' }}>
+                          PESANDO...
+                        </span>
+                      )}
+                    </div>
                     <div style={{ fontSize: '0.75rem', color: '#D0B29E', marginTop: 2 }}>
                       {r.lote && <>Lote: {r.lote} · </>}{r.codigoProduto && <>COD {r.codigoProduto}</>}
                     </div>
@@ -396,6 +428,7 @@ export default function PainelTV({ sair }) {
                   </div>
                 </div>
               ))}
+              <style>{`@keyframes sinoPulseTv { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
             </div>
           </>
         )}
