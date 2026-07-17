@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, collection, writeBatch, arrayUnion, getDocs, getDoc, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
-import { hojeISO, formatarKg } from '../services/utils';
+import { hojeISO, formatarKg, formatarHoraData } from '../services/utils';
 import { useAuth } from '../services/auth';
-import { useProdutos } from '../services/hooks';
+import { useProdutos, useMPOcultos } from '../services/hooks';
 import { resumirOrigemMP } from '../services/consumoMP';
 import ModalTeclado from '../components/ModalTeclado';
 
@@ -11,10 +11,16 @@ export default function Expedicao() {
   const { currentUser } = useAuth();
   const { produtos } = useProdutos();
   const dataHoje = hojeISO();
+  const CHAVE_RASCUNHO = `patinhasPendentes_${dataHoje}`;
   const [producaoHoje, setProducaoHoje]     = useState([]);
   const [tunelHoje, setTunelHoje]           = useState([]);
   const [carregando, setCarregando]         = useState(true);
-  const [listaEntrada, setListaEntrada]     = useState([]);
+  const [listaEntrada, setListaEntrada]     = useState(() => {
+    try {
+      const salvo = localStorage.getItem(`patinhasPendentes_${hojeISO()}`);
+      return salvo ? JSON.parse(salvo) : [];
+    } catch { return []; }
+  });
   const [salvando, setSalvando]             = useState(false);
   const [produtoIdx, setProdutoIdx]         = useState('');
   const [lote, setLote]                     = useState('');
@@ -31,6 +37,7 @@ export default function Expedicao() {
   const [estoqueMP, setEstoqueMP]           = useState([]);
   const [estoqueWinthor, setEstoqueWinthor] = useState({});
   const [carregandoMP, setCarregandoMP]     = useState(false);
+  const mpOcultos = useMPOcultos();
 
   // Matéria Prima (original intacto)
   useEffect(() => {
@@ -74,6 +81,15 @@ export default function Expedicao() {
     });
     return unsub;
   }, [dataHoje]);
+
+  // Salva a fila de patinhas ainda não confirmadas — evita perder o
+  // registro se a aba fechar/recarregar antes de "Confirmar Entrada".
+  useEffect(() => {
+    try {
+      if (listaEntrada.length > 0) localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify(listaEntrada));
+      else localStorage.removeItem(CHAVE_RASCUNHO);
+    } catch { /* localStorage indisponível — ignora */ }
+  }, [listaEntrada, CHAVE_RASCUNHO]);
 
   // Auto-preenche lote/validade do túnel
   useEffect(() => {
@@ -184,7 +200,7 @@ export default function Expedicao() {
           lote:           item.lote,
           pesoTotal:      item.qtd,
           qtCaixas:       1,
-          horario:        new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }),
+          horario:        formatarHoraData(new Date().toISOString()),
           timestamp:      new Date().toISOString(),
         };
         batch.set(refExp, { data: dataHoje, registros: arrayUnion(regExp) }, { merge: true });
@@ -227,6 +243,7 @@ export default function Expedicao() {
       await batch.commit();
       alert(`${listaEntrada.length} patinhas registradas na câmara!`);
       setListaEntrada([]);
+      try { localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* ignora */ }
       setQtd('');
       setAba(2);
     } catch (e) {
@@ -249,11 +266,11 @@ export default function Expedicao() {
     gruposAcabado[it.nome].lotes.push(it);
   });
   let listaAcabado = Object.values(gruposAcabado);
-  let mpFiltrado = estoqueMP;
+  let mpFiltrado = estoqueMP.filter(g => !mpOcultos[g.codigo]);
   if (termoBuscaEstoque) {
     const t = termoBuscaEstoque.toLowerCase();
     listaAcabado = listaAcabado.filter(g => g.nome.toLowerCase().includes(t));
-    mpFiltrado = estoqueMP.filter(g => g.nome.toLowerCase().includes(t) || (g.codigo && g.codigo.toLowerCase().includes(t)));
+    mpFiltrado = mpFiltrado.filter(g => g.nome.toLowerCase().includes(t) || (g.codigo && g.codigo.toLowerCase().includes(t)));
   }
 
   return (

@@ -19,3 +19,19 @@ export function useProdutos() {
 
   return { produtos, carregando };
 }
+
+// Itens de matéria-prima do sistema externo (Winthor/OS) que o PCP marcou
+// como "ocultar" — sem cadastro válido ou sem saída. É só um filtro de
+// visualização: não apaga nada no sistema de origem.
+export function useMPOcultos() {
+  const [ocultos, setOcultos] = useState({});
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'mpOcultos'), snap => {
+      const mapa = {};
+      snap.forEach(d => { mapa[d.id] = d.data(); });
+      setOcultos(mapa);
+    });
+    return unsub;
+  }, []);
+  return ocultos;
+}

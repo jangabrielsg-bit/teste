@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, getDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
-import { hojeISO, formatarDataBR } from '../services/utils';
+import { hojeISO, formatarDataBR, formatarHoraData } from '../services/utils';
+import { useMPOcultos } from '../services/hooks';
 
 // ── Hook: Estoque MP — polling a cada 30min (era 5min) ────────────
 function useEstoqueMP(ativo) {
@@ -68,8 +69,8 @@ function useEstoqueMP(ativo) {
   return { itens, carregando };
 }
 
-const ABAS = ['producao', 'masseira', 'estoque_pa', 'estoque_mp'];
-const NOMES_ABAS = { producao: 'Visão Geral', masseira: 'Masseira', estoque_pa: 'Est. PA', estoque_mp: 'Est. MP' };
+const ABAS = ['producao', 'masseira', 'patinhas', 'estoque_pa', 'estoque_mp'];
+const NOMES_ABAS = { producao: 'Visão Geral', masseira: 'Masseira', patinhas: 'Patinhas', estoque_pa: 'Est. PA', estoque_mp: 'Est. MP' };
 
 export default function PainelTV({ sair }) {
   const dataHoje = hojeISO();
@@ -81,6 +82,7 @@ export default function PainelTV({ sair }) {
   const [carregando, setCarregando] = useState(true);
   const [tunelRegistros, setTunelRegistros] = useState([]);
   const [estoquePA, setEstoquePA]   = useState([]);
+  const [patinhas, setPatinhas]     = useState([]);
 
   // Relógio
   useEffect(() => {
@@ -98,6 +100,19 @@ export default function PainelTV({ sair }) {
         setTunelRegistros(snap.data().tunelRegistros || []);
       } else {
         setExiste(false); setItens([]); setTunelRegistros([]);
+      }
+    });
+    return unsub;
+  }, [dataHoje]);
+
+  // ✅ Patinhas pesadas hoje — mesmo doc de expedicaoDiaria usado no PCP/Expedição
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'expedicaoDiaria', dataHoje), snap => {
+      if (snap.exists() && snap.data().registros) {
+        const lista = [...snap.data().registros].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+        setPatinhas(lista);
+      } else {
+        setPatinhas([]);
       }
     });
     return unsub;
@@ -141,7 +156,9 @@ export default function PainelTV({ sair }) {
   }, []);
 
   // Estoque MP
-  const { itens: estoqueMP, carregando: carregandoMP } = useEstoqueMP(aba === 'estoque_mp');
+  const mpOcultos = useMPOcultos();
+  const { itens: estoqueMPBruto, carregando: carregandoMP } = useEstoqueMP(aba === 'estoque_mp');
+  const estoqueMP = estoqueMPBruto.filter(item => !mpOcultos[item.id]);
 
   // Rodízio automático
   useEffect(() => {
@@ -353,6 +370,32 @@ export default function PainelTV({ sair }) {
                 );
               })}
               {ordenados.length === 0 && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Nenhuma produção programada para hoje.</div>}
+            </div>
+          </>
+        )}
+
+        {/* ABA 3 — PATINHAS PESADAS */}
+        {aba === 'patinhas' && (
+          <>
+            <h3 style={S.h3}><i className="ph ph-scales" style={{ color: '#F6BE00', marginRight: 8 }}></i>Patinhas Pesadas Hoje</h3>
+            {patinhas.length === 0 && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Nenhuma patinha pesada ainda hoje.</div>}
+            <div style={{ display: 'grid', gap: 10 }}>
+              {patinhas.map((r, i) => (
+                <div key={r.id || i} style={{ ...S.card, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, color: 'white' }}>{r.produto}</div>
+                    <div style={{ fontSize: '0.75rem', color: '#D0B29E', marginTop: 2 }}>
+                      {r.lote && <>Lote: {r.lote} · </>}{r.codigoProduto && <>COD {r.codigoProduto}</>}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                    <div style={{ fontWeight: 900, color: '#F6BE00', fontSize: '1.1rem' }}>{(r.pesoTotal || 0).toFixed(2)} kg</div>
+                    <div style={{ fontSize: '0.75rem', color: '#D0B29E', fontFamily: 'monospace' }}>
+                      {r.horario || formatarHoraData(r.timestamp)}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </>
         )}

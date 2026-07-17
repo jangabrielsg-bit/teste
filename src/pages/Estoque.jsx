@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
-import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment } from 'firebase/firestore';
+import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment, setDoc, deleteDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { useAuth } from '../services/auth';
-import { useProdutos } from '../services/hooks';
+import { useProdutos, useMPOcultos } from '../services/hooks';
 
 // ── Hook: Estoque PA Winthor (bridge) ─────────────────────────────
 function useEstoqueWinthorPA() {
@@ -198,27 +198,81 @@ function ModalAjusteFisico({ item, aoFechar }) {
 }
 
 // ── Modal Lotes (compartilhado PA e MP) ───────────────────────────
-function ModalLotes({ produto, aoFechar }) {
+// `editavel` só é true para lotes de PA lançados nesta aplicação (coleção
+// `estoque`, com `id` próprio) — permite ao PCP corrigir/apagar uma
+// patinha pesada errada. Lotes de MP vêm do sistema externo (Winthor/OS)
+// e continuam somente leitura.
+function ModalLotes({ produto, aoFechar, editavel, onSalvarLote, onExcluirLote }) {
+  const [editando, setEditando] = useState(null); // lote sendo editado
+  const [qtdEdit, setQtdEdit]   = useState('');
+  const [loteEdit, setLoteEdit] = useState('');
+  const [validadeEdit, setValidadeEdit] = useState('');
+  const [salvando, setSalvando] = useState(false);
+
+  function abrirEdicao(lt) {
+    setEditando(lt);
+    setQtdEdit(String(lt.qtd ?? ''));
+    setLoteEdit(lt.lote || '');
+    setValidadeEdit(lt.validade || '');
+  }
+
+  async function confirmarEdicao() {
+    if (!qtdEdit || isNaN(parseFloat(qtdEdit))) return alert('Peso inválido.');
+    setSalvando(true);
+    try {
+      await onSalvarLote(editando, { qtd: parseFloat(qtdEdit), lote: loteEdit.trim(), validade: validadeEdit });
+      setEditando(null);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', zIndex: 9999 }} onClick={aoFechar}>
-      <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 420, maxHeight: '70vh', overflow: 'hidden', margin: 16 }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'white', borderRadius: 24, width: '100%', maxWidth: 420, maxHeight: '75vh', overflow: 'hidden', margin: 16, display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         <div style={{ padding: 20, borderBottom: '1px solid var(--border-suave)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div><h2 style={{ fontWeight: 900, fontSize: '1.3rem' }}>{produto.nome}</h2><div style={{ fontSize: '0.75rem', color: '#999' }}>CÓD: {produto.codigo || 'N/A'}</div></div>
           <button style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }} onClick={aoFechar}>✕</button>
         </div>
-        <div style={{ padding: 12, maxHeight: '50vh', overflowY: 'auto' }}>
+        <div style={{ padding: 12, overflowY: 'auto' }}>
           {(produto.lotes || []).length === 0
             ? <div className="status-msg">Nenhum lote encontrado.</div>
             : (produto.lotes || []).map((lt, lIdx) => (
-                <div key={lIdx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderBottom: '1px solid #f3f4f6' }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || lt.code || 'S/N'}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#999' }}>{(lt.validade || lt.expiryDate) ? new Date(lt.validade || lt.expiryDate).toLocaleDateString('pt-BR') : 'Sem validade'}</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div>
-                    <div style={{ fontSize: '0.75rem', color: '#999' }}>{produto.und || lt.und || 'kg'}</div>
-                  </div>
+                <div key={lt.id || lIdx} style={{ padding: 14, borderBottom: '1px solid #f3f4f6' }}>
+                  {editando === lt ? (
+                    <div>
+                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                        <input className="input-texto" style={{ flex: 1 }} value={loteEdit} onChange={e => setLoteEdit(e.target.value)} placeholder="Lote" />
+                        <input type="date" className="input-texto" style={{ flex: 1 }} value={validadeEdit} onChange={e => setValidadeEdit(e.target.value)} />
+                      </div>
+                      <input type="number" step="0.01" className="input-texto" value={qtdEdit} onChange={e => setQtdEdit(e.target.value)} placeholder="Peso" style={{ marginBottom: 8 }} />
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button className="btn btn-outline btn-block" onClick={() => setEditando(null)} disabled={salvando}>Cancelar</button>
+                        <button className="btn btn-primary btn-block" onClick={confirmarEdicao} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || lt.code || 'S/N'}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#999' }}>{(lt.validade || lt.expiryDate) ? new Date(lt.validade || lt.expiryDate).toLocaleDateString('pt-BR') : 'Sem validade'}</div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#999' }}>{produto.und || lt.und || 'kg'}</div>
+                        </div>
+                        {editavel && (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => abrirEdicao(lt)} title="Editar" style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }}>
+                              <i className="ph ph-pencil-simple"></i>
+                            </button>
+                            <button onClick={() => onExcluirLote(lt)} title="Excluir" className="remover-btn">✕</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
           }
@@ -259,7 +313,7 @@ function ChipsResumo({ criticos, avisos, atualizadoEm, labelFonte }) {
 }
 
 // ── CARD SÓLIDO — mesmo layout para PA e MP ───────────────────────
-function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, onClick, onAjustar, borderColor }) {
+function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, onClick, onAjustar, borderColor, acaoExtra }) {
   return (
     <div style={{
       border: `1px solid ${borderColor || '#f0e3c4'}`,
@@ -285,6 +339,7 @@ function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, on
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {tagQtd}
+          {acaoExtra}
           {onAjustar && (
             <button
               onClick={e => { e.stopPropagation(); onAjustar(); }}
@@ -325,6 +380,8 @@ export default function Estoque() {
   const [estoqueWinthorSistema, setEstoqueWinthorSistema] = useState({});
   const [estoqueMP, setEstoqueMP]       = useState([]);
   const [carregandoMP, setCarregandoMP] = useState(false);
+  const [mostrarOcultosMP, setMostrarOcultosMP] = useState(false);
+  const mpOcultos = useMPOcultos();
 
   const { dados: winthorPA, atualizadoEm: paAtualizadoEm } = useEstoqueWinthorPA();
   const fisicoPA = useEstoquePAFisico();
@@ -368,6 +425,39 @@ export default function Estoque() {
       })();
     }
   }, [subAba, isPcp]);
+
+  // ── Editar/excluir uma patinha de PA lançada errada ────────────
+  // Ajusta o doc individual em `estoque` e reflete a diferença no saldo
+  // agregado `estoquePAFisico`, mantendo os dois em sincronia.
+  async function excluirLotePA(lote) {
+    if (!lote.id) return;
+    if (!confirm(`Excluir a patinha "${lote.lote || 'S/N'}" (${parseFloat(lote.qtd || 0).toFixed(2)} ${lote.und || 'kg'})? Esta ação não pode ser desfeita.`)) return;
+    try {
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'estoque', lote.id));
+      if (lote.codigo) {
+        batch.set(doc(db, 'estoquePAFisico', lote.codigo), { saldoFisico: increment(-(parseFloat(lote.qtd) || 0)) }, { merge: true });
+      }
+      await batch.commit();
+      setModalLotes(null);
+    } catch (e) {
+      alert(`Erro ao excluir (${e.code || 'desconhecido'}): ${e.message}`);
+    }
+  }
+
+  async function editarLotePA(loteAntigo, novo) {
+    try {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'estoque', loteAntigo.id), { lote: novo.lote, qtd: novo.qtd, validade: novo.validade });
+      const delta = novo.qtd - (parseFloat(loteAntigo.qtd) || 0);
+      if (loteAntigo.codigo && delta !== 0) {
+        batch.set(doc(db, 'estoquePAFisico', loteAntigo.codigo), { saldoFisico: increment(delta) }, { merge: true });
+      }
+      await batch.commit();
+    } catch (e) {
+      alert(`Erro ao editar (${e.code || 'desconhecido'}): ${e.message}`);
+    }
+  }
 
   const lotesPorCodigo = {};
   estoqueAtual.forEach(it => {
@@ -447,10 +537,26 @@ export default function Estoque() {
   const totalCriticos = listaAcabado.filter(g => classificar(g) === 0).length;
   const totalAvisos   = listaAcabado.filter(g => classificar(g) === 1).length;
 
-  let mpFiltrado = estoqueMP;
+  let mpFiltrado = mostrarOcultosMP
+    ? estoqueMP.filter(g => mpOcultos[g.codigo])
+    : estoqueMP.filter(g => !mpOcultos[g.codigo]);
   if (termoBusca && subAba === 'mp') {
     const t = termoBusca.toLowerCase();
-    mpFiltrado = estoqueMP.filter(g => g.nome.toLowerCase().includes(t) || (g.codigo && g.codigo.toLowerCase().includes(t)));
+    mpFiltrado = mpFiltrado.filter(g => g.nome.toLowerCase().includes(t) || (g.codigo && g.codigo.toLowerCase().includes(t)));
+  }
+  const qtdOcultosMP = estoqueMP.filter(g => mpOcultos[g.codigo]).length;
+
+  async function ocultarMP(item) {
+    if (!confirm(`Ocultar "${item.nome}" da visualização de estoque de MP? Você pode reexibir depois.`)) return;
+    try {
+      await setDoc(doc(db, 'mpOcultos', item.codigo), { codigo: item.codigo, nome: item.nome, ocultoEm: new Date().toISOString() });
+    } catch (e) { alert(`Erro ao ocultar (${e.code || 'desconhecido'}): ${e.message}`); }
+  }
+
+  async function reexibirMP(item) {
+    try {
+      await deleteDoc(doc(db, 'mpOcultos', item.codigo));
+    } catch (e) { alert(`Erro ao reexibir (${e.code || 'desconhecido'}): ${e.message}`); }
   }
 
   return (
@@ -610,6 +716,15 @@ export default function Estoque() {
         )}
 
         {/* ── ABA: MATÉRIA PRIMA — mesmo layout sólido ── */}
+        {subAba === 'mp' && isPcp && qtdOcultosMP > 0 && (
+          <button
+            onClick={() => setMostrarOcultosMP(v => !v)}
+            style={{ marginBottom: 12, background: mostrarOcultosMP ? 'var(--amarelo)' : '#f3f4f6', border: '1px solid var(--border-forte)', borderRadius: 20, padding: '6px 14px', fontWeight: 700, fontSize: '0.78rem', color: 'var(--marrom)', cursor: 'pointer' }}
+          >
+            <i className="ph ph-eye-slash" style={{ marginRight: 6 }}></i>
+            {mostrarOcultosMP ? `Voltar (${qtdOcultosMP} ocultos)` : `Ver ${qtdOcultosMP} ocultos`}
+          </button>
+        )}
         {subAba === 'mp' && isPcp && (
           carregandoMP
             ? <div className="status-msg" style={{ fontWeight: 700 }}>Carregando conciliação...</div>
@@ -649,6 +764,15 @@ export default function Estoque() {
                             {grp.lotes.length} lote{grp.lotes.length > 1 ? 's' : ''}
                           </span>
                         )}
+                        acaoExtra={
+                          <button
+                            onClick={e => { e.stopPropagation(); mostrarOcultosMP ? reexibirMP(grp) : ocultarMP(grp); }}
+                            title={mostrarOcultosMP ? 'Reexibir' : 'Ocultar da visualização'}
+                            style={{ background: mostrarOcultosMP ? '#f0fdf4' : '#fef2f2', border: `1px solid ${mostrarOcultosMP ? '#16a34a' : '#dc2626'}`, borderRadius: 8, padding: '6px 10px', fontWeight: 700, fontSize: '0.72rem', color: mostrarOcultosMP ? '#16a34a' : '#dc2626', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                          >
+                            <i className={`ph ${mostrarOcultosMP ? 'ph-eye' : 'ph-eye-slash'}`}></i>
+                          </button>
+                        }
                       />
                     );
                   })}
@@ -656,7 +780,15 @@ export default function Estoque() {
         )}
       </div>
 
-      {modalLotes && <ModalLotes produto={modalLotes} aoFechar={() => setModalLotes(null)} />}
+      {modalLotes && (
+        <ModalLotes
+          produto={modalLotes}
+          aoFechar={() => setModalLotes(null)}
+          editavel={isPcp && subAba === 'acabado'}
+          onSalvarLote={editarLotePA}
+          onExcluirLote={excluirLotePA}
+        />
+      )}
       {modalAjuste && isPcp && <ModalAjusteFisico item={modalAjuste} aoFechar={() => setModalAjuste(null)} />}
     </div>
   );
