@@ -100,11 +100,7 @@ export default function Operador() {
   const [existe, setExiste] = useState(false);
   const [itens, setItens] = useState([]);
   const [tunelRegistrosDia, setTunelRegistrosDia] = useState([]);
-  const [tunelProd, setTunelProd] = useState('');
-  const [tunelTempo, setTunelTempo] = useState(35);
-  const [tunelHora, setTunelHora] = useState(() => new Date().toTimeString().slice(0, 5));
-  const [tunelHoraFim, setTunelHoraFim] = useState(() => { const d = new Date(); d.setMinutes(d.getMinutes() + 35); return d.toTimeString().slice(0, 5); });
-  const [salvandoTunel, setSalvandoTunel] = useState(false);
+  const [registrandoTunel, setRegistrandoTunel] = useState(null); // idx do card com ação de túnel em andamento
   const [processandoMP, setProcessandoMP] = useState(null);
   const [lotesForcados, setLotesForcados] = useState({});
   const [modalTrocaLote, setModalTrocaLote] = useState(null);
@@ -258,17 +254,41 @@ export default function Operador() {
     }
   }
 
-  async function registrarTunel() {
-    if (!tunelProd) { alert('Selecione um produto.'); return; }
-    const jaExiste = tunelRegistrosDia.find(r => r.produto === tunelProd);
-    if (jaExiste) { alert('Produto já registrado no túnel hoje!'); return; }
-    setSalvandoTunel(true);
+  // Entrada no túnel — botão aparece no card assim que a 1ª receita é batida (+1)
+  async function registrarEntradaTunel(item, idx) {
+    if (tunelRegistrosDia.find(r => r.produto === item.produto)) return;
+    const tempoStr = window.prompt(`Tempo de congelamento (min) para "${item.produto}":`, '35');
+    if (tempoStr === null) return;
+    const tempo = parseInt(tempoStr) || 35;
+    setRegistrandoTunel(idx);
     try {
-      const registro = { produto: tunelProd, horaEntrada: tunelHora, horaFim: tunelHoraFim, tempo: parseInt(tunelTempo) || 35, lote: '', timestamp: new Date().toISOString() };
+      const agora = new Date();
+      const previsto = new Date(agora.getTime() + tempo * 60000);
+      const registro = {
+        produto: item.produto,
+        horaEntrada: agora.toTimeString().slice(0, 5),
+        horaFimPrevista: previsto.toTimeString().slice(0, 5),
+        horaFimReal: null,
+        tempo,
+        lote: '',
+        timestamp: agora.toISOString(),
+      };
       await setDoc(doc(db, 'producaoDiaria', dataAlvo), { tunelRegistros: arrayUnion(registro) }, { merge: true });
-      alert('Entrada no túnel registrada!');
-    } catch (e) { alert('Erro: ' + e.message); }
-    setSalvandoTunel(false);
+    } catch (e) { alert('Erro ao registrar entrada no túnel: ' + e.message); }
+    finally { setRegistrandoTunel(null); }
+  }
+
+  // Término no túnel — botão aparece quando a receita é concluída (última +1)
+  async function registrarTerminoTunel(item, idx) {
+    const posicao = tunelRegistrosDia.findIndex(r => r.produto === item.produto);
+    if (posicao === -1 || tunelRegistrosDia[posicao].horaFimReal) return;
+    setRegistrandoTunel(idx);
+    try {
+      const novaLista = [...tunelRegistrosDia];
+      novaLista[posicao] = { ...novaLista[posicao], horaFimReal: new Date().toTimeString().slice(0, 5) };
+      await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { tunelRegistros: novaLista });
+    } catch (e) { alert('Erro ao registrar término no túnel: ' + e.message); }
+    finally { setRegistrandoTunel(null); }
   }
 
   async function finalizarAntecipado(index) {
@@ -308,6 +328,8 @@ export default function Operador() {
     const diag = diagPorItem[item.produto];
     const farinhas = diag?.farinhas || [];
     const semRastreio = diag && !diag.receita;
+    const tunelReg = tunelRegistrosDia.find(r => r.produto === item.produto);
+    const registrandoEsteTunel = registrandoTunel === idx;
 
     return (
       <div className={'card' + (concluido ? ' concluido' : '')} key={idx}>
@@ -344,6 +366,41 @@ export default function Operador() {
           >
             <i className="ph ph-flag-checkered" style={{ marginRight: 4 }}></i>Finalizar antes da meta
           </button>
+        )}
+
+        {/* ── Túnel Helicoidal: entrada aparece na 1ª batida, término na conclusão ── */}
+        {item.feitos > 0 && !tunelReg && (
+          <button
+            onClick={() => registrarEntradaTunel(item, idx)}
+            disabled={registrandoEsteTunel}
+            style={{ marginTop: 8, width: '100%', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 10px', fontSize: '0.75rem', fontWeight: 700, color: '#1e40af', cursor: registrandoEsteTunel ? 'wait' : 'pointer' }}
+          >
+            <i className="ph ph-thermometer-cold" style={{ marginRight: 6 }}></i>
+            {registrandoEsteTunel ? 'Registrando...' : 'Registrar entrada no túnel'}
+          </button>
+        )}
+
+        {tunelReg && !tunelReg.horaFimReal && (
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 10px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#1e40af', fontWeight: 700 }}>
+              🧊 Entrou {tunelReg.horaEntrada} · previsão {tunelReg.horaFimPrevista}
+            </span>
+            {concluido && (
+              <button
+                onClick={() => registrarTerminoTunel(item, idx)}
+                disabled={registrandoEsteTunel}
+                style={{ background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: '0.72rem', fontWeight: 700, cursor: registrandoEsteTunel ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}
+              >
+                {registrandoEsteTunel ? 'Registrando...' : 'Registrar término'}
+              </button>
+            )}
+          </div>
+        )}
+
+        {tunelReg?.horaFimReal && (
+          <div style={{ marginTop: 8, fontSize: '0.72rem', color: '#1e40af', background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 10px', fontWeight: 700 }}>
+            🧊 Túnel: {tunelReg.horaEntrada} → {tunelReg.horaFimReal}
+          </div>
         )}
 
         {item.finalizadoAntecipadamente && (
@@ -420,36 +477,6 @@ export default function Operador() {
       {carregando ? <div className="status-msg">Carregando...</div> :
        !existe ? <div className="status-msg">Nenhuma produção programada para esta data.<br />Fale com o líder de produção.</div> :
        <>
-        <div className="card" style={{ borderLeftColor: '#2563eb' }}>
-          <div className="nome" style={{ marginBottom: 10, color: '#1e40af' }}>
-            <i className="ph ph-thermometer-cold" style={{ marginRight: 6 }}></i>Registro Manual do Túnel Helicoidal
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#666', marginBottom: 4 }}>Produto</label>
-              <select className="input-texto" style={{ padding: 10 }} value={tunelProd} onChange={e => setTunelProd(e.target.value)}>
-                <option value="">Selecione...</option>
-                {itens.map((it, i) => <option key={i} value={it.produto}>{it.produto}</option>)}
-              </select>
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#666', marginBottom: 4 }}>Hora Entrada</label>
-              <input type="time" className="input-texto" style={{ padding: 10 }} value={tunelHora} onChange={e => setTunelHora(e.target.value)} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#666', marginBottom: 4 }}>Término Entrada</label>
-              <input type="time" className="input-texto" style={{ padding: 10 }} value={tunelHoraFim} onChange={e => setTunelHoraFim(e.target.value)} />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#666', marginBottom: 4 }}>Tempo Congel. (min)</label>
-              <input type="number" className="input-texto" style={{ padding: 10 }} value={tunelTempo} onChange={e => setTunelTempo(e.target.value)} />
-            </div>
-          </div>
-          <button className="btn btn-block" style={{ marginTop: 12, background: '#2563eb', color: 'white', borderColor: '#2563eb' }} onClick={registrarTunel} disabled={salvandoTunel || !tunelProd}>
-            {salvandoTunel ? 'Registrando...' : 'Registrar Entrada no Túnel'}
-          </button>
-        </div>
-
         {ativos.map(({ item, idx }) => {
           const mostrar = item.categoria !== catAnterior;
           catAnterior = item.categoria;
