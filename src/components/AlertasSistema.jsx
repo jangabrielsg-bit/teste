@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot, getDocs, getDoc, doc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { useProdutos } from '../services/hooks';
+import { hojeISO } from '../services/utils';
 
 const DIAS_JANELA_VALIDADE = 45;
 const INTERVALO_REFRESH_MP_MS = 5 * 60 * 1000; // MP não é tempo real — evita ler a coleção de lotes toda hora
@@ -113,12 +114,26 @@ function useEstoqueMP() {
   return { itensMP, ultimaBusca };
 }
 
+// ── Hook: produção finalizada antes da meta (hoje) ─────────────────
+function useProducaoFinalizadaAntecipada() {
+  const [itens, setItens] = useState([]);
+  useEffect(() => {
+    return onSnapshot(doc(db, 'producaoDiaria', hojeISO()), snap => {
+      if (!snap.exists()) { setItens([]); return; }
+      const lista = (snap.data().itens || []).filter(it => it.finalizadoAntecipadamente);
+      setItens(lista);
+    });
+  }, []);
+  return itens;
+}
+
 export default function AlertasSistema() {
   const [aberto, setAberto] = useState(false);
   const { produtos } = useProdutos();
   const estoquePA = useEstoquePABridge();
   const lotesPA = useLotesFisicosPA();
   const { itensMP } = useEstoqueMP();
+  const finalizadasAntecipadamente = useProducaoFinalizadaAntecipada();
 
   // ── Alertas de cobertura 48h (gravados pela bridge via calcularAlertasEstoque) ──
   // Usa a média real do Winthor (consultarMediaMovi2). Cada doc em alertasEstoque
@@ -188,8 +203,8 @@ export default function AlertasSistema() {
     return [...doPA, ...doMP].sort((a, b) => a.dias - b.dias);
   }, [lotesPA, itensMP]);
 
-  const totalAlertas = abaixoMinimo.length + validades.length + alertas48h.length;
-  const temCritico = abaixoMinimo.some(a => a.atual <= 0) || validades.some(v => v.dias < 0) || alertas48h.some(a => a.abaixoDoMinimo);
+  const totalAlertas = abaixoMinimo.length + validades.length + alertas48h.length + finalizadasAntecipadamente.length;
+  const temCritico = abaixoMinimo.some(a => a.atual <= 0) || validades.some(v => v.dias < 0) || alertas48h.some(a => a.abaixoDoMinimo) || finalizadasAntecipadamente.length > 0;
 
   return (
     <>
@@ -246,7 +261,28 @@ export default function AlertasSistema() {
               <button onClick={() => setAberto(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }}>✕</button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 0, overflow: 'hidden', flex: 1 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 0, overflow: 'hidden', flex: 1 }}>
+
+              {/* ── Coluna 0: Produção finalizada abaixo da meta (hoje) ── */}
+              <div style={{ borderRight: '1px solid var(--border-suave)', overflowY: 'auto', padding: 16 }}>
+                <div style={{ background: '#fffbeb', color: '#92400e', fontWeight: 800, fontSize: '0.8rem', padding: '8px 14px', borderRadius: 8, marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <i className="ph ph-flag-checkered"></i> FINALIZADO ABAIXO DA META ({finalizadasAntecipadamente.length})
+                </div>
+                {finalizadasAntecipadamente.length === 0 && <div className="status-msg" style={{ padding: '20px 0' }}>Nenhuma produção finalizada antes da meta hoje.</div>}
+                {finalizadasAntecipadamente.map((item, idx) => (
+                  <div key={idx} style={{ borderLeft: '4px solid #f59e0b', background: '#fafafa', borderRadius: 10, padding: 12, marginBottom: 8 }}>
+                    <div style={{ fontWeight: 800, color: 'var(--marrom)', fontSize: '0.88rem' }}>{item.produto}</div>
+                    <div style={{ fontSize: '0.72rem', color: '#999', marginTop: 2 }}>
+                      {item.feitos}/{item.metaLotes} · faltaram <strong style={{ color: '#92400e' }}>{item.deficit}</strong>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--marrom)', marginTop: 4 }}>{item.motivoFinalizacaoAntecipada}</div>
+                    <div style={{ fontSize: '0.65rem', color: '#999', marginTop: 4 }}>
+                      {item.finalizadoAntecipadamentePor}
+                      {item.finalizadoAntecipadamenteEm && ` às ${new Date(item.finalizadoAntecipadamenteEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+                    </div>
+                  </div>
+                ))}
+              </div>
 
               {/* ── Coluna 1: Abaixo do mínimo (PA + MP) ── */}
               <div style={{ borderRight: '1px solid var(--border-suave)', overflowY: 'auto', padding: 16 }}>

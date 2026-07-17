@@ -271,11 +271,38 @@ export default function Operador() {
     setSalvandoTunel(false);
   }
 
+  async function finalizarAntecipado(index) {
+    const item = itens[index];
+    if (item.feitos >= item.metaLotes || item.finalizadoAntecipadamente) return;
+    const faltam = item.metaLotes - item.feitos;
+    const motivo = window.prompt(
+      `Finalizar "${item.produto}" com ${item.feitos}/${item.metaLotes} (faltam ${faltam})?\n\n` +
+      `Informe o motivo — fica registrado como lembrete para o líder e o PCP:`
+    );
+    if (motivo === null) return;
+    if (!motivo.trim()) { alert('Informe um motivo para finalizar antes da meta.'); return; }
+    try {
+      const nova = [...itens];
+      nova[index] = {
+        ...nova[index],
+        finalizadoAntecipadamente: true,
+        deficit: faltam,
+        motivoFinalizacaoAntecipada: motivo.trim(),
+        finalizadoAntecipadamenteEm: new Date().toISOString(),
+        finalizadoAntecipadamentePor: nomeOperador || 'Não identificado',
+      };
+      setItens(nova);
+      await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
+    } catch (e) {
+      alert('Erro ao finalizar: ' + e.message);
+    }
+  }
+
   const ativos = [], concluidos = [];
-  itens.forEach((item, idx) => { if (item.feitos >= item.metaLotes) concluidos.push({ item, idx }); else ativos.push({ item, idx }); });
+  itens.forEach((item, idx) => { if (item.feitos >= item.metaLotes || item.finalizadoAntecipadamente) concluidos.push({ item, idx }); else ativos.push({ item, idx }); });
 
   function renderCard({ item, idx }) {
-    const concluido = item.feitos >= item.metaLotes;
+    const concluido = item.feitos >= item.metaLotes || item.finalizadoAntecipadamente;
     const pct = item.metaLotes > 0 ? Math.min(100, Math.round(item.feitos / item.metaLotes * 100)) : 0;
     const processando = processandoMP === idx;
     const diag = diagPorItem[item.produto];
@@ -286,7 +313,11 @@ export default function Operador() {
       <div className={'card' + (concluido ? ' concluido' : '')} key={idx}>
         <div className="card-top">
           <div className="nome">{item.produto}</div>
-          {concluido && <span className="selo-ok">Concluído</span>}
+          {concluido && (
+            <span className="selo-ok" style={item.finalizadoAntecipadamente ? { background: '#fef3c7', color: '#92400e' } : undefined}>
+              {item.finalizadoAntecipadamente ? 'Finalizado (abaixo da meta)' : 'Concluído'}
+            </span>
+          )}
         </div>
 
         {item.ops?.length > 0 && (
@@ -305,6 +336,25 @@ export default function Operador() {
             {processando ? <i className="ph ph-circle-notch" style={{ animation: 'spin 0.6s linear infinite' }}></i> : '+1'}
           </button>
         </div>
+
+        {!concluido && item.feitos > 0 && (
+          <button
+            onClick={() => finalizarAntecipado(idx)}
+            style={{ marginTop: 8, width: '100%', background: 'none', border: '1px dashed var(--border-forte)', borderRadius: 8, padding: '6px 10px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--marrom-claro)', cursor: 'pointer' }}
+          >
+            <i className="ph ph-flag-checkered" style={{ marginRight: 4 }}></i>Finalizar antes da meta
+          </button>
+        )}
+
+        {item.finalizadoAntecipadamente && (
+          <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fffbeb', border: '1px solid #fde68a', fontSize: '0.72rem', color: '#92400e', lineHeight: 1.4 }}>
+            <strong>⚠️ Finalizado antes da meta — faltaram {item.deficit} receita{item.deficit === 1 ? '' : 's'}.</strong>
+            <div style={{ marginTop: 2 }}>Motivo: {item.motivoFinalizacaoAntecipada}</div>
+            <div style={{ fontSize: '0.65rem', marginTop: 2, opacity: 0.85 }}>
+              {item.finalizadoAntecipadamentePor} às {item.finalizadoAntecipadamenteEm ? new Date(item.finalizadoAntecipadamenteEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : ''}
+            </div>
+          </div>
+        )}
 
         {semRastreio && (
           <div style={{ marginTop: 8, padding: '8px 10px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', fontSize: '0.7rem', color: '#b91c1c', lineHeight: 1.4 }}>
