@@ -39,6 +39,16 @@ export default function Expedicao() {
   const [carregandoMP, setCarregandoMP]     = useState(false);
   const mpOcultos = useMPOcultos();
 
+  // Id estável por dispositivo/aba — cada operador pesando ao mesmo tempo
+  // grava numa sub-sessão própria, sem sobrescrever a fila de outro.
+  const [sessionId] = useState(() => {
+    try {
+      let id = localStorage.getItem('expedicaoSessionId');
+      if (!id) { id = Date.now().toString(36) + Math.random().toString(36).slice(2); localStorage.setItem('expedicaoSessionId', id); }
+      return id;
+    } catch { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+  });
+
   // Matéria Prima (original intacto)
   useEffect(() => {
     if (aba === 2 && subAbaEstoque === 'mp') {
@@ -91,6 +101,15 @@ export default function Expedicao() {
     } catch { /* localStorage indisponível — ignora */ }
   }, [listaEntrada, CHAVE_RASCUNHO]);
 
+  // Espelha a mesma fila no Firestore, em tempo real, para o Painel TV
+  // mostrar a patinha assim que ela é pesada — não só depois de confirmada.
+  useEffect(() => {
+    setDoc(doc(db, 'pesagensEmAndamento', dataHoje, 'sessoes', sessionId), {
+      itens: listaEntrada,
+      atualizadoEm: new Date().toISOString(),
+    }).catch(e => console.error('Erro ao sincronizar pesagem em andamento:', e));
+  }, [listaEntrada, dataHoje, sessionId]);
+
   // Auto-preenche lote/validade do túnel
   useEffect(() => {
     if (produtoIdx !== '') {
@@ -138,6 +157,7 @@ export default function Expedicao() {
     }
 
     setListaEntrada(prev => [...prev, {
+      id:          Date.now().toString(36) + Math.random().toString(36).slice(2),
       operador:    nomeOperador.trim(),
       nome:        itemProg.produto,
       codigo:      itemProg.codigo,   // ← código Winthor linkado
@@ -149,6 +169,7 @@ export default function Expedicao() {
       und,
       validade,
       origemMP,                       // ← NOVO: genealogia dos lotes de MP
+      timestamp:   new Date().toISOString(),
     }]);
     setQtd('');
     alert('Patinha adicionada para conferência!');
