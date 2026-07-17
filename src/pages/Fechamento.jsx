@@ -4,6 +4,61 @@ import { db } from '../services/firebase';
 import { hojeISO, paraISO, formatarDataBR, formatarKg } from '../services/utils';
 import ModalTeclado from '../components/ModalTeclado';
 
+const MOTIVOS_PERDA = ['Massa caiu no chão', 'Erro de operação', 'Falha de maquinário', 'Outros'];
+
+// ── Modal: motivo padronizado antes de digitar o peso da perda ─────
+function ModalMotivoPerda({ titulo, aoEscolher, aoFechar }) {
+  const [motivoSel, setMotivoSel] = useState(null);
+  const [textoOutros, setTextoOutros] = useState('');
+
+  function confirmar() {
+    if (!motivoSel) return;
+    const motivoFinal = motivoSel === 'Outros' ? textoOutros.trim() : motivoSel;
+    if (!motivoFinal) { alert('Descreva o motivo.'); return; }
+    aoEscolher(motivoFinal);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={aoFechar}>
+      <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--marrom)' }}>{titulo}</div>
+          <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {MOTIVOS_PERDA.map(m => (
+            <button
+              key={m}
+              onClick={() => setMotivoSel(m)}
+              style={{
+                textAlign: 'left', padding: '12px 16px', borderRadius: 12,
+                border: motivoSel === m ? '2px solid var(--amarelo-escuro)' : '1px solid var(--border-forte)',
+                background: motivoSel === m ? 'var(--amarelo-claro)' : 'white',
+                fontWeight: 700, color: 'var(--marrom)', cursor: 'pointer',
+              }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        {motivoSel === 'Outros' && (
+          <input
+            className="input-texto"
+            placeholder="Descreva o motivo"
+            value={textoOutros}
+            onChange={e => setTextoOutros(e.target.value)}
+            style={{ marginTop: 12 }}
+            autoFocus
+          />
+        )}
+        <button className="btn btn-primary btn-block" style={{ marginTop: 18 }} disabled={!motivoSel} onClick={confirmar}>
+          Continuar → informar peso
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Fechamento() {
   const [dataAlvo, setDataAlvo] = useState(hojeISO());
   const [carregando, setCarregando] = useState(true);
@@ -11,6 +66,7 @@ export default function Fechamento() {
   const [itens, setItens] = useState([]);
   const [salvando, setSalvando] = useState(false);
   const [teclado, setTeclado] = useState(null);
+  const [seletorMotivo, setSeletorMotivo] = useState(null); // { index, campo, titulo }
 
   useEffect(() => {
     setCarregando(true);
@@ -27,7 +83,25 @@ export default function Fechamento() {
   function mudarDia(delta) { const d = new Date(dataAlvo + 'T12:00:00'); d.setDate(d.getDate() + delta); setDataAlvo(paraISO(d)); }
 
   function abrirTeclado(index, campo, titulo) { setTeclado({ index, campo, titulo, valorInicial: itens[index][campo] }); }
-  function confirmarTeclado(valor) { setItens(prev => { const nova = [...prev]; nova[teclado.index] = { ...nova[teclado.index], [teclado.campo]: valor }; return nova; }); setTeclado(null); }
+  function abrirSeletorMotivo(index, campo, titulo) { setSeletorMotivo({ index, campo, titulo }); }
+  function escolherMotivoPerda(motivo) {
+    const { index, campo, titulo } = seletorMotivo;
+    setSeletorMotivo(null);
+    setTeclado({ index, campo, titulo, valorInicial: itens[index][campo], motivo });
+  }
+  function confirmarTeclado(valor) {
+    setItens(prev => {
+      const nova = [...prev];
+      const campoMotivo = teclado.campo + 'Motivo';
+      nova[teclado.index] = {
+        ...nova[teclado.index],
+        [teclado.campo]: valor,
+        ...(teclado.motivo ? { [campoMotivo]: teclado.motivo } : {}),
+      };
+      return nova;
+    });
+    setTeclado(null);
+  }
   function alternarPeDeMassa(index) { setItens(prev => { const nova = [...prev]; const usou = nova[index].peDeMassa > 0 || nova[index].usouPeDeMassa; nova[index] = { ...nova[index], usouPeDeMassa: !usou, peDeMassa: !usou ? nova[index].peDeMassa : 0 }; return nova; }); }
 
   async function salvarFechamento() {
@@ -68,8 +142,14 @@ export default function Fechamento() {
               </div>
               {item.ops?.length > 0 && <div className="ops-linha">OP{item.ops.length > 1 ? 's' : ''} Winthor: {item.ops.join(', ')}</div>}
               <div className="fechamento-resumo">Programadas: <strong>{item.metaLotes}</strong> · Realizadas: <strong>{item.feitos}</strong></div>
-              <div className="fechamento-linha"><span>Massa perdida (produção)</span><button className="valor-pill" onClick={() => abrirTeclado(idx, 'massaPerdidaProd', 'Massa perdida — Produção')}>{formatarKg(item.massaPerdidaProd)} kg</button></div>
-              <div className="fechamento-linha"><span>Massa perdida (embalagem)</span><button className="valor-pill" onClick={() => abrirTeclado(idx, 'massaPerdidaEmb', 'Massa perdida — Embalagem')}>{formatarKg(item.massaPerdidaEmb)} kg</button></div>
+              <div className="fechamento-linha">
+                <span>Massa perdida (produção){item.massaPerdidaProdMotivo && <div style={{ fontSize: '0.68rem', color: '#999', fontWeight: 600 }}>{item.massaPerdidaProdMotivo}</div>}</span>
+                <button className="valor-pill" onClick={() => abrirSeletorMotivo(idx, 'massaPerdidaProd', 'Massa perdida — Produção')}>{formatarKg(item.massaPerdidaProd)} kg</button>
+              </div>
+              <div className="fechamento-linha">
+                <span>Massa perdida (embalagem){item.massaPerdidaEmbMotivo && <div style={{ fontSize: '0.68rem', color: '#999', fontWeight: 600 }}>{item.massaPerdidaEmbMotivo}</div>}</span>
+                <button className="valor-pill" onClick={() => abrirSeletorMotivo(idx, 'massaPerdidaEmb', 'Massa perdida — Embalagem')}>{formatarKg(item.massaPerdidaEmb)} kg</button>
+              </div>
               <div className="fechamento-linha">
                 <span>Pé de massa utilizado</span>
                 {usaPe ? <button className="valor-pill" onClick={() => abrirTeclado(idx, 'peDeMassa', 'Pé de massa')}>{formatarKg(item.peDeMassa)} kg</button>
@@ -81,6 +161,13 @@ export default function Fechamento() {
         );
       })}
       {existe && <button className="btn btn-primary btn-block" disabled={salvando} onClick={salvarFechamento} style={{ marginTop: 14 }}>{salvando ? 'Salvando...' : 'Salvar Fechamento'}</button>}
+      {seletorMotivo && (
+        <ModalMotivoPerda
+          titulo={seletorMotivo.titulo}
+          aoEscolher={escolherMotivoPerda}
+          aoFechar={() => setSeletorMotivo(null)}
+        />
+      )}
       {teclado && <ModalTeclado titulo={teclado.titulo} valorInicial={teclado.valorInicial} aoConfirmar={confirmarTeclado} aoFechar={() => setTeclado(null)} />}
     </div>
   );

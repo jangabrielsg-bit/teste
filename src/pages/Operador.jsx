@@ -94,6 +94,144 @@ function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
   );
 }
 
+// ── Códigos padronizados de parada de linha ────────────────────────
+const CODIGOS_PARADA = [
+  { codigo: 'falta_mp', label: 'Falta de matéria-prima' },
+  { codigo: 'quebra_equip', label: 'Quebra / falha de equipamento' },
+  { codigo: 'falta_operador', label: 'Falta de operador' },
+  { codigo: 'limpeza', label: 'Limpeza / higienização' },
+  { codigo: 'troca_produto', label: 'Troca de produto (setup)' },
+  { codigo: 'outros', label: 'Outros' },
+];
+
+// ── Motivos comuns para finalizar produção antes da meta ───────────
+const MOTIVOS_FINALIZACAO = [
+  'Falta de matéria-prima',
+  'Ordem cancelada / reduzida',
+  'Fim do turno / expediente',
+  'Problema de qualidade',
+  'Outros',
+];
+
+// ── Modal: iniciar parada de linha (código padronizado) ────────────
+function ModalIniciarParada({ aoConfirmar, aoFechar, salvando }) {
+  const [codigoSel, setCodigoSel] = useState(null);
+  const [textoOutros, setTextoOutros] = useState('');
+
+  function confirmar() {
+    if (!codigoSel) return;
+    if (codigoSel.codigo === 'outros' && !textoOutros.trim()) { alert('Descreva o motivo.'); return; }
+    aoConfirmar(codigoSel, textoOutros.trim());
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={aoFechar}>
+      <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#dc2626' }}>⏸ Registrar parada de linha</div>
+          <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {CODIGOS_PARADA.map(c => (
+            <button
+              key={c.codigo}
+              onClick={() => setCodigoSel(c)}
+              style={{
+                textAlign: 'left', padding: '12px 16px', borderRadius: 12,
+                border: codigoSel?.codigo === c.codigo ? '2px solid #dc2626' : '1px solid var(--border-forte)',
+                background: codigoSel?.codigo === c.codigo ? '#fef2f2' : 'white',
+                fontWeight: 700, color: 'var(--marrom)', cursor: 'pointer',
+              }}
+            >
+              {c.label}
+            </button>
+          ))}
+        </div>
+        {codigoSel?.codigo === 'outros' && (
+          <input
+            className="input-texto"
+            placeholder="Descreva o motivo da parada"
+            value={textoOutros}
+            onChange={e => setTextoOutros(e.target.value)}
+            style={{ marginTop: 12 }}
+            autoFocus
+          />
+        )}
+        <button
+          className="btn btn-block"
+          style={{ marginTop: 18, background: '#dc2626', color: 'white', borderColor: '#dc2626' }}
+          disabled={!codigoSel || salvando}
+          onClick={confirmar}
+        >
+          {salvando ? 'Registrando...' : 'Confirmar parada'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Modal: motivo de finalizar produção antes da meta ───────────────
+function ModalMotivoFinalizacao({ item, aoConfirmar, aoFechar, salvando }) {
+  const [motivoSel, setMotivoSel] = useState(null);
+  const [textoOutros, setTextoOutros] = useState('');
+  const faltam = item.metaLotes - item.feitos;
+
+  function confirmar() {
+    if (!motivoSel) return;
+    const motivoFinal = motivoSel === 'Outros' ? textoOutros.trim() : motivoSel;
+    if (!motivoFinal) { alert('Descreva o motivo.'); return; }
+    aoConfirmar(motivoFinal);
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={aoFechar}>
+      <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22 }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <div style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--marrom)' }}>🏁 Finalizar antes da meta</div>
+          <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
+        </div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--marrom-claro)', marginBottom: 16 }}>
+          {item.produto} — {item.feitos}/{item.metaLotes} (faltam {faltam})
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {MOTIVOS_FINALIZACAO.map(m => (
+            <button
+              key={m}
+              onClick={() => setMotivoSel(m)}
+              style={{
+                textAlign: 'left', padding: '12px 16px', borderRadius: 12,
+                border: motivoSel === m ? '2px solid var(--amarelo-escuro)' : '1px solid var(--border-forte)',
+                background: motivoSel === m ? 'var(--amarelo-claro)' : 'white',
+                fontWeight: 700, color: 'var(--marrom)', cursor: 'pointer',
+              }}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+        {motivoSel === 'Outros' && (
+          <input
+            className="input-texto"
+            placeholder="Descreva o motivo"
+            value={textoOutros}
+            onChange={e => setTextoOutros(e.target.value)}
+            style={{ marginTop: 12 }}
+            autoFocus
+          />
+        )}
+        <button
+          className="btn btn-block"
+          style={{ marginTop: 18, background: 'var(--marrom)', color: 'white' }}
+          disabled={!motivoSel || salvando}
+          onClick={confirmar}
+        >
+          {salvando ? 'Salvando...' : 'Confirmar finalização'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function Operador() {
   const [dataAlvo, setDataAlvo] = useState(hojeISO());
   const [carregando, setCarregando] = useState(true);
@@ -105,6 +243,11 @@ export default function Operador() {
   const [lotesForcados, setLotesForcados] = useState({});
   const [modalTrocaLote, setModalTrocaLote] = useState(null);
   const [nomeOperador] = useState(() => localStorage.getItem('nomeOperador') || '');
+  const [paradas, setParadas] = useState([]);
+  const [modalParada, setModalParada] = useState(false);
+  const [salvandoParada, setSalvandoParada] = useState(false);
+  const [modalFinalizar, setModalFinalizar] = useState(null); // { item, idx }
+  const [salvandoFinalizar, setSalvandoFinalizar] = useState(false);
 
   const [diagPorItem, setDiagPorItem] = useState({});
 
@@ -143,8 +286,9 @@ export default function Operador() {
         setItens(snap.data().itens || []);
         setTunelRegistrosDia(snap.data().tunelRegistros || []);
         setLotesForcados(snap.data().lotesForcados || {});
+        setParadas(snap.data().paradas || []);
       } else {
-        setExiste(false); setItens([]); setTunelRegistrosDia([]); setLotesForcados({});
+        setExiste(false); setItens([]); setTunelRegistrosDia([]); setLotesForcados({}); setParadas([]);
       }
     });
     return unsub;
@@ -291,30 +435,70 @@ export default function Operador() {
     finally { setRegistrandoTunel(null); }
   }
 
-  async function finalizarAntecipado(index) {
+  function finalizarAntecipado(index) {
     const item = itens[index];
     if (item.feitos >= item.metaLotes || item.finalizadoAntecipadamente) return;
+    setModalFinalizar({ item, idx: index });
+  }
+
+  async function confirmarFinalizacaoAntecipada(motivo) {
+    const { idx, item } = modalFinalizar;
     const faltam = item.metaLotes - item.feitos;
-    const motivo = window.prompt(
-      `Finalizar "${item.produto}" com ${item.feitos}/${item.metaLotes} (faltam ${faltam})?\n\n` +
-      `Informe o motivo — fica registrado como lembrete para o líder e o PCP:`
-    );
-    if (motivo === null) return;
-    if (!motivo.trim()) { alert('Informe um motivo para finalizar antes da meta.'); return; }
+    setSalvandoFinalizar(true);
     try {
       const nova = [...itens];
-      nova[index] = {
-        ...nova[index],
+      nova[idx] = {
+        ...nova[idx],
         finalizadoAntecipadamente: true,
         deficit: faltam,
-        motivoFinalizacaoAntecipada: motivo.trim(),
+        motivoFinalizacaoAntecipada: motivo,
         finalizadoAntecipadamenteEm: new Date().toISOString(),
         finalizadoAntecipadamentePor: nomeOperador || 'Não identificado',
       };
       setItens(nova);
       await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { itens: nova });
+      setModalFinalizar(null);
     } catch (e) {
       alert('Erro ao finalizar: ' + e.message);
+    } finally {
+      setSalvandoFinalizar(false);
+    }
+  }
+
+  // ── Paradas de linha ────────────────────────────────────────────
+  const paradaAberta = paradas.find(p => !p.fim);
+
+  async function iniciarParada(codigoObj, textoOutros) {
+    setSalvandoParada(true);
+    try {
+      const registro = {
+        codigo: codigoObj.codigo,
+        label: codigoObj.codigo === 'outros' ? textoOutros : codigoObj.label,
+        inicio: new Date().toISOString(),
+        fim: null,
+        duracaoMin: null,
+        registradoPor: nomeOperador || 'Não identificado',
+      };
+      await setDoc(doc(db, 'producaoDiaria', dataAlvo), { paradas: arrayUnion(registro) }, { merge: true });
+      setModalParada(false);
+    } catch (e) {
+      alert('Erro ao registrar parada: ' + e.message);
+    } finally {
+      setSalvandoParada(false);
+    }
+  }
+
+  async function encerrarParada() {
+    const idx = paradas.findIndex(p => !p.fim);
+    if (idx === -1) return;
+    try {
+      const inicio = new Date(paradas[idx].inicio);
+      const fim = new Date();
+      const nova = [...paradas];
+      nova[idx] = { ...nova[idx], fim: fim.toISOString(), duracaoMin: Math.round((fim - inicio) / 60000) };
+      await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { paradas: nova });
+    } catch (e) {
+      alert('Erro ao encerrar parada: ' + e.message);
     }
   }
 
@@ -354,10 +538,15 @@ export default function Operador() {
             <div className="progress-bar"><div className="progress-fill" style={{ width: pct + '%' }}></div></div>
           </div>
           <button className="btn-menos" disabled={item.feitos <= 0 || processando} onClick={() => desfazer(idx)}>−1</button>
-          <button className="btn-mais" disabled={concluido || processando} onClick={() => bater(idx)}>
+          <button className="btn-mais" disabled={concluido || processando || !!paradaAberta} onClick={() => bater(idx)}>
             {processando ? <i className="ph ph-circle-notch" style={{ animation: 'spin 0.6s linear infinite' }}></i> : '+1'}
           </button>
         </div>
+        {!concluido && paradaAberta && (
+          <div style={{ marginTop: 6, fontSize: '0.7rem', color: '#dc2626', fontWeight: 700 }}>
+            ⏸ Linha parada — retome a produção para continuar.
+          </div>
+        )}
 
         {!concluido && item.feitos > 0 && (
           <button
@@ -477,6 +666,27 @@ export default function Operador() {
       {carregando ? <div className="status-msg">Carregando...</div> :
        !existe ? <div className="status-msg">Nenhuma produção programada para esta data.<br />Fale com o líder de produção.</div> :
        <>
+        <div className="card" style={{ borderLeftColor: paradaAberta ? '#dc2626' : '#16a34a', marginBottom: 14 }}>
+          {paradaAberta ? (
+            <>
+              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: '1rem' }}>🔴 Linha parada — {paradaAberta.label}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--marrom-claro)', marginTop: 4 }}>
+                Desde {new Date(paradaAberta.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · registrado por {paradaAberta.registradoPor}
+              </div>
+              <button className="btn btn-block" style={{ marginTop: 12, background: '#16a34a', color: 'white', borderColor: '#16a34a' }} onClick={encerrarParada}>
+                ✓ Retomar produção
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 900, color: '#16a34a', fontSize: '1rem' }}>🟢 Linha em produção</div>
+              <button className="btn btn-outline btn-block" style={{ marginTop: 10 }} onClick={() => setModalParada(true)}>
+                ⏸ Registrar parada
+              </button>
+            </>
+          )}
+        </div>
+
         {ativos.map(({ item, idx }) => {
           const mostrar = item.categoria !== catAnterior;
           catAnterior = item.categoria;
@@ -495,6 +705,23 @@ export default function Operador() {
             await definirLoteForcado(dataAlvo, modalTrocaLote.productId, lote, nomeOperador);
           }}
           aoFechar={() => setModalTrocaLote(null)}
+        />
+      )}
+
+      {modalParada && (
+        <ModalIniciarParada
+          aoConfirmar={iniciarParada}
+          aoFechar={() => setModalParada(false)}
+          salvando={salvandoParada}
+        />
+      )}
+
+      {modalFinalizar && (
+        <ModalMotivoFinalizacao
+          item={modalFinalizar.item}
+          aoConfirmar={confirmarFinalizacaoAntecipada}
+          aoFechar={() => setModalFinalizar(null)}
+          salvando={salvandoFinalizar}
         />
       )}
     </div>

@@ -83,6 +83,7 @@ export default function PainelTV({ sair }) {
   const [tunelRegistros, setTunelRegistros] = useState([]);
   const [estoquePA, setEstoquePA]   = useState([]);
   const [patinhas, setPatinhas]     = useState([]);
+  const [paradas, setParadas]       = useState([]);
 
   // Relógio
   useEffect(() => {
@@ -98,8 +99,9 @@ export default function PainelTV({ sair }) {
         setExiste(true);
         setItens(snap.data().itens || []);
         setTunelRegistros(snap.data().tunelRegistros || []);
+        setParadas(snap.data().paradas || []);
       } else {
-        setExiste(false); setItens([]); setTunelRegistros([]);
+        setExiste(false); setItens([]); setTunelRegistros([]); setParadas([]);
       }
     });
     return unsub;
@@ -232,6 +234,31 @@ export default function PainelTV({ sair }) {
     porCategoria[cat].push(it);
   });
 
+  // ── OEE provisório: Performance baseada no programado (metaLotes),
+  // já que ainda não há tempo de ciclo por máquina. Disponibilidade vem
+  // das paradas registradas pelo operador; Qualidade, da massa perdida
+  // apontada no Fechamento. Troca-se a Performance por dado de máquina
+  // quando isso existir, sem mudar o resto da conta.
+  const oee = (() => {
+    const primeiraBatida = todasBatidas[0] || null;
+    if (!primeiraBatida || totalProgramado === 0) return null;
+
+    const tempoTotalMin = Math.max(1, (agora.getTime() - new Date(primeiraBatida).getTime()) / 60000);
+    const tempoParadoMin = paradas.reduce((acc, p) => {
+      const fim = p.fim ? new Date(p.fim) : agora;
+      return acc + Math.max(0, (fim.getTime() - new Date(p.inicio).getTime()) / 60000);
+    }, 0);
+    const disponibilidade = Math.max(0, Math.min(1, (tempoTotalMin - tempoParadoMin) / tempoTotalMin));
+
+    const performance = Math.max(0, Math.min(1, totalFeito / totalProgramado));
+
+    const brutoTotal  = itens.reduce((s, it) => s + (it.rendimentoTeorico || 0) * (it.feitos || 0), 0);
+    const perdasTotal = itens.reduce((s, it) => s + (it.massaPerdidaProd || 0) + (it.massaPerdidaEmb || 0), 0);
+    const qualidade = brutoTotal > 0 ? Math.max(0, Math.min(1, (brutoTotal - perdasTotal) / brutoTotal)) : 1;
+
+    return { disponibilidade, performance, qualidade, valor: disponibilidade * performance * qualidade, tempoParadoMin };
+  })();
+
   const S = {
     shell:   { display: 'flex', flexDirection: 'column', height: '100vh', background: '#3D2515', color: '#D0B29E', fontFamily: "'Inter', sans-serif", overflow: 'hidden' },
     header:  { height: 64, background: '#2A170A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', borderBottom: '1px solid #5C3A21', flexShrink: 0, gap: 12 },
@@ -293,6 +320,36 @@ export default function PainelTV({ sair }) {
             {!carregando && !existe && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Nenhuma produção programada para hoje.</div>}
             {!carregando && existe && (
               <>
+                {oee && (
+                  <div style={{ ...S.card, marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#F6BE00', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                        <i className="ph ph-gauge" style={{ marginRight: 6 }}></i>OEE do dia
+                      </div>
+                      <div style={{ fontSize: '2rem', fontWeight: 900, color: oee.valor >= 0.85 ? '#4ade80' : oee.valor >= 0.6 ? '#F6BE00' : '#f87171' }}>
+                        {Math.round(oee.valor * 100)}%
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={S.label}>Disponibilidade</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{Math.round(oee.disponibilidade * 100)}%</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={S.label}>Performance</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{Math.round(oee.performance * 100)}%</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={S.label}>Qualidade</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{Math.round(oee.qualidade * 100)}%</div>
+                      </div>
+                    </div>
+                    <div style={{ marginTop: 10, fontSize: '0.65rem', color: '#D0B29E', textAlign: 'center' }}>
+                      Provisório: Performance baseada no programado (sem tempo de ciclo de máquina) · {Math.round(oee.tempoParadoMin)} min parado hoje
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ ...S.cardDark, marginBottom: 16, textAlign: 'center' }}>
                   <div style={{ fontSize: '2.8rem', fontWeight: 900, color: '#F6BE00', lineHeight: 1 }}>
                     {totalFeito}<span style={{ fontSize: '1.4rem', color: '#D0B29E', fontWeight: 700 }}> / {totalProgramado}</span>
