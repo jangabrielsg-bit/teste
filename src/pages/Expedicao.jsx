@@ -4,6 +4,7 @@ import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarKg, formatarHoraData } from '../services/utils';
 import { useAuth } from '../services/auth';
 import { useProdutos, useMPOcultos } from '../services/hooks';
+import { agoraServidor } from '../services/relogioServidor';
 import { resumirOrigemMP } from '../services/consumoMP';
 import ModalTeclado from '../components/ModalTeclado';
 
@@ -106,7 +107,7 @@ export default function Expedicao() {
   useEffect(() => {
     setDoc(doc(db, 'pesagensEmAndamento', dataHoje, 'sessoes', sessionId), {
       itens: listaEntrada,
-      atualizadoEm: new Date().toISOString(),
+      atualizadoEm: agoraServidor().toISOString(),
     }).catch(e => console.error('Erro ao sincronizar pesagem em andamento:', e));
   }, [listaEntrada, dataHoje, sessionId]);
 
@@ -169,7 +170,7 @@ export default function Expedicao() {
       und,
       validade,
       origemMP,                       // ← NOVO: genealogia dos lotes de MP
-      timestamp:   new Date().toISOString(),
+      timestamp:   agoraServidor().toISOString(),
     }]);
     setQtd('');
     alert('Patinha adicionada para conferência!');
@@ -207,7 +208,7 @@ export default function Expedicao() {
           lote:    item.lote,
           qtd:     item.qtd,
           und:     item.und,
-          data:    new Date().toISOString(),
+          data:    agoraServidor().toISOString(),
           usuario: item.operador,
         });
 
@@ -221,8 +222,8 @@ export default function Expedicao() {
           lote:           item.lote,
           pesoTotal:      item.qtd,
           qtCaixas:       1,
-          horario:        formatarHoraData(new Date().toISOString()),
-          timestamp:      new Date().toISOString(),
+          horario:        formatarHoraData(agoraServidor().toISOString()),
+          timestamp:      agoraServidor().toISOString(),
         };
         batch.set(refExp, { data: dataHoje, registros: arrayUnion(regExp) }, { merge: true });
 
@@ -235,7 +236,7 @@ export default function Expedicao() {
             produto:      item.nome,
             saldoFisico:  increment(item.qtd),
             unidade:      item.und,
-            ultimaEntrada: new Date().toISOString(),
+            ultimaEntrada: agoraServidor().toISOString(),
           }, { merge: true });
 
           // Sub-coleção: lotes individuais rastreáveis
@@ -256,7 +257,7 @@ export default function Expedicao() {
             origemMP:        item.origemMP || null,
             rastreioCompleto: !!item.origemMP && !item.origemMP.incompleto,
 
-            registradoEm: new Date().toISOString(),
+            registradoEm: agoraServidor().toISOString(),
           });
         }
       });
