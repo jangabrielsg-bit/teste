@@ -80,7 +80,6 @@ export default function PainelTV({ sair }) {
   const [itens, setItens]           = useState([]);
   const [existe, setExiste]         = useState(false);
   const [carregando, setCarregando] = useState(true);
-  const [tunelRegistros, setTunelRegistros] = useState([]);
   const [estoquePA, setEstoquePA]   = useState([]);
   const [patinhas, setPatinhas]     = useState([]);
   const [paradas, setParadas]       = useState([]);
@@ -99,10 +98,9 @@ export default function PainelTV({ sair }) {
       if (snap.exists()) {
         setExiste(true);
         setItens(snap.data().itens || []);
-        setTunelRegistros(snap.data().tunelRegistros || []);
         setParadas(snap.data().paradas || []);
       } else {
-        setExiste(false); setItens([]); setTunelRegistros([]); setParadas([]);
+        setExiste(false); setItens([]); setParadas([]);
       }
     });
     return unsub;
@@ -196,6 +194,28 @@ export default function PainelTV({ sair }) {
   const mpOcultos = useMPOcultos();
   const { itens: estoqueMPBruto, carregando: carregandoMP } = useEstoqueMP(aba === 'estoque_mp');
   const estoqueMP = estoqueMPBruto.filter(item => !mpOcultos[item.id]);
+
+  // ── Declutter: por padrão, PA e MP mostram só o que é relevante à
+  // produção programada hoje (linha piloto) — não o catálogo inteiro.
+  const [mostrarTodosPA, setMostrarTodosPA] = useState(false);
+  const [mostrarTodosMP, setMostrarTodosMP] = useState(false);
+
+  const codigosHoje = new Set(itens.map(it => it.codigo).filter(Boolean));
+  const nomesHoje = new Set(itens.map(it => it.produto).filter(Boolean));
+  const estoquePAFiltrado = mostrarTodosPA
+    ? estoquePA
+    : estoquePA.filter(item => codigosHoje.has(item.codigo) || nomesHoje.has(item.produto));
+  const estoquePAExibida = estoquePAFiltrado.length > 0 || mostrarTodosPA ? estoquePAFiltrado : estoquePA;
+
+  const nomesInsumosHoje = new Set(
+    itens.flatMap(it => (it.consumoMP || []).flatMap(c => (c.consumos || []).map(x => x.nomeMP))).filter(Boolean)
+  );
+  const estoqueMPFiltrado = mostrarTodosMP
+    ? estoqueMP
+    : nomesInsumosHoje.size > 0
+      ? estoqueMP.filter(item => nomesInsumosHoje.has(item.nome))
+      : estoqueMP.filter(item => item.minimo > 0);
+  const estoqueMPExibida = estoqueMPFiltrado.length > 0 || mostrarTodosMP ? estoqueMPFiltrado : estoqueMP;
 
   // Rodízio automático
   useEffect(() => {
@@ -354,11 +374,6 @@ export default function PainelTV({ sair }) {
           // Regra didática de cor: verde = fluindo, amarelo = atenção,
           // vermelho = travado, cinza = sem dado / etapa manual.
           const paradaAberta = paradas.find(p => !p.fim);
-          const noTunel = tunelRegistros.filter(t => !t.horaFimReal);
-          const proximaQueda = noTunel
-            .map(t => t.horaFimPrevista || t.horaFim)
-            .filter(Boolean)
-            .sort()[0] || null;
           const pesandoAgora = patinhasPendentes;
           const kgPesando = pesandoAgora.reduce((s, p) => s + (parseFloat(p.qtd) || 0), 0);
           const kgCamara = patinhasConfirmadas.reduce((s, p) => s + (parseFloat(p.pesoTotal) || 0), 0);
@@ -391,17 +406,8 @@ export default function PainelTV({ sair }) {
               alerta: !!paradaAberta,
             },
             {
-              icone: 'ph-thermometer-cold',
-              titulo: '3. Túnel de Congelamento',
-              subtitulo: 'Túneis 1–6',
-              valor: `${noTunel.length}`,
-              unidade: noTunel.length === 1 ? 'produto dentro agora' : 'produtos dentro agora',
-              cor: noTunel.length > 0 ? '#F6BE00' : '#6b7280',
-              detalhe: proximaQueda ? `Próxima queda prevista: ${proximaQueda}` : 'Nenhum produto no túnel no momento.',
-            },
-            {
               icone: 'ph-scales',
-              titulo: '4. Pesagem / Embalagem',
+              titulo: '3. Pesagem / Embalagem',
               subtitulo: 'Embaladora → balança da expedição',
               valor: `${pesandoAgora.length}`,
               unidade: pesandoAgora.length === 1 ? 'patinha sendo pesada' : 'patinhas sendo pesadas',
@@ -410,27 +416,18 @@ export default function PainelTV({ sair }) {
             },
             {
               icone: 'ph-snowflake',
-              titulo: '5. Câmara de Produto Acabado',
+              titulo: '4. Câmara de Produto Acabado',
               subtitulo: 'Entradas confirmadas hoje',
               valor: kgCamara.toFixed(0),
               unidade: 'kg na câmara hoje',
               cor: kgCamara > 0 ? '#4ade80' : '#6b7280',
               detalhe: `${patinhasConfirmadas.length} patinha(s) confirmada(s) no dia.`,
             },
-            {
-              icone: 'ph-truck',
-              titulo: '6. Expedição / Carregamento',
-              subtitulo: 'Saída para rota',
-              valor: '—',
-              unidade: 'saída manual',
-              cor: '#6b7280',
-              detalhe: 'Baixa feita manualmente por PVPS, puxando lotes internos (janela de 24h).',
-            },
           ];
 
           return (
             <>
-              <h3 style={S.h3}><i className="ph ph-flow-arrow" style={{ color: '#F6BE00', marginRight: 8 }}></i>Fluxo da Linha — do PCP à Expedição</h3>
+              <h3 style={S.h3}><i className="ph ph-flow-arrow" style={{ color: '#F6BE00', marginRight: 8 }}></i>Fluxo da Linha — do PCP à Câmara</h3>
               <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#D0B29E', marginTop: -12, marginBottom: 18 }}>
                 Leia da esquerda para a direita: é o mesmo caminho físico da fábrica. Verde = fluindo · Amarelo = em atividade · Vermelho = travado · Cinza = sem movimento.
               </div>
@@ -533,8 +530,11 @@ export default function PainelTV({ sair }) {
                                 {' '}/{' '}{item.metaLotes}
                               </div>
                             </div>
-                            <div style={{ background: '#3D2515', borderRadius: 20, height: 10, overflow: 'hidden' }}>
-                              <div style={{ background: abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <div style={{ flex: 1, background: '#2A170A', border: '1px solid #5C3A21', borderRadius: 20, height: 10, overflow: 'hidden' }}>
+                                <div style={{ background: abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : '#F6BE00', height: '100%', width: Math.max(perc, 3) + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                              </div>
+                              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#D0B29E', width: 34, textAlign: 'right' }}>{perc}%</span>
                             </div>
                             {abaixoDaMeta && (
                               <div style={{ marginTop: 6, fontSize: '0.7rem', fontWeight: 700, color: '#fbbf24' }}>
@@ -610,8 +610,11 @@ export default function PainelTV({ sair }) {
                         <span style={{ color: '#D0B29E', fontSize: '1rem' }}> / {item.metaLotes}</span>
                       </div>
                     </div>
-                    <div style={{ background: '#3D2515', borderRadius: 20, height: 12, overflow: 'hidden' }}>
-                      <div style={{ background: abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, background: '#2A170A', border: '1px solid #5C3A21', borderRadius: 20, height: 12, overflow: 'hidden' }}>
+                        <div style={{ background: abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : '#F6BE00', height: '100%', width: Math.max(perc, 3) + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                      </div>
+                      <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#D0B29E', width: 38, textAlign: 'right' }}>{perc}%</span>
                     </div>
                   </div>
                 );
@@ -658,9 +661,16 @@ export default function PainelTV({ sair }) {
         {aba === 'estoque_pa' && (
           <>
             <h3 style={S.h3}><i className="ph ph-snowflake" style={{ color: '#F6BE00', marginRight: 8 }}></i>Estoque Produto Acabado</h3>
+            {estoquePA.length > estoquePAExibida.length && (
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <button onClick={() => setMostrarTodosPA(v => !v)} style={{ background: 'transparent', border: '1px solid #734A2A', color: '#D0B29E', borderRadius: 20, padding: '6px 16px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                  {mostrarTodosPA ? `Mostrar só os da produção de hoje (${estoquePAFiltrado.length})` : `Mostrando itens da produção de hoje · ver todos (${estoquePA.length})`}
+                </button>
+              </div>
+            )}
             {estoquePA.length === 0 && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Aguardando dados...</div>}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 14 }}>
-              {estoquePA.map((item, i) => {
+              {estoquePAExibida.map((item, i) => {
                 const abaixoMin = item.estoqueMinimo > 0 && item.estoqueAtual <= item.estoqueMinimo;
                 const cobDias   = item.coberturaDias ?? (item.mediaSaidaDiaria > 0 ? item.estoqueAtual / item.mediaSaidaDiaria : null);
                 const emAviso   = !abaixoMin && cobDias != null && cobDias < 2;
@@ -696,6 +706,13 @@ export default function PainelTV({ sair }) {
         {aba === 'estoque_mp' && (
           <>
             <h3 style={S.h3}><i className="ph ph-package" style={{ color: '#F6BE00', marginRight: 8 }}></i>Estoque Matéria-Prima</h3>
+            {estoqueMP.length > estoqueMPExibida.length && (
+              <div style={{ textAlign: 'center', marginBottom: 14 }}>
+                <button onClick={() => setMostrarTodosMP(v => !v)} style={{ background: 'transparent', border: '1px solid #734A2A', color: '#D0B29E', borderRadius: 20, padding: '6px 16px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+                  {mostrarTodosMP ? `Mostrar só os insumos da produção de hoje (${estoqueMPFiltrado.length})` : `Mostrando insumos da produção de hoje · ver todos (${estoqueMP.length})`}
+                </button>
+              </div>
+            )}
             {carregandoMP && <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>Carregando...</div>}
             {!carregandoMP && estoqueMP.length === 0 && (
               <div style={{ textAlign: 'center', color: '#D0B29E', padding: 40 }}>
@@ -704,7 +721,7 @@ export default function PainelTV({ sair }) {
               </div>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
-              {estoqueMP.map(item => {
+              {estoqueMPExibida.map(item => {
                 const abaixoMin = item.minimo > 0 && item.saldo <= item.minimo;
                 const semEstoque = item.saldo <= 0;
                 const corBorda = semEstoque ? '#dc2626' : abaixoMin ? '#f59e0b' : '#734A2A';
