@@ -3,6 +3,7 @@ import { doc, onSnapshot, getDoc, collection } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, amanhaISO, formatarDataBR, formatarHoraData } from '../services/utils';
 import { useMPOcultos } from '../services/hooks';
+import { agoraServidor } from '../services/relogioServidor';
 
 // ── Hook: Estoque MP — polling a cada 30min (era 5min) ────────────
 function useEstoqueMP(ativo) {
@@ -76,7 +77,7 @@ export default function PainelTV({ sair }) {
   const dataHoje = hojeISO();
   const [aba, setAba]               = useState('producao');
   const [autoRodizio, setAutoRodizio] = useState(false);
-  const [agora, setAgora]           = useState(new Date());
+  const [agora, setAgora]           = useState(agoraServidor());
   const [itens, setItens]           = useState([]);
   const [existe, setExiste]         = useState(false);
   const [carregando, setCarregando] = useState(true);
@@ -85,9 +86,9 @@ export default function PainelTV({ sair }) {
   const [paradas, setParadas]       = useState([]);
   const [programaAmanha, setProgramaAmanha] = useState(null); // itens confirmados p/ amanhã (kits em preparo hoje)
 
-  // Relógio
+  // Relógio — sincronizado com o servidor (não com o hardware da TV/tablet)
   useEffect(() => {
-    const t = setInterval(() => setAgora(new Date()), 1000);
+    const t = setInterval(() => setAgora(agoraServidor()), 1000);
     return () => clearInterval(t);
   }, []);
 
@@ -255,6 +256,20 @@ export default function PainelTV({ sair }) {
     if (todasBatidas.length < 2) return null;
     const min = (new Date(todasBatidas.at(-1)).getTime() - new Date(todasBatidas[0]).getTime()) / 60000;
     return min > 0 ? (todasBatidas.length - 1) / min : null;
+  })();
+
+  // ── Velocidade em janela móvel de 1h: conta quantas receitas saíram
+  // nos últimos 60 minutos (pelo relógio do servidor, não do aparelho) e
+  // divide pelo tempo decorrido nessa janela. Diferente da "velocidade
+  // geral" (média do dia inteiro), esta reage rápido a uma parada ou
+  // uma arrancada recente — é o "ritmo agora" da linha.
+  const JANELA_VELOCIDADE_MIN = 60;
+  const receitasUltimaHora = todasBatidas.filter(b => (agora.getTime() - new Date(b).getTime()) / 60000 <= JANELA_VELOCIDADE_MIN).length;
+  const velocidadeUltimaHora = (() => {
+    if (receitasUltimaHora === 0 || !ultimaBatidaGeral) return null;
+    const primeiraNaJanela = todasBatidas.find(b => (agora.getTime() - new Date(b).getTime()) / 60000 <= JANELA_VELOCIDADE_MIN);
+    const minutosNaJanela = Math.min(JANELA_VELOCIDADE_MIN, (agora.getTime() - new Date(primeiraNaJanela).getTime()) / 60000);
+    return minutosNaJanela > 0 ? receitasUltimaHora / minutosNaJanela : null;
   })();
 
   const porCategoria = {};
@@ -564,10 +579,20 @@ export default function PainelTV({ sair }) {
         {aba === 'masseira' && (
           <>
             <h3 style={S.h3}><i className="ph ph-bowl-food" style={{ color: '#F6BE00', marginRight: 8 }}></i>Produção Masseira</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 20 }}>
               <div style={{ ...S.cardDark, textAlign: 'center' }}>
-                <div style={S.label}>⚡ Velocidade geral</div>
+                <div style={S.label}>⚡ Ritmo (última hora)</div>
                 <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#F6BE00', marginTop: 6 }}>
+                  {velocidadeUltimaHora != null ? velocidadeUltimaHora.toFixed(2) : '—'}
+                  <span style={{ fontSize: '0.9rem', color: '#D0B29E', marginLeft: 4 }}>rec/min</span>
+                </div>
+                <div style={{ fontSize: '0.68rem', color: '#D0B29E', marginTop: 4 }}>
+                  {receitasUltimaHora} receita{receitasUltimaHora === 1 ? '' : 's'} nos últimos 60 min
+                </div>
+              </div>
+              <div style={{ ...S.cardDark, textAlign: 'center' }}>
+                <div style={S.label}>📊 Média do dia</div>
+                <div style={{ fontSize: '2.2rem', fontWeight: 900, color: '#D0B29E', marginTop: 6 }}>
                   {velocidadeGeral != null ? velocidadeGeral.toFixed(2) : '—'}
                   <span style={{ fontSize: '0.9rem', color: '#D0B29E', marginLeft: 4 }}>rec/min</span>
                 </div>

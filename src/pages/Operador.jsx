@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { doc, onSnapshot, updateDoc, setDoc, arrayUnion } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { hojeISO, paraISO, formatarDataBR } from '../services/utils';
+import { agoraServidor } from '../services/relogioServidor';
 import {
   listarLotesDisponiveis,
   definirLoteForcado,
@@ -326,7 +327,7 @@ export default function Operador() {
         });
 
         registroConsumo = {
-          timestamp: new Date().toISOString(),
+          timestamp: agoraServidor().toISOString(),
           consumos: consumosRastreio
         };
       }
@@ -336,7 +337,7 @@ export default function Operador() {
       nova[index] = {
         ...nova[index],
         feitos: nova[index].feitos + 1,
-        batidas: [...(nova[index].batidas || []), new Date().toISOString()],
+        batidas: [...(nova[index].batidas || []), agoraServidor().toISOString()],
         consumoMP: registroConsumo ? [...consumoMPAnterior, registroConsumo] : consumoMPAnterior,
       };
       
@@ -406,7 +407,7 @@ export default function Operador() {
     const tempo = parseInt(tempoStr) || 35;
     setRegistrandoTunel(idx);
     try {
-      const agora = new Date();
+      const agora = agoraServidor();
       const previsto = new Date(agora.getTime() + tempo * 60000);
       const registro = {
         produto: item.produto,
@@ -429,7 +430,7 @@ export default function Operador() {
     setRegistrandoTunel(idx);
     try {
       const novaLista = [...tunelRegistrosDia];
-      novaLista[posicao] = { ...novaLista[posicao], horaFimReal: new Date().toTimeString().slice(0, 5) };
+      novaLista[posicao] = { ...novaLista[posicao], horaFimReal: agoraServidor().toTimeString().slice(0, 5) };
       await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { tunelRegistros: novaLista });
     } catch (e) { alert('Erro ao registrar término no túnel: ' + e.message); }
     finally { setRegistrandoTunel(null); }
@@ -452,7 +453,7 @@ export default function Operador() {
         finalizadoAntecipadamente: true,
         deficit: faltam,
         motivoFinalizacaoAntecipada: motivo,
-        finalizadoAntecipadamenteEm: new Date().toISOString(),
+        finalizadoAntecipadamenteEm: agoraServidor().toISOString(),
         finalizadoAntecipadamentePor: nomeOperador || 'Não identificado',
       };
       setItens(nova);
@@ -474,7 +475,7 @@ export default function Operador() {
       const registro = {
         codigo: codigoObj.codigo,
         label: codigoObj.codigo === 'outros' ? textoOutros : codigoObj.label,
-        inicio: new Date().toISOString(),
+        inicio: agoraServidor().toISOString(),
         fim: null,
         duracaoMin: null,
         registradoPor: nomeOperador || 'Não identificado',
@@ -493,7 +494,7 @@ export default function Operador() {
     if (idx === -1) return;
     try {
       const inicio = new Date(paradas[idx].inicio);
-      const fim = new Date();
+      const fim = agoraServidor();
       const nova = [...paradas];
       nova[idx] = { ...nova[idx], fim: fim.toISOString(), duracaoMin: Math.round((fim - inicio) / 60000) };
       await updateDoc(doc(db, 'producaoDiaria', dataAlvo), { paradas: nova });
