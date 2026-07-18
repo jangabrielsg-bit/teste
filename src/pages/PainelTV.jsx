@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, getDoc, collection } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
-import { hojeISO, formatarDataBR, formatarHoraData } from '../services/utils';
+import { hojeISO, amanhaISO, formatarDataBR, formatarHoraData } from '../services/utils';
 import { useMPOcultos } from '../services/hooks';
 
 // ── Hook: Estoque MP — polling a cada 30min (era 5min) ────────────
@@ -69,8 +69,8 @@ function useEstoqueMP(ativo) {
   return { itens, carregando };
 }
 
-const ABAS = ['producao', 'masseira', 'patinhas', 'estoque_pa', 'estoque_mp'];
-const NOMES_ABAS = { producao: 'Visão Geral', masseira: 'Masseira', patinhas: 'Patinhas', estoque_pa: 'Est. PA', estoque_mp: 'Est. MP' };
+const ABAS = ['fluxo', 'producao', 'masseira', 'patinhas', 'estoque_pa', 'estoque_mp'];
+const NOMES_ABAS = { fluxo: 'Fluxo da Linha', producao: 'Visão Geral', masseira: 'Masseira', patinhas: 'Patinhas', estoque_pa: 'Est. PA', estoque_mp: 'Est. MP' };
 
 export default function PainelTV({ sair }) {
   const dataHoje = hojeISO();
@@ -84,6 +84,7 @@ export default function PainelTV({ sair }) {
   const [estoquePA, setEstoquePA]   = useState([]);
   const [patinhas, setPatinhas]     = useState([]);
   const [paradas, setParadas]       = useState([]);
+  const [programaAmanha, setProgramaAmanha] = useState(null); // itens confirmados p/ amanhã (kits em preparo hoje)
 
   // Relógio
   useEffect(() => {
@@ -103,6 +104,15 @@ export default function PainelTV({ sair }) {
       } else {
         setExiste(false); setItens([]); setTunelRegistros([]); setParadas([]);
       }
+    });
+    return unsub;
+  }, [dataHoje]);
+
+  // ✅ Programação de amanhã — reflete a janela de 24h dos kits:
+  // o que está confirmado para amanhã é o que o preparo fraciona hoje.
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'producaoDiaria', amanhaISO()), snap => {
+      setProgramaAmanha(snap.exists() ? (snap.data().itens || []) : null);
     });
     return unsub;
   }, [dataHoje]);
@@ -337,6 +347,126 @@ export default function PainelTV({ sair }) {
       })()}
 
       <main style={S.main}>
+
+        {/* ABA 0 — FLUXO DA LINHA (mapa didático: estoque → ... → expedição) */}
+        {aba === 'fluxo' && (() => {
+          // Cada etapa espelha um setor físico do layout da fábrica.
+          // Regra didática de cor: verde = fluindo, amarelo = atenção,
+          // vermelho = travado, cinza = sem dado / etapa manual.
+          const paradaAberta = paradas.find(p => !p.fim);
+          const noTunel = tunelRegistros.filter(t => !t.horaFimReal);
+          const proximaQueda = noTunel
+            .map(t => t.horaFimPrevista || t.horaFim)
+            .filter(Boolean)
+            .sort()[0] || null;
+          const pesandoAgora = patinhasPendentes;
+          const kgPesando = pesandoAgora.reduce((s, p) => s + (parseFloat(p.qtd) || 0), 0);
+          const kgCamara = patinhasConfirmadas.reduce((s, p) => s + (parseFloat(p.pesoTotal) || 0), 0);
+          const finalizadosAbaixo = itens.filter(it => it.finalizadoAntecipadamente).length;
+
+          const etapas = [
+            {
+              icone: 'ph-calendar-check',
+              titulo: '1. PCP / Kits',
+              subtitulo: 'Programação de amanhã (kits fracionados hoje, 24h antes)',
+              valor: programaAmanha ? `${programaAmanha.length}` : '—',
+              unidade: programaAmanha ? 'receitas programadas' : 'sem programação ainda',
+              cor: programaAmanha ? '#4ade80' : '#6b7280',
+              detalhe: programaAmanha
+                ? `${programaAmanha.reduce((s, it) => s + (it.metaLotes || 0), 0)} lotes no total para ${formatarDataBR(amanhaISO())}`
+                : 'O líder ainda não confirmou a programação de amanhã.',
+            },
+            {
+              icone: 'ph-cooking-pot',
+              titulo: '2. Produção',
+              subtitulo: 'Setor de produção — linha piloto de pães',
+              valor: `${totalFeito} / ${totalProgramado}`,
+              unidade: 'receitas hoje',
+              cor: paradaAberta ? '#f87171' : totalProgramado > 0 && totalFeito >= totalProgramado ? '#4ade80' : '#F6BE00',
+              detalhe: paradaAberta
+                ? `🔴 LINHA PARADA — ${paradaAberta.label} (há ${tempoDecorrido(paradaAberta.inicio)})`
+                : finalizadosAbaixo > 0
+                  ? `⚠ ${finalizadosAbaixo} receita(s) finalizada(s) abaixo da meta`
+                  : totalProgramado > 0 ? `${pctGeral}% da meta do dia` : 'Nada programado para hoje.',
+              alerta: !!paradaAberta,
+            },
+            {
+              icone: 'ph-thermometer-cold',
+              titulo: '3. Túnel de Congelamento',
+              subtitulo: 'Túneis 1–6',
+              valor: `${noTunel.length}`,
+              unidade: noTunel.length === 1 ? 'produto dentro agora' : 'produtos dentro agora',
+              cor: noTunel.length > 0 ? '#F6BE00' : '#6b7280',
+              detalhe: proximaQueda ? `Próxima queda prevista: ${proximaQueda}` : 'Nenhum produto no túnel no momento.',
+            },
+            {
+              icone: 'ph-scales',
+              titulo: '4. Pesagem / Embalagem',
+              subtitulo: 'Embaladora → balança da expedição',
+              valor: `${pesandoAgora.length}`,
+              unidade: pesandoAgora.length === 1 ? 'patinha sendo pesada' : 'patinhas sendo pesadas',
+              cor: pesandoAgora.length > 0 ? '#F6BE00' : '#6b7280',
+              detalhe: pesandoAgora.length > 0 ? `${kgPesando.toFixed(2)} kg aguardando confirmação` : 'Nenhuma pesagem em andamento.',
+            },
+            {
+              icone: 'ph-snowflake',
+              titulo: '5. Câmara de Produto Acabado',
+              subtitulo: 'Entradas confirmadas hoje',
+              valor: kgCamara.toFixed(0),
+              unidade: 'kg na câmara hoje',
+              cor: kgCamara > 0 ? '#4ade80' : '#6b7280',
+              detalhe: `${patinhasConfirmadas.length} patinha(s) confirmada(s) no dia.`,
+            },
+            {
+              icone: 'ph-truck',
+              titulo: '6. Expedição / Carregamento',
+              subtitulo: 'Saída para rota',
+              valor: '—',
+              unidade: 'saída manual',
+              cor: '#6b7280',
+              detalhe: 'Baixa feita manualmente por PVPS, puxando lotes internos (janela de 24h).',
+            },
+          ];
+
+          return (
+            <>
+              <h3 style={S.h3}><i className="ph ph-flow-arrow" style={{ color: '#F6BE00', marginRight: 8 }}></i>Fluxo da Linha — do PCP à Expedição</h3>
+              <div style={{ textAlign: 'center', fontSize: '0.72rem', color: '#D0B29E', marginTop: -12, marginBottom: 18 }}>
+                Leia da esquerda para a direita: é o mesmo caminho físico da fábrica. Verde = fluindo · Amarelo = em atividade · Vermelho = travado · Cinza = sem movimento.
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
+                {etapas.map((et, i) => (
+                  <div key={i} style={{ position: 'relative' }}>
+                    <div style={{
+                      ...S.card,
+                      borderLeft: `5px solid ${et.cor}`,
+                      height: '100%',
+                      boxShadow: et.alerta ? '0 0 18px rgba(248,113,113,0.45)' : 'none',
+                      animation: et.alerta ? 'sinoPulseTv 1.4s ease-in-out infinite' : 'none',
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                        <i className={`ph ${et.icone}`} style={{ color: et.cor, fontSize: '1.3rem' }}></i>
+                        <span style={{ fontWeight: 800, color: 'white', fontSize: '0.95rem' }}>{et.titulo}</span>
+                      </div>
+                      <div style={{ fontSize: '0.68rem', color: '#D0B29E', marginBottom: 10 }}>{et.subtitulo}</div>
+                      <div style={{ fontSize: '2rem', fontWeight: 900, color: et.cor, lineHeight: 1 }}>
+                        {et.valor} <span style={{ fontSize: '0.75rem', color: '#D0B29E', fontWeight: 700 }}>{et.unidade}</span>
+                      </div>
+                      <div style={{ marginTop: 10, fontSize: '0.75rem', color: et.alerta ? '#fecaca' : '#D0B29E', fontWeight: et.alerta ? 800 : 400 }}>
+                        {et.detalhe}
+                      </div>
+                    </div>
+                    {i < etapas.length - 1 && (
+                      <div style={{ position: 'absolute', right: -14, top: '50%', transform: 'translateY(-50%)', color: '#734A2A', fontSize: '1.2rem', zIndex: 1 }}>
+                        <i className="ph ph-caret-right"></i>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
 
         {/* ABA 1 — VISÃO GERAL */}
         {aba === 'producao' && (
