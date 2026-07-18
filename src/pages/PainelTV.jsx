@@ -270,8 +270,14 @@ export default function PainelTV({ sair }) {
   // apontada no Fechamento. Troca-se a Performance por dado de máquina
   // quando isso existir, sem mudar o resto da conta.
   const oee = (() => {
+    if (totalProgramado === 0) return null; // sem programação hoje, não há o que medir
+
     const primeiraBatida = todasBatidas[0] || null;
-    if (!primeiraBatida || totalProgramado === 0) return null;
+    if (!primeiraBatida) {
+      // Programado, mas ainda sem nenhuma batida — mostra o card zerado
+      // em vez de escondê-lo, pra ficar claro que está "aguardando início".
+      return { disponibilidade: 0, performance: 0, qualidade: 1, valor: 0, tempoParadoMin: 0, aindaNaoComecou: true };
+    }
 
     const tempoTotalMin = Math.max(1, (agora.getTime() - new Date(primeiraBatida).getTime()) / 60000);
     const tempoParadoMin = paradas.reduce((acc, p) => {
@@ -478,26 +484,28 @@ export default function PainelTV({ sair }) {
                       <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#F6BE00', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                         <i className="ph ph-gauge" style={{ marginRight: 6 }}></i>OEE do dia
                       </div>
-                      <div style={{ fontSize: '2rem', fontWeight: 900, color: oee.valor >= 0.85 ? '#4ade80' : oee.valor >= 0.6 ? '#F6BE00' : '#f87171' }}>
-                        {Math.round(oee.valor * 100)}%
+                      <div style={{ fontSize: '2rem', fontWeight: 900, color: oee.aindaNaoComecou ? '#6b7280' : oee.valor >= 0.85 ? '#4ade80' : oee.valor >= 0.6 ? '#F6BE00' : '#f87171' }}>
+                        {oee.aindaNaoComecou ? '—' : `${Math.round(oee.valor * 100)}%`}
                       </div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                       <div style={{ textAlign: 'center' }}>
                         <div style={S.label}>Disponibilidade</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{Math.round(oee.disponibilidade * 100)}%</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{oee.aindaNaoComecou ? '—' : `${Math.round(oee.disponibilidade * 100)}%`}</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div style={S.label}>Performance</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{Math.round(oee.performance * 100)}%</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{oee.aindaNaoComecou ? '—' : `${Math.round(oee.performance * 100)}%`}</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
                         <div style={S.label}>Qualidade</div>
-                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{Math.round(oee.qualidade * 100)}%</div>
+                        <div style={{ fontSize: '1.1rem', fontWeight: 900, color: 'white', marginTop: 2 }}>{oee.aindaNaoComecou ? '—' : `${Math.round(oee.qualidade * 100)}%`}</div>
                       </div>
                     </div>
                     <div style={{ marginTop: 10, fontSize: '0.65rem', color: '#D0B29E', textAlign: 'center' }}>
-                      Provisório: Performance baseada no programado (sem tempo de ciclo de máquina) · {Math.round(oee.tempoParadoMin)} min parado hoje
+                      {oee.aindaNaoComecou
+                        ? 'Aguardando a primeira batida do dia.'
+                        : `Provisório: Performance baseada no programado (sem tempo de ciclo de máquina) · ${Math.round(oee.tempoParadoMin)} min parado hoje`}
                     </div>
                   </div>
                 )}
