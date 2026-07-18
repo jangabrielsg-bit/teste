@@ -311,6 +311,31 @@ export default function PainelTV({ sair }) {
         </div>
       </header>
 
+      <style>{`@keyframes sinoPulseTv { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
+
+      {/* ── Sinalização: linha parada agora, ou item finalizado abaixo da meta ── */}
+      {(() => {
+        const paradaAberta = paradas.find(p => !p.fim);
+        const finalizadosAbaixo = itens.filter(it => it.finalizadoAntecipadamente);
+        if (!paradaAberta && finalizadosAbaixo.length === 0) return null;
+        return (
+          <div style={{ background: '#5c1a1a', borderBottom: '2px solid #dc2626', padding: '10px 24px', display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center' }}>
+            {paradaAberta && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: '#fecaca', animation: 'sinoPulseTv 1.4s ease-in-out infinite' }}>
+                <i className="ph ph-pause-circle" style={{ fontSize: '1.2rem' }}></i>
+                LINHA PARADA — {paradaAberta.label} (há {tempoDecorrido(paradaAberta.inicio)})
+              </div>
+            )}
+            {finalizadosAbaixo.map((it, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#fecaca', fontSize: '0.85rem' }}>
+                <i className="ph ph-flag-checkered"></i>
+                {it.produto} finalizado com {it.feitos}/{it.metaLotes} (faltaram {it.deficit})
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       <main style={S.main}>
 
         {/* ABA 1 — VISÃO GERAL */}
@@ -368,18 +393,24 @@ export default function PainelTV({ sair }) {
                       {catItens.map((item, idx) => {
                         const perc = item.metaLotes ? Math.min(100, Math.round((item.feitos || 0) / item.metaLotes * 100)) : 0;
                         const concluido = (item.feitos || 0) >= item.metaLotes;
+                        const abaixoDaMeta = item.finalizadoAntecipadamente;
                         return (
-                          <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
+                          <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                               <div style={{ fontWeight: 700, color: 'white' }}>{item.produto}</div>
                               <div style={{ fontFamily: 'monospace', color: '#D0B29E' }}>
-                                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
+                                <span style={{ fontSize: '1.4rem', fontWeight: 900, color: abaixoDaMeta ? '#fbbf24' : concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
                                 {' '}/{' '}{item.metaLotes}
                               </div>
                             </div>
                             <div style={{ background: '#3D2515', borderRadius: 20, height: 10, overflow: 'hidden' }}>
-                              <div style={{ background: concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                              <div style={{ background: abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
                             </div>
+                            {abaixoDaMeta && (
+                              <div style={{ marginTop: 6, fontSize: '0.7rem', fontWeight: 700, color: '#fbbf24' }}>
+                                ⚠ Finalizado abaixo da meta — faltaram {item.deficit}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -417,8 +448,9 @@ export default function PainelTV({ sair }) {
                 const concluido = (item.feitos || 0) >= item.metaLotes;
                 const vel = velItem(item);
                 const ub = item.batidas?.at(-1);
+                const abaixoDaMeta = item.finalizadoAntecipadamente;
                 return (
-                  <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
+                  <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       {/* Nome + velocidade */}
                       <div>
@@ -434,19 +466,22 @@ export default function PainelTV({ sair }) {
                               🕐 há {tempoDecorrido(ub)}
                             </span>
                           )}
-                          {concluido && (
+                          {abaixoDaMeta && (
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24' }}>⚠ Finalizado abaixo da meta (faltaram {item.deficit})</span>
+                          )}
+                          {concluido && !abaixoDaMeta && (
                             <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4ade80' }}>✔ Concluído</span>
                           )}
                         </div>
                       </div>
                       {/* Contador */}
                       <div style={{ textAlign: 'right', fontFamily: 'monospace', flexShrink: 0 }}>
-                        <span style={{ fontSize: '1.8rem', fontWeight: 900, color: concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
+                        <span style={{ fontSize: '1.8rem', fontWeight: 900, color: abaixoDaMeta ? '#fbbf24' : concluido ? '#4ade80' : '#F6BE00' }}>{item.feitos || 0}</span>
                         <span style={{ color: '#D0B29E', fontSize: '1rem' }}> / {item.metaLotes}</span>
                       </div>
                     </div>
                     <div style={{ background: '#3D2515', borderRadius: 20, height: 12, overflow: 'hidden' }}>
-                      <div style={{ background: concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
+                      <div style={{ background: abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : '#F6BE00', height: '100%', width: perc + '%', transition: 'width 1s', borderRadius: 20 }}></div>
                     </div>
                   </div>
                 );
@@ -485,7 +520,6 @@ export default function PainelTV({ sair }) {
                   </div>
                 </div>
               ))}
-              <style>{`@keyframes sinoPulseTv { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
             </div>
           </>
         )}
