@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, getDoc, collection } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
-import { hojeISO, amanhaISO, formatarDataBR, formatarHoraData } from '../services/utils';
+import { hojeISO, formatarDataBR, formatarHoraData, somarDiasISO } from '../services/utils';
 import { useMPOcultos } from '../services/hooks';
 import { agoraServidor } from '../services/relogioServidor';
 
@@ -74,7 +74,11 @@ const ABAS = ['fluxo', 'producao', 'masseira', 'patinhas', 'estoque_pa', 'estoqu
 const NOMES_ABAS = { fluxo: 'Fluxo da Linha', producao: 'Visão Geral', masseira: 'Masseira', patinhas: 'Patinhas', estoque_pa: 'Est. PA', estoque_mp: 'Est. MP' };
 
 export default function PainelTV({ sair }) {
-  const dataHoje = hojeISO();
+  const hoje = hojeISO();
+  const [dataSelecionada, setDataSelecionada] = useState(hoje);
+  const dataHoje = dataSelecionada; // nome mantido nas queries abaixo — é a data em exibição, não necessariamente "hoje"
+  const vendoHoje = dataSelecionada === hoje;
+  function mudarDia(delta) { setDataSelecionada(d => somarDiasISO(d, delta)); }
   const [aba, setAba]               = useState('producao');
   const [autoRodizio, setAutoRodizio] = useState(false);
   const [agora, setAgora]           = useState(agoraServidor());
@@ -107,10 +111,10 @@ export default function PainelTV({ sair }) {
     return unsub;
   }, [dataHoje]);
 
-  // ✅ Programação de amanhã — reflete a janela de 24h dos kits:
-  // o que está confirmado para amanhã é o que o preparo fraciona hoje.
+  // ✅ Programação do dia seguinte ao selecionado — reflete a janela de 24h
+  // dos kits: o que está confirmado para amanhã é o que o preparo fraciona hoje.
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'producaoDiaria', amanhaISO()), snap => {
+    const unsub = onSnapshot(doc(db, 'producaoDiaria', somarDiasISO(dataHoje, 1)), snap => {
       setProgramaAmanha(snap.exists() ? (snap.data().itens || []) : null);
     });
     return unsub;
@@ -354,13 +358,37 @@ export default function PainelTV({ sair }) {
           <span style={{ fontFamily: 'monospace', fontSize: '1.1rem', fontWeight: 700, color: '#F6BE00' }}>
             {agora.toLocaleTimeString('pt-BR')}
           </span>
-          <span style={{ fontSize: '0.8rem', color: '#D0B29E' }}>{formatarDataBR(dataHoje)}</span>
+
+          {/* ── Navegação de data — ver o resumo de qualquer dia, não só hoje ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, background: '#3D2515', border: '1px solid #734A2A', borderRadius: 8, padding: '3px 4px' }}>
+            <button onClick={() => mudarDia(-1)} style={{ background: 'none', border: 'none', color: '#D0B29E', fontSize: '1.1rem', padding: '2px 8px', cursor: 'pointer' }}>‹</button>
+            <input
+              type="date"
+              value={dataSelecionada}
+              onChange={e => e.target.value && setDataSelecionada(e.target.value)}
+              style={{ background: 'transparent', border: 'none', color: vendoHoje ? '#D0B29E' : '#F6BE00', fontWeight: 700, fontSize: '0.8rem', colorScheme: 'dark', cursor: 'pointer' }}
+            />
+            <button onClick={() => mudarDia(1)} disabled={dataSelecionada >= hoje} style={{ background: 'none', border: 'none', color: dataSelecionada >= hoje ? '#5C3A21' : '#D0B29E', fontSize: '1.1rem', padding: '2px 8px', cursor: dataSelecionada >= hoje ? 'default' : 'pointer' }}>›</button>
+            {!vendoHoje && (
+              <button onClick={() => setDataSelecionada(hoje)} style={{ background: '#F6BE00', color: '#2A170A', border: 'none', borderRadius: 6, padding: '3px 10px', fontWeight: 800, fontSize: '0.7rem', cursor: 'pointer', marginLeft: 2 }}>
+                Hoje
+              </button>
+            )}
+          </div>
+
           <button onClick={alternarTelaCheia} style={{ background: '#F6BE00', color: '#2A170A', padding: '6px 12px', borderRadius: 6, fontWeight: 700, border: 'none', cursor: 'pointer' }}>
             <i className="ph ph-corners-out"></i>
           </button>
           {sair && <button onClick={sair} style={{ background: '#4A2E1A', color: 'white', padding: '6px 12px', borderRadius: 6, fontWeight: 700, border: '1px solid #734A2A', cursor: 'pointer' }}>Voltar</button>}
         </div>
       </header>
+
+      {!vendoHoje && (
+        <div style={{ background: '#3D2515', borderBottom: '1px solid #5C3A21', padding: '6px 24px', textAlign: 'center', fontSize: '0.75rem', color: '#F6BE00', fontWeight: 700 }}>
+          <i className="ph ph-clock-counter-clockwise" style={{ marginRight: 6 }}></i>
+          Vendo dados de {formatarDataBR(dataSelecionada)} — histórico, não é o dia atual.
+        </div>
+      )}
 
       <style>{`@keyframes sinoPulseTv { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }`}</style>
 
@@ -409,7 +437,7 @@ export default function PainelTV({ sair }) {
               unidade: programaAmanha ? 'receitas programadas' : 'sem programação ainda',
               cor: programaAmanha ? '#4ade80' : '#6b7280',
               detalhe: programaAmanha
-                ? `${programaAmanha.reduce((s, it) => s + (it.metaLotes || 0), 0)} lotes no total para ${formatarDataBR(amanhaISO())}`
+                ? `${programaAmanha.reduce((s, it) => s + (it.metaLotes || 0), 0)} lotes no total para ${formatarDataBR(somarDiasISO(dataHoje, 1))}`
                 : 'O líder ainda não confirmou a programação de amanhã.',
             },
             {
