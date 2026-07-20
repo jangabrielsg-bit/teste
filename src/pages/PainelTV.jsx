@@ -242,10 +242,14 @@ export default function PainelTV({ sair }) {
     return `${String(Math.floor(seg / 60)).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`;
   }
 
+  // Receitas por minuto deste item (não confundir com minutos por receita,
+  // que é o inverso — bug corrigido aqui: a conta antiga devolvia o
+  // intervalo médio entre batidas e mostrava isso rotulado como "rec/min").
   function velItem(item) {
     const b = item.batidas || [];
     if (b.length < 2) return null;
-    return (new Date(b.at(-1)).getTime() - new Date(b[0]).getTime()) / 60000 / (b.length - 1);
+    const minutosDecorridos = (new Date(b.at(-1)).getTime() - new Date(b[0]).getTime()) / 60000;
+    return minutosDecorridos > 0 ? (b.length - 1) / minutosDecorridos : null;
   }
 
   const totalProgramado = itens.reduce((s, it) => s + (it.metaLotes || 0), 0);
