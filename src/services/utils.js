@@ -11,6 +11,13 @@ export function amanhaISO() {
   return paraISO(d);
 }
 
+/** Soma (ou subtrai, com delta negativo) dias a uma data ISO (YYYY-MM-DD) arbitrária. */
+export function somarDiasISO(iso, delta) {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + delta);
+  return paraISO(d);
+}
+
 export function hojeISO() {
   return paraISO(new Date());
 }
