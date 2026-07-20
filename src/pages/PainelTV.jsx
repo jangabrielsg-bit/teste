@@ -574,7 +574,7 @@ export default function PainelTV({ sair }) {
                     <div style={{ display: 'grid', gap: 12 }}>
                       {catItens.map((item, idx) => {
                         const perc = item.metaLotes ? Math.min(100, Math.round((item.feitos || 0) / item.metaLotes * 100)) : 0;
-                        const concluido = (item.feitos || 0) >= item.metaLotes;
+                        const concluido = (item.feitos || 0) >= item.metaLotes || item.finalizadoAntecipadamente;
                         const abaixoDaMeta = item.finalizadoAntecipadamente;
                         return (
                           <div key={idx} style={{ ...S.card, borderLeft: `4px solid ${abaixoDaMeta ? '#f59e0b' : concluido ? '#15803d' : item === itemAtivo ? '#F6BE00' : '#734A2A'}` }}>
@@ -640,7 +640,7 @@ export default function PainelTV({ sair }) {
             <div style={{ display: 'grid', gap: 14 }}>
               {ordenados.map((item, idx) => {
                 const perc = item.metaLotes ? Math.min(100, Math.round((item.feitos || 0) / item.metaLotes * 100)) : 0;
-                const concluido = (item.feitos || 0) >= item.metaLotes;
+                const concluido = (item.feitos || 0) >= item.metaLotes || item.finalizadoAntecipadamente;
                 const vel = velItem(item);
                 const ub = item.batidas?.at(-1);
                 const abaixoDaMeta = item.finalizadoAntecipadamente;
@@ -662,7 +662,12 @@ export default function PainelTV({ sair }) {
                             </span>
                           )}
                           {abaixoDaMeta && (
-                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24' }}>⚠ Finalizado abaixo da meta (faltaram {item.deficit})</span>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24' }}>
+                              ⚠ Finalizado abaixo da meta (faltaram {item.deficit})
+                              {item.finalizadoAntecipadamenteEm && (
+                                <span style={{ fontWeight: 400, color: '#D0B29E' }}> · às {new Date(item.finalizadoAntecipadamenteEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                              )}
+                            </span>
                           )}
                           {concluido && !abaixoDaMeta && (
                             <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#4ade80' }}>✔ Concluído</span>
