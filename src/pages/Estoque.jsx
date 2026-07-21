@@ -208,6 +208,31 @@ function ModalLotes({ produto, aoFechar, editavel, onSalvarLote, onExcluirLote }
   const [loteEdit, setLoteEdit] = useState('');
   const [validadeEdit, setValidadeEdit] = useState('');
   const [salvando, setSalvando] = useState(false);
+  const [expandidos, setExpandidos] = useState(() => new Set());
+
+  function alternarExpandido(chave) {
+    setExpandidos(prev => {
+      const novo = new Set(prev);
+      if (novo.has(chave)) novo.delete(chave); else novo.add(chave);
+      return novo;
+    });
+  }
+
+  // ── Agrupa entradas com o mesmo lote (e mesma validade) — muitas
+  // patinhas pesadas do mesmo lote físico não precisam de uma linha cada.
+  const grupos = [];
+  const indicePorChave = new Map();
+  (produto.lotes || []).forEach(lt => {
+    const numeroLote = lt.lote || lt.loteFisico || lt.batchNumber || lt.code || 'S/N';
+    const validadeChave = lt.validade || lt.expiryDate || '';
+    const chave = `${numeroLote}::${validadeChave}`;
+    if (indicePorChave.has(chave)) {
+      grupos[indicePorChave.get(chave)].itens.push(lt);
+    } else {
+      indicePorChave.set(chave, grupos.length);
+      grupos.push({ chave, numeroLote, validadeChave, itens: [lt] });
+    }
+  });
 
   function abrirEdicao(lt) {
     setEditando(lt);
@@ -235,46 +260,116 @@ function ModalLotes({ produto, aoFechar, editavel, onSalvarLote, onExcluirLote }
           <button style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }} onClick={aoFechar}>✕</button>
         </div>
         <div style={{ padding: 12, overflowY: 'auto' }}>
-          {(produto.lotes || []).length === 0
+          {grupos.length === 0
             ? <div className="status-msg">Nenhum lote encontrado.</div>
-            : (produto.lotes || []).map((lt, lIdx) => (
-                <div key={lt.id || lIdx} style={{ padding: 14, borderBottom: '1px solid #f3f4f6' }}>
-                  {editando === lt ? (
-                    <div>
-                      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                        <input className="input-texto" style={{ flex: 1 }} value={loteEdit} onChange={e => setLoteEdit(e.target.value)} placeholder="Lote" />
-                        <input type="date" className="input-texto" style={{ flex: 1 }} value={validadeEdit} onChange={e => setValidadeEdit(e.target.value)} />
+            : grupos.map(grupo => {
+                const agrupado = grupo.itens.length > 1;
+                const totalGrupo = grupo.itens.reduce((s, it) => s + (parseFloat(it.qtd || it.quantity || 0) || 0), 0);
+                const validadeFmt = grupo.validadeChave ? new Date(grupo.validadeChave).toLocaleDateString('pt-BR') : 'Sem validade';
+                const expandido = expandidos.has(grupo.chave);
+
+                if (!agrupado) {
+                  const lt = grupo.itens[0];
+                  return (
+                    <div key={grupo.chave} style={{ padding: 14, borderBottom: '1px solid #f3f4f6' }}>
+                      {editando === lt ? (
+                        <div>
+                          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                            <input className="input-texto" style={{ flex: 1 }} value={loteEdit} onChange={e => setLoteEdit(e.target.value)} placeholder="Lote" />
+                            <input type="date" className="input-texto" style={{ flex: 1 }} value={validadeEdit} onChange={e => setValidadeEdit(e.target.value)} />
+                          </div>
+                          <input type="number" step="0.01" className="input-texto" value={qtdEdit} onChange={e => setQtdEdit(e.target.value)} placeholder="Peso" style={{ marginBottom: 8 }} />
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button className="btn btn-outline btn-block" onClick={() => setEditando(null)} disabled={salvando}>Cancelar</button>
+                            <button className="btn btn-primary btn-block" onClick={confirmarEdicao} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 700 }}>{grupo.numeroLote}</div>
+                            <div style={{ fontSize: '0.75rem', color: '#999' }}>{validadeFmt}</div>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div>
+                              <div style={{ fontSize: '0.75rem', color: '#999' }}>{produto.und || lt.und || 'kg'}</div>
+                            </div>
+                            {editavel && (
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <button onClick={() => abrirEdicao(lt)} title="Editar" style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }}>
+                                  <i className="ph ph-pencil-simple"></i>
+                                </button>
+                                <button onClick={() => onExcluirLote(lt)} title="Excluir" className="remover-btn">✕</button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                // ── Grupo com mais de uma entrada do mesmo lote ──
+                return (
+                  <div key={grupo.chave} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                    <div
+                      onClick={() => alternarExpandido(grupo.chave)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 14, cursor: 'pointer', background: expandido ? '#faf6ea' : 'transparent' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <i className={`ph ${expandido ? 'ph-caret-down' : 'ph-caret-right'}`} style={{ color: '#999' }}></i>
+                        <div>
+                          <div style={{ fontWeight: 700 }}>
+                            {grupo.numeroLote}
+                            <span style={{ marginLeft: 8, fontSize: '0.68rem', fontWeight: 700, color: 'var(--marrom)', background: 'var(--amarelo-claro)', padding: '2px 8px', borderRadius: 20 }}>
+                              x{grupo.itens.length}
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#999' }}>{validadeFmt}</div>
+                        </div>
                       </div>
-                      <input type="number" step="0.01" className="input-texto" value={qtdEdit} onChange={e => setQtdEdit(e.target.value)} placeholder="Peso" style={{ marginBottom: 8 }} />
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-outline btn-block" onClick={() => setEditando(null)} disabled={salvando}>Cancelar</button>
-                        <button className="btn btn-primary btn-block" onClick={confirmarEdicao} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{totalGrupo.toFixed(2)}</div>
+                        <div style={{ fontSize: '0.75rem', color: '#999' }}>{produto.und || 'kg'}</div>
                       </div>
                     </div>
-                  ) : (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{lt.lote || lt.loteFisico || lt.batchNumber || lt.code || 'S/N'}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#999' }}>{(lt.validade || lt.expiryDate) ? new Date(lt.validade || lt.expiryDate).toLocaleDateString('pt-BR') : 'Sem validade'}</div>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontWeight: 900, fontSize: '1.1rem' }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)}</div>
-                          <div style={{ fontSize: '0.75rem', color: '#999' }}>{produto.und || lt.und || 'kg'}</div>
-                        </div>
-                        {editavel && (
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => abrirEdicao(lt)} title="Editar" style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }}>
-                              <i className="ph ph-pencil-simple"></i>
-                            </button>
-                            <button onClick={() => onExcluirLote(lt)} title="Excluir" className="remover-btn">✕</button>
+
+                    {expandido && grupo.itens.map((lt, lIdx) => (
+                      <div key={lt.id || lIdx} style={{ padding: '10px 14px 10px 34px', borderTop: '1px dashed #f3f4f6', background: '#fcfcfc' }}>
+                        {editando === lt ? (
+                          <div>
+                            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                              <input className="input-texto" style={{ flex: 1 }} value={loteEdit} onChange={e => setLoteEdit(e.target.value)} placeholder="Lote" />
+                              <input type="date" className="input-texto" style={{ flex: 1 }} value={validadeEdit} onChange={e => setValidadeEdit(e.target.value)} />
+                            </div>
+                            <input type="number" step="0.01" className="input-texto" value={qtdEdit} onChange={e => setQtdEdit(e.target.value)} placeholder="Peso" style={{ marginBottom: 8 }} />
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="btn btn-outline btn-block" onClick={() => setEditando(null)} disabled={salvando}>Cancelar</button>
+                              <button className="btn btn-primary btn-block" onClick={confirmarEdicao} disabled={salvando}>{salvando ? 'Salvando...' : 'Salvar'}</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <div style={{ fontSize: '0.72rem', color: '#999' }}>{lt.dataEntrada || lt.registradoEm ? new Date(lt.dataEntrada || lt.registradoEm).toLocaleDateString('pt-BR') : ''}</div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ fontWeight: 800 }}>{parseFloat(lt.qtd || lt.quantity || 0).toFixed(2)} {produto.und || lt.und || 'kg'}</div>
+                              {editavel && (
+                                <div style={{ display: 'flex', gap: 6 }}>
+                                  <button onClick={() => abrirEdicao(lt)} title="Editar" style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }}>
+                                    <i className="ph ph-pencil-simple"></i>
+                                  </button>
+                                  <button onClick={() => onExcluirLote(lt)} title="Excluir" className="remover-btn">✕</button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))
+                    ))}
+                  </div>
+                );
+              })
           }
         </div>
         <div style={{ padding: 14, background: '#fafafa', borderTop: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
