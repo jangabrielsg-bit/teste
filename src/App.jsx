@@ -1,6 +1,7 @@
 import { AuthProvider, useAuth } from './services/auth';
 import Login from './pages/Login';
 import AppLayout from './layouts/AppLayout';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function AppContent() {
   const { currentUser, firebasePronto } = useAuth();
@@ -23,8 +24,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
