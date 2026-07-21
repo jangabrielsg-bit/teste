@@ -51,6 +51,7 @@ export default function Expedicao() {
   const mpOcultos = useMPOcultos();
   const [aviso, setAviso]                   = useState(null); // { tipo: 'ok'|'erro', texto }
   const [confirmSemRastreio, setConfirmSemRastreio] = useState(null); // { itemProg }
+  const [edicaoPatinha, setEdicaoPatinha] = useState(null); // { idx, lote, validade, qtd }
   const avisoTimeoutRef = useRef(null);
 
   // Id estável por dispositivo/aba — cada operador pesando ao mesmo tempo
@@ -139,9 +140,12 @@ export default function Expedicao() {
 
   // Espelha a mesma fila no Firestore, em tempo real, para o Painel TV
   // mostrar a patinha assim que ela é pesada — não só depois de confirmada.
+  // O Firestore rejeita qualquer campo `undefined` (mesmo dentro de um
+  // array), e a genealogia de MP pode conter algum campo assim — o
+  // JSON.parse(JSON.stringify(...)) remove essas chaves antes de gravar.
   useEffect(() => {
     setDoc(doc(db, 'pesagensEmAndamento', dataHoje, 'sessoes', sessionId), {
-      itens: listaEntrada,
+      itens: JSON.parse(JSON.stringify(listaEntrada)),
       atualizadoEm: agoraServidor().toISOString(),
     }).catch(e => console.error('Erro ao sincronizar pesagem em andamento:', e));
   }, [listaEntrada, dataHoje, sessionId]);
@@ -206,6 +210,40 @@ export default function Expedicao() {
     mostrarAviso('ok', 'Patinha adicionada para conferência!');
   }
 
+  function abrirEdicaoPatinha(idx) {
+    const item = listaEntrada[idx];
+    setEdicaoPatinha({ idx, lote: item.lote, validade: item.validade || '', qtd: String(item.qtd) });
+  }
+
+  function confirmarEdicaoPatinha() {
+    if (!nomeOperador.trim()) return mostrarAviso('erro', 'Informe seu nome antes de editar.');
+    const { idx, lote: loteNovo, validade: validadeNova, qtd: qtdNova } = edicaoPatinha;
+    const qtdNum = parseFloat(qtdNova);
+    if (!qtdNova || isNaN(qtdNum) || qtdNum <= 0) return mostrarAviso('erro', 'Peso inválido.');
+    if (!loteNovo.trim()) return mostrarAviso('erro', 'Informe o lote.');
+
+    setListaEntrada(prev => {
+      const nova = [...prev];
+      const original = nova[idx];
+      const mudancas = [];
+      if (original.lote !== loteNovo.trim()) mudancas.push(`lote ${original.lote} → ${loteNovo.trim()}`);
+      if ((original.validade || '') !== validadeNova) mudancas.push(`validade ${original.validade || 's/data'} → ${validadeNova || 's/data'}`);
+      if (original.qtd !== qtdNum) mudancas.push(`peso ${formatarKg(original.qtd)} → ${formatarKg(qtdNum)} ${original.und}`);
+
+      nova[idx] = {
+        ...original,
+        lote: loteNovo.trim(),
+        validade: validadeNova,
+        qtd: qtdNum,
+        ...(mudancas.length > 0 ? {
+          ultimaEdicao: { por: nomeOperador.trim(), em: agoraServidor().toISOString(), mudancas: mudancas.join(', ') },
+        } : {}),
+      };
+      return nova;
+    });
+    setEdicaoPatinha(null);
+  }
+
   function adicionarPatinha() {
     if (produtoIdx === '') return mostrarAviso('erro', 'Selecione um produto!');
     if (!qtd || qtd <= 0) return mostrarAviso('erro', 'Insira um peso válido!');
@@ -233,6 +271,11 @@ export default function Expedicao() {
       const batch = writeBatch(db);
 
       listaEntrada.forEach(item => {
+        // O Firestore rejeita qualquer campo `undefined`, mesmo dentro de
+        // objetos aninhados — a genealogia de MP pode ter algum campo assim
+        // dependendo de como a batida foi registrada. Sanitiza uma vez aqui.
+        const origemMPLimpa = item.origemMP ? JSON.parse(JSON.stringify(item.origemMP)) : null;
+
         // ── 1. Lote individual no estoque físico (colecão original) ──
         const refEst = doc(collection(db, 'estoque'));
         batch.set(refEst, {
@@ -245,7 +288,8 @@ export default function Expedicao() {
           validade:    item.validade,
           dataEntrada: item.dataEntrada,
           ops:         item.ops,
-          origemMP:    item.origemMP || null,   // ← genealogia MP
+          origemMP:    origemMPLimpa,   // ← genealogia MP
+          ultimaEdicao: item.ultimaEdicao || null,   // ← auditoria: quem/quando/o quê mudou antes de confirmar
           isTeste:     false,
         });
 
@@ -304,8 +348,9 @@ export default function Expedicao() {
             // ── GENEALOGIA: de quais lotes de MP este lote de PA veio ──
             // Fecha a rastreabilidade ponta a ponta:
             //   lote de farinha → batida → este lote de PA → cliente
-            origemMP:        item.origemMP || null,
+            origemMP:        origemMPLimpa,
             rastreioCompleto: !!item.origemMP && !item.origemMP.incompleto,
+            ultimaEdicao:    item.ultimaEdicao || null,
 
             registradoEm: agoraServidor().toISOString(),
           });
@@ -440,38 +485,18 @@ export default function Expedicao() {
                           </div>
                         )}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.1rem' }}>{formatarKg(item.qtd)} {item.und}</span>
+                        <button onClick={() => abrirEdicaoPatinha(idx)} title="Editar" style={{ background: 'var(--amarelo-claro)', border: '1px solid var(--amarelo)', borderRadius: 8, padding: '6px 8px', cursor: 'pointer' }}>
+                          <i className="ph ph-pencil-simple"></i>
+                        </button>
                         <button className="remover-btn" onClick={() => setListaEntrada(prev => prev.filter((_, i) => i !== idx))}>✕</button>
                       </div>
                     </div>
-
-                    {/* ── Genealogia: lotes de MP que originaram esta patinha ── */}
-                    {item.origemMP ? (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-suave)' }}>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#15803d', marginBottom: 4 }}>
-                          <i className="ph ph-link" style={{ marginRight: 4 }}></i>
-                          Rastreabilidade ({item.origemMP.batidas} batida{item.origemMP.batidas > 1 ? 's' : ''})
-                        </div>
-                        {item.origemMP.insumos.map(ins => (
-                          <div key={ins.productId} style={{ fontSize: '0.68rem', color: 'var(--marrom-claro)', lineHeight: 1.5 }}>
-                            <strong>{ins.nomeMP}</strong>: {ins.lotes.map(l => (
-                              <span key={l.loteId} style={{ marginRight: 6 }}>
-                                Lote {l.loteNumero} ({l.quantidade.toFixed(2)} {ins.unidade})
-                                {l.forcadoManualmente && <span title="Escolha manual do operador"> ✋</span>}
-                              </span>
-                            ))}
-                          </div>
-                        ))}
-                        {item.origemMP.incompleto && (
-                          <div style={{ fontSize: '0.65rem', color: '#b45309', marginTop: 4 }}>
-                            ⚠️ Alguma batida teve estoque de MP insuficiente — genealogia parcial.
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px dashed var(--border-suave)', fontSize: '0.68rem', color: '#b91c1c' }}>
-                        ⚠️ Sem genealogia de matéria-prima — este lote não será rastreável até a farinha.
+                    {item.ultimaEdicao && (
+                      <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px dashed var(--border-suave)', fontSize: '0.66rem', color: '#a78355' }}>
+                        <i className="ph ph-note-pencil" style={{ marginRight: 4 }}></i>
+                        Editado por {item.ultimaEdicao.por} às {formatarHoraData(item.ultimaEdicao.em)} — {item.ultimaEdicao.mudancas}
                       </div>
                     )}
                   </div>
@@ -498,6 +523,37 @@ export default function Expedicao() {
           aoConfirmar={v => { setQtd(v); setTecladoAberto(false); }}
           aoFechar={() => setTecladoAberto(false)}
         />
+      )}
+
+      {/* ── Editar patinha (lote, validade, peso) antes de confirmar a entrada ── */}
+      {edicaoPatinha && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={() => setEdicaoPatinha(null)}>
+          <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontWeight: 900, fontSize: '1.05rem', color: 'var(--marrom)' }}>Editar patinha</div>
+              <button onClick={() => setEdicaoPatinha(null)} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>Lote Físico</label>
+                <input className="input-texto" value={edicaoPatinha.lote} onChange={e => setEdicaoPatinha({ ...edicaoPatinha, lote: e.target.value })} />
+              </div>
+              <div>
+                <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>Validade</label>
+                <input type="date" className="input-texto" value={edicaoPatinha.validade} onChange={e => setEdicaoPatinha({ ...edicaoPatinha, validade: e.target.value })} />
+              </div>
+            </div>
+            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>Peso (kg)</label>
+            <input type="number" step="0.01" className="input-texto" value={edicaoPatinha.qtd} onChange={e => setEdicaoPatinha({ ...edicaoPatinha, qtd: e.target.value })} style={{ marginBottom: 14 }} />
+            <div style={{ fontSize: '0.72rem', color: '#999', marginBottom: 16 }}>
+              A alteração fica registrada com seu nome ({nomeOperador || 'informe o nome na aba Pesagem'}) e o horário.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-outline btn-block" onClick={() => setEdicaoPatinha(null)}>Cancelar</button>
+              <button className="btn btn-primary btn-block" onClick={confirmarEdicaoPatinha}>Salvar edição</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Confirmação de patinha sem rastreio de MP (substitui window.confirm) ── */}
