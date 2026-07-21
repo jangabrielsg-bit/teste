@@ -7,6 +7,7 @@ import {
   listarLotesDisponiveis,
   definirLoteForcado,
   diagnosticarProduto,
+  registrarLotesUtilizados,
 } from '../services/consumoMP';
 
 // ── Modal: troca manual do lote de farinha em uso ─────────────────
@@ -317,19 +318,27 @@ export default function Operador() {
           return;
         }
       } else {
-        const farinhas = diag?.farinhas || [];
-        const consumosRastreio = farinhas.map(f => {
-          const forcado = lotesForcados[f.productId];
-          return {
-            nomeMP: f.nome,
-            lote: forcado ? forcado.loteNumero : 'Automático'
+        // Registra (via FEFO) os lotes de TODOS os insumos da receita —
+        // farinha, glúten, sal, melhorador etc. — sem descontar nada do
+        // estoque físico: a baixa de MP continua manual (Estoque/PVPS).
+        // Isto só fecha a rastreabilidade ponta a ponta desta batida.
+        try {
+          const resultado = await registrarLotesUtilizados(receita, 1, lotesForcados, {
+            ops: item.ops || [],
+            codigo: item.codigo,
+            produto: item.produto,
+            operador: nomeOperador || 'Não identificado',
+          });
+          registroConsumo = {
+            timestamp: agoraServidor().toISOString(),
+            incompleto: resultado.incompleto,
+            ops: resultado.ops,
+            consumos: resultado.consumos,
           };
-        });
-
-        registroConsumo = {
-          timestamp: agoraServidor().toISOString(),
-          consumos: consumosRastreio
-        };
+        } catch (e) {
+          console.error('Erro ao registrar lotes de MP:', e);
+          registroConsumo = { timestamp: agoraServidor().toISOString(), erro: e.message, consumos: [] };
+        }
       }
 
       const nova = [...itens];

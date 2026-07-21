@@ -353,19 +353,11 @@ export async function definirLoteForcado(dataISO, productId, lote, operador) {
   );
 }
 
-// ── Consome os ingredientes de uma receita via FEFO ─────────────────
-// receita       — ficha técnica (com .ingredients e, idealmente, .yield/.rendimento)
-// multiplicador — quantas receitas essa batida representa (default 1)
-// lotesForcados — { [productId]: { loteId, ... } } override manual do operador
-// contexto      — { numeroOP, produto, operador } → gravado para rastreabilidade
-//
-// O lote forçado fura a fila; se acabar no meio da batelada, o sistema
-// completa automaticamente com o próximo lote em ordem FEFO.
-export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotesForcados = {}, contexto = {}) {
-  const mUid = await obterMasterUid();
+// ── Escolhe, em ordem FEFO, quais lotes cobririam a necessidade de CADA
+// ingrediente da receita — sem descontar nada do estoque. Compartilhada
+// pelas duas funções abaixo (uma só registra, a outra também consome).
+async function escolherLotesFEFO(receita, multiplicador, lotesForcados) {
   const inventoryMap = await carregarInventoryMap();
-
-  // Carrega TODOS os batches de uma vez (cache — zero leituras se já carregado)
   const batchesMap = await carregarTodosBatches();
 
   const consumos = [];
@@ -421,6 +413,42 @@ export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotes
       lotes: consumidosDesteIngrediente,
     });
   }
+
+  return { consumos, incompleto };
+}
+
+// ── Apenas REGISTRA os lotes que cobririam a receita (FEFO), sem
+// descontar nada do estoque físico — é o que o app usa hoje: a baixa de
+// matéria-prima continua manual (Estoque/PVPS), isto aqui só fecha a
+// rastreabilidade (todos os ingredientes, não só a farinha) por batida.
+export async function registrarLotesUtilizados(receita, multiplicador = 1, lotesForcados = {}, contexto = {}) {
+  const { consumos, incompleto } = await escolherLotesFEFO(receita, multiplicador, lotesForcados);
+  return {
+    consumos,
+    incompleto,
+    receitaNome: receita.name,
+    receitaId: receita.id || null,
+    multiplicador,
+    ops: contexto.ops || [],
+    codigo: contexto.codigo || null,
+    produto: contexto.produto || null,
+    operador: contexto.operador || null,
+  };
+}
+
+// ── Consome de verdade os ingredientes de uma receita via FEFO (desconta
+// do estoque). Não usada atualmente em nenhuma tela — a baixa de MP é
+// manual — mas fica pronta para o dia em que isso mudar.
+// receita       — ficha técnica (com .ingredients e, idealmente, .yield/.rendimento)
+// multiplicador — quantas receitas essa batida representa (default 1)
+// lotesForcados — { [productId]: { loteId, ... } } override manual do operador
+// contexto      — { numeroOP, produto, operador } → gravado para rastreabilidade
+//
+// O lote forçado fura a fila; se acabar no meio da batelada, o sistema
+// completa automaticamente com o próximo lote em ordem FEFO.
+export async function consumirIngredientesFEFO(receita, multiplicador = 1, lotesForcados = {}, contexto = {}) {
+  const mUid = await obterMasterUid();
+  const { consumos, incompleto } = await escolherLotesFEFO(receita, multiplicador, lotesForcados);
 
   // Grava os descontos em batch — 1 operação atômica no Firestore
   const batch = writeBatch(dbEstoqueOS);
