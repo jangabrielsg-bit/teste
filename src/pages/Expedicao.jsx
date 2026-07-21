@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, collection, writeBatch, arrayUnion, getDocs, getDoc, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
 import { hojeISO, formatarKg, formatarHoraData } from '../services/utils';
@@ -13,6 +13,7 @@ export default function Expedicao() {
   const { produtos } = useProdutos();
   const dataHoje = hojeISO();
   const CHAVE_RASCUNHO = `patinhasPendentes_${dataHoje}`;
+  const CHAVE_FORM_PESAGEM = `formPesagem_${dataHoje}`;
   const [producaoHoje, setProducaoHoje]     = useState([]);
   const [tunelHoje, setTunelHoje]           = useState([]);
   const [carregando, setCarregando]         = useState(true);
@@ -23,11 +24,20 @@ export default function Expedicao() {
     } catch { return []; }
   });
   const [salvando, setSalvando]             = useState(false);
+  // Formulário de pesagem: restaurado do localStorage se a página recarregar
+  // no meio do trabalho — só precisa selecionar de novo se for a 1ª vez.
+  const formPesagemSalvo = (() => {
+    try {
+      const salvo = localStorage.getItem(CHAVE_FORM_PESAGEM);
+      return salvo ? JSON.parse(salvo) : null;
+    } catch { return null; }
+  })();
   const [produtoIdx, setProdutoIdx]         = useState('');
-  const [lote, setLote]                     = useState('');
+  const [produtoRestaurar, setProdutoRestaurar] = useState(formPesagemSalvo?.produto || null);
+  const [lote, setLote]                     = useState(formPesagemSalvo?.lote || '');
   const [qtd, setQtd]                       = useState('');
-  const [und, setUnd]                       = useState('kg');
-  const [validade, setValidade]             = useState('');
+  const [und, setUnd]                       = useState(formPesagemSalvo?.und || 'kg');
+  const [validade, setValidade]             = useState(formPesagemSalvo?.validade || '');
   const [nomeOperador, setNomeOperador]     = useState(localStorage.getItem('nomeOperador') || '');
   const [tecladoAberto, setTecladoAberto]   = useState(false);
   const [aba, setAba]                       = useState(0);
@@ -39,6 +49,9 @@ export default function Expedicao() {
   const [estoqueWinthor, setEstoqueWinthor] = useState({});
   const [carregandoMP, setCarregandoMP]     = useState(false);
   const mpOcultos = useMPOcultos();
+  const [aviso, setAviso]                   = useState(null); // { tipo: 'ok'|'erro', texto }
+  const [confirmSemRastreio, setConfirmSemRastreio] = useState(null); // { itemProg }
+  const avisoTimeoutRef = useRef(null);
 
   // Id estável por dispositivo/aba — cada operador pesando ao mesmo tempo
   // grava numa sub-sessão própria, sem sobrescrever a fila de outro.
@@ -102,6 +115,28 @@ export default function Expedicao() {
     } catch { /* localStorage indisponível — ignora */ }
   }, [listaEntrada, CHAVE_RASCUNHO]);
 
+  // Assim que a produção do dia carrega, resolve o produto que estava
+  // selecionado antes de uma recarga de página (guardado por nome/código).
+  useEffect(() => {
+    if (produtoRestaurar && producaoHoje.length > 0) {
+      const idx = producaoHoje.findIndex(it => it.codigo === produtoRestaurar.codigo || it.produto === produtoRestaurar.nome);
+      if (idx !== -1) setProdutoIdx(String(idx));
+      setProdutoRestaurar(null);
+    }
+  }, [produtoRestaurar, producaoHoje]);
+
+  // Mantém produto/lote/validade/unidade preenchidos entre uma patinha e
+  // outra, e sobrevivem a um recarregamento acidental da página.
+  useEffect(() => {
+    try {
+      const itemProg = produtoIdx !== '' ? producaoHoje[produtoIdx] : null;
+      localStorage.setItem(CHAVE_FORM_PESAGEM, JSON.stringify({
+        produto: itemProg ? { nome: itemProg.produto, codigo: itemProg.codigo } : null,
+        lote, validade, und,
+      }));
+    } catch { /* localStorage indisponível — ignora */ }
+  }, [produtoIdx, lote, validade, und, producaoHoje, CHAVE_FORM_PESAGEM]);
+
   // Espelha a mesma fila no Firestore, em tempo real, para o Painel TV
   // mostrar a patinha assim que ela é pesada — não só depois de confirmada.
   useEffect(() => {
@@ -111,17 +146,24 @@ export default function Expedicao() {
     }).catch(e => console.error('Erro ao sincronizar pesagem em andamento:', e));
   }, [listaEntrada, dataHoje, sessionId]);
 
-  // Auto-preenche lote/validade do túnel
+  // Auto-preenche lote/validade do túnel — só quando o OPERADOR troca de
+  // produto, nunca em atualizações de fundo. Antes isso tinha producaoHoje/
+  // tunelHoje nas dependências, então toda vez que OUTRO operador batia uma
+  // receita em qualquer lugar da fábrica (o que atualiza esses dados em
+  // tempo real), o efeito rodava de novo e apagava o lote/validade que você
+  // acabara de digitar no meio da pesagem.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (produtoIdx !== '') {
       const itemProg = producaoHoje[produtoIdx];
       if (itemProg) {
         const tunelItem = tunelHoje.slice().reverse().find(t => t.produto === itemProg.produto && t.lote);
-        setLote(tunelItem?.lote || '');
-        setValidade(tunelItem?.validade || '');
+        if (tunelItem?.lote) setLote(tunelItem.lote);
+        if (tunelItem?.validade) setValidade(tunelItem.validade);
       }
     }
-  }, [produtoIdx, producaoHoje, tunelHoje]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produtoIdx]);
 
   // Estoque físico PA (coleção 'estoque' — lotes individuais)
   useEffect(() => {
@@ -135,28 +177,16 @@ export default function Expedicao() {
     }
   }, [aba]);
 
-  function adicionarPatinha() {
-    if (produtoIdx === '') return alert('Selecione um produto!');
-    if (!qtd || qtd <= 0) return alert('Insira um peso válido!');
-    if (!lote.trim()) return alert('Insira o lote físico!');
-    if (!nomeOperador.trim()) return alert('Informe seu nome!');
-    localStorage.setItem('nomeOperador', nomeOperador.trim());
-    const itemProg = producaoHoje[produtoIdx];
+  // Aviso não-bloqueante (substitui alert()) — evita diálogos nativos
+  // repetidos a cada patinha, que em alguns navegadores de tablet/kiosk
+  // deixam a página em branco e exigem recarregar manualmente.
+  function mostrarAviso(tipo, texto) {
+    setAviso({ tipo, texto });
+    clearTimeout(avisoTimeoutRef.current);
+    avisoTimeoutRef.current = setTimeout(() => setAviso(null), 3500);
+  }
 
-    // ── Genealogia: puxa os lotes de MP consumidos nas batidas deste item ──
-    // É aqui que a corrente se fecha: farinha → batida → esta patinha de PA.
-    const origemMP = resumirOrigemMP(itemProg.consumoMP);
-
-    if (!origemMP) {
-      const seguir = window.confirm(
-        `⚠️ SEM RASTREIO DE MATÉRIA-PRIMA\n\n` +
-        `"${itemProg.produto}" não tem nenhum consumo de MP registrado nas batidas de hoje.\n\n` +
-        `Este lote de PA entrará na câmara SEM genealogia — não será possível saber ` +
-        `de quais lotes de farinha ele veio.\n\nAdicionar mesmo assim?`
-      );
-      if (!seguir) return;
-    }
-
+  function commitPatinha(itemProg, origemMP) {
     setListaEntrada(prev => [...prev, {
       id:          Date.now().toString(36) + Math.random().toString(36).slice(2),
       operador:    nomeOperador.trim(),
@@ -173,7 +203,27 @@ export default function Expedicao() {
       timestamp:   agoraServidor().toISOString(),
     }]);
     setQtd('');
-    alert('Patinha adicionada para conferência!');
+    mostrarAviso('ok', 'Patinha adicionada para conferência!');
+  }
+
+  function adicionarPatinha() {
+    if (produtoIdx === '') return mostrarAviso('erro', 'Selecione um produto!');
+    if (!qtd || qtd <= 0) return mostrarAviso('erro', 'Insira um peso válido!');
+    if (!lote.trim()) return mostrarAviso('erro', 'Insira o lote físico!');
+    if (!nomeOperador.trim()) return mostrarAviso('erro', 'Informe seu nome!');
+    localStorage.setItem('nomeOperador', nomeOperador.trim());
+    const itemProg = producaoHoje[produtoIdx];
+
+    // ── Genealogia: puxa os lotes de MP consumidos nas batidas deste item ──
+    // É aqui que a corrente se fecha: farinha → batida → esta patinha de PA.
+    const origemMP = resumirOrigemMP(itemProg.consumoMP);
+
+    if (!origemMP) {
+      setConfirmSemRastreio({ itemProg });
+      return;
+    }
+
+    commitPatinha(itemProg, origemMP);
   }
 
   async function salvarEntradas() {
@@ -263,13 +313,13 @@ export default function Expedicao() {
       });
 
       await batch.commit();
-      alert(`${listaEntrada.length} patinhas registradas na câmara!`);
+      mostrarAviso('ok', `${listaEntrada.length} patinhas registradas na câmara!`);
       setListaEntrada([]);
       try { localStorage.removeItem(CHAVE_RASCUNHO); } catch { /* ignora */ }
       setQtd('');
       setAba(2);
     } catch (e) {
-      alert(e.message);
+      mostrarAviso('erro', e.message);
     } finally {
       setSalvando(false);
     }
@@ -384,6 +434,11 @@ export default function Expedicao() {
                           {item.codigo && <span style={{ marginLeft: 8, background: 'var(--amarelo-claro)', color: 'var(--marrom)', padding: '1px 7px', borderRadius: 8, fontWeight: 700 }}>COD {item.codigo}</span>}
                           {item.ops?.length > 0 && <span style={{ marginLeft: 6, color: '#a78355' }}>OP: {item.ops.join(', ')}</span>}
                         </div>
+                        {item.timestamp && (
+                          <div style={{ fontSize: '0.72rem', color: '#a78355', marginTop: 2, fontWeight: 600 }}>
+                            <i className="ph ph-clock" style={{ marginRight: 4 }}></i>Pesado às {formatarHoraData(item.timestamp)}
+                          </div>
+                        )}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                         <span style={{ fontWeight: 900, color: 'var(--amarelo)', fontSize: '1.1rem' }}>{formatarKg(item.qtd)} {item.und}</span>
@@ -443,6 +498,40 @@ export default function Expedicao() {
           aoConfirmar={v => { setQtd(v); setTecladoAberto(false); }}
           aoFechar={() => setTecladoAberto(false)}
         />
+      )}
+
+      {/* ── Confirmação de patinha sem rastreio de MP (substitui window.confirm) ── */}
+      {confirmSemRastreio && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={() => setConfirmSemRastreio(null)}>
+          <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22 }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#b91c1c', marginBottom: 10 }}>⚠️ Sem rastreio de matéria-prima</div>
+            <div style={{ fontSize: '0.85rem', color: 'var(--marrom)', lineHeight: 1.5, marginBottom: 18 }}>
+              "{confirmSemRastreio.itemProg.produto}" não tem nenhum consumo de MP registrado nas batidas de hoje.
+              Este lote de PA entrará na câmara <strong>sem genealogia</strong> — não será possível saber de quais lotes de farinha ele veio.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button className="btn btn-outline btn-block" onClick={() => setConfirmSemRastreio(null)}>Cancelar</button>
+              <button
+                className="btn btn-primary btn-block"
+                onClick={() => { commitPatinha(confirmSemRastreio.itemProg, null); setConfirmSemRastreio(null); }}
+              >
+                Adicionar mesmo assim
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Aviso não-bloqueante (substitui alert()) ── */}
+      {aviso && (
+        <div style={{
+          position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 10000,
+          background: aviso.tipo === 'erro' ? '#b91c1c' : '#15803d', color: 'white',
+          padding: '12px 20px', borderRadius: 12, fontWeight: 700, fontSize: '0.88rem',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.25)', maxWidth: '90vw', textAlign: 'center',
+        }}>
+          {aviso.texto}
+        </div>
       )}
     </div>
   );
