@@ -3,6 +3,7 @@ import { collection, onSnapshot, getDocs, getDoc, doc, writeBatch, increment, se
 import { db, dbEstoqueOS } from '../services/firebase';
 import { useAuth } from '../services/auth';
 import { useProdutos, useMPOcultos } from '../services/hooks';
+import { gerarPrevisaoParaAmanha, usePrevisaoHoje, avaliarDivergencia, justificarDivergencia } from '../services/previsaoEstoque';
 
 // ── Hook: Estoque PA Winthor (bridge) ─────────────────────────────
 function useEstoqueWinthorPA() {
@@ -408,7 +409,7 @@ function ChipsResumo({ criticos, avisos, atualizadoEm, labelFonte }) {
 }
 
 // ── CARD SÓLIDO — mesmo layout para PA e MP ───────────────────────
-function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, onClick, onAjustar, borderColor, acaoExtra }) {
+function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, rodape, onClick, onAjustar, borderColor, acaoExtra }) {
   return (
     <div style={{
       border: `1px solid ${borderColor || '#f0e3c4'}`,
@@ -451,6 +452,45 @@ function CardEstoque({ icone, produto, codigo, tagQtd, metricas, coberturaEl, on
       </div>
 
       {coberturaEl && <div style={{ padding: '0 16px 14px' }}>{coberturaEl}</div>}
+      {rodape && <div style={{ padding: '0 16px 14px' }}>{rodape}</div>}
+    </div>
+  );
+}
+
+// ── Divergência entre o previsto ontem para hoje e o real do Winthor ──
+function BadgeDivergenciaPrevisao({ previsao, real, unidade, isPcp, onJustificar }) {
+  if (!previsao) return null;
+  const av = avaliarDivergencia(previsao.previsto, real);
+  if (!av) return null;
+
+  if (!av.divergente) {
+    return (
+      <div style={{ marginTop: 8, display: 'inline-flex', alignItems: 'center', gap: 6, background: '#f0fdf4', color: '#166534', fontSize: '0.7rem', fontWeight: 700, padding: '4px 10px', borderRadius: 20 }}>
+        <i className="ph ph-check-circle"></i> Previsto ontem: {fmtQtd(previsao.previsto, unidade)} · bateu com o real
+      </div>
+    );
+  }
+
+  const sinal = av.delta > 0 ? '+' : '';
+  return (
+    <div style={{ marginTop: 8, background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 10, padding: '8px 10px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#9a3412' }}>
+          <i className="ph ph-warning" style={{ marginRight: 4 }}></i>
+          Previsto ontem: {fmtQtd(previsao.previsto, unidade)} · Real: {fmtQtd(real, unidade)} ({sinal}{fmtQtd(av.delta, unidade)}, {sinal}{(av.percentual * 100).toFixed(0)}%)
+        </span>
+        {isPcp && !previsao.justificativa && (
+          <button onClick={onJustificar} style={{ background: '#9a3412', color: 'white', border: 'none', borderRadius: 6, padding: '4px 10px', fontWeight: 700, fontSize: '0.68rem', cursor: 'pointer' }}>
+            Justificar
+          </button>
+        )}
+      </div>
+      {previsao.justificativa && (
+        <div style={{ marginTop: 6, fontSize: '0.68rem', color: '#9a3412' }}>
+          <i className="ph ph-note-pencil" style={{ marginRight: 4 }}></i>
+          {previsao.justificativa.texto} — {previsao.justificativa.por}
+        </div>
+      )}
     </div>
   );
 }
@@ -480,6 +520,32 @@ export default function Estoque() {
 
   const { dados: winthorPA, atualizadoEm: paAtualizadoEm } = useEstoqueWinthorPA();
   const fisicoPA = useEstoquePAFisico();
+  const previsaoHoje = usePrevisaoHoje();
+  const [justificando, setJustificando] = useState(null); // { codigo, produto }
+  const [textoJustificativa, setTextoJustificativa] = useState('');
+  const [salvandoJustificativa, setSalvandoJustificativa] = useState(false);
+
+  // Gera (no máx. 1x/dia) a previsão de amanhã com base no estoque e na
+  // saída de hoje — só o PCP dispara isso, e a função já é idempotente.
+  useEffect(() => {
+    if (isPcp && Object.keys(winthorPA).length > 0) {
+      gerarPrevisaoParaAmanha(winthorPA).catch(e => console.error('Erro ao gerar previsão de estoque:', e));
+    }
+  }, [isPcp, winthorPA]);
+
+  async function confirmarJustificativa() {
+    if (!textoJustificativa.trim()) return;
+    setSalvandoJustificativa(true);
+    try {
+      await justificarDivergencia(justificando.codigo, textoJustificativa.trim(), currentUser?.id);
+      setJustificando(null);
+      setTextoJustificativa('');
+    } catch (e) {
+      alert('Erro ao salvar justificativa: ' + e.message);
+    } finally {
+      setSalvandoJustificativa(false);
+    }
+  }
 
   useEffect(() => {
     return onSnapshot(collection(db, 'estoque'), snap => {
@@ -804,6 +870,15 @@ export default function Estoque() {
                       }
                       onAjustar={isPcp ? () => setModalAjuste({ codigo, produto, winthor: w, fisico: f }) : null}
                       coberturaEl={<BadgeCobertura disponivel={disponivelWinthor} demanda={demanda} coberturaDias={w?.coberturaDias ?? null} />}
+                      rodape={
+                        <BadgeDivergenciaPrevisao
+                          previsao={previsaoHoje[codigo]}
+                          real={w?.estoqueAtual}
+                          unidade={unidade}
+                          isPcp={isPcp}
+                          onJustificar={() => setJustificando({ codigo, produto })}
+                        />
+                      }
                     />
                   );
                 })}
@@ -885,6 +960,35 @@ export default function Estoque() {
         />
       )}
       {modalAjuste && isPcp && <ModalAjusteFisico item={modalAjuste} aoFechar={() => setModalAjuste(null)} />}
+
+      {justificando && (
+        <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={() => setJustificando(null)}>
+          <div style={{ background: 'white', width: '100%', maxWidth: 500, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 24 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontWeight: 900, fontSize: '1.1rem', color: 'var(--marrom)' }}>Justificar divergência</div>
+                <div style={{ fontSize: '0.78rem', color: '#999', marginTop: 2 }}>{justificando.produto}</div>
+              </div>
+              <button onClick={() => setJustificando(null)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', color: '#999', cursor: 'pointer' }}>✕</button>
+            </div>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>
+              O que explica a diferença entre o previsto e o real?
+            </label>
+            <textarea
+              className="input-texto"
+              rows={3}
+              value={textoJustificativa}
+              onChange={e => setTextoJustificativa(e.target.value)}
+              placeholder="Ex: contagem física corrigida, saída não lançada no Winthor, perda por vencimento..."
+              style={{ resize: 'vertical', marginBottom: 16 }}
+              autoFocus
+            />
+            <button onClick={confirmarJustificativa} disabled={salvandoJustificativa || !textoJustificativa.trim()} style={{ width: '100%', padding: 15, borderRadius: 12, border: 'none', background: 'var(--marrom)', color: 'white', fontWeight: 900, fontSize: '0.95rem', cursor: 'pointer' }}>
+              {salvandoJustificativa ? 'Salvando...' : 'Salvar justificativa'}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
