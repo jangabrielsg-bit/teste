@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, collection, writeBatch, arrayUnion, getDocs, getDoc, increment, setDoc } from 'firebase/firestore';
 import { db, dbEstoqueOS } from '../services/firebase';
-import { hojeISO, formatarKg, formatarHoraData } from '../services/utils';
+import { hojeISO, formatarKg, formatarHoraData, formatarDataBR, somarDiasISO } from '../services/utils';
 import { useAuth } from '../services/auth';
 import { useProdutos, useMPOcultos } from '../services/hooks';
 import { agoraServidor } from '../services/relogioServidor';
@@ -14,6 +14,16 @@ export default function Expedicao() {
   const dataHoje = hojeISO();
   const CHAVE_RASCUNHO = `patinhasPendentes_${dataHoje}`;
   const CHAVE_FORM_PESAGEM = `formPesagem_${dataHoje}`;
+  // Data para a qual a patinha está sendo pesada — normalmente hoje, mas o
+  // operador pode voltar pra um dia anterior que esqueceu de registrar.
+  const [dataPesagem, setDataPesagem]       = useState(dataHoje);
+  const pesandoRetroativo = dataPesagem !== dataHoje;
+  function trocarDataPesagem(novaData) {
+    setDataPesagem(novaData);
+    setProdutoIdx('');
+    setLote('');
+    setValidade('');
+  }
   const [producaoHoje, setProducaoHoje]     = useState([]);
   const [tunelHoje, setTunelHoje]           = useState([]);
   const [carregando, setCarregando]         = useState(true);
@@ -97,15 +107,15 @@ export default function Expedicao() {
     }
   }, [aba, subAbaEstoque]);
 
-  // Produção do dia
+  // Produção do dia sendo pesado (hoje, ou um dia anterior esquecido)
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'producaoDiaria', dataHoje), snap => {
+    const unsub = onSnapshot(doc(db, 'producaoDiaria', dataPesagem), snap => {
       if (snap.exists()) { setProducaoHoje(snap.data().itens || []); setTunelHoje(snap.data().tunelRegistros || []); }
       else { setProducaoHoje([]); setTunelHoje([]); }
       setCarregando(false);
     });
     return unsub;
-  }, [dataHoje]);
+  }, [dataPesagem]);
 
   // Salva a fila de patinhas ainda não confirmadas — evita perder o
   // registro se a aba fechar/recarregar antes de "Confirmar Entrada".
@@ -198,7 +208,7 @@ export default function Expedicao() {
       codigo:      itemProg.codigo,   // ← código Winthor linkado
       ops:         itemProg.ops || [],
       setor:       itemProg.categoria || 'Câmara',
-      dataEntrada: dataHoje,
+      dataEntrada: dataPesagem,
       lote:        lote.trim(),
       qtd:         parseFloat(qtd),
       und,
@@ -307,7 +317,7 @@ export default function Expedicao() {
         });
 
         // ── 3. Expedição diária (original) ──
-        const refExp = doc(db, 'expedicaoDiaria', dataHoje);
+        const refExp = doc(db, 'expedicaoDiaria', item.dataEntrada || dataHoje);
         const regExp = {
           id:             Date.now().toString() + Math.random(),
           codigoProduto:  item.codigo,
@@ -319,7 +329,7 @@ export default function Expedicao() {
           horario:        formatarHoraData(agoraServidor().toISOString()),
           timestamp:      agoraServidor().toISOString(),
         };
-        batch.set(refExp, { data: dataHoje, registros: arrayUnion(regExp) }, { merge: true });
+        batch.set(refExp, { data: item.dataEntrada || dataHoje, registros: arrayUnion(regExp) }, { merge: true });
 
         // ── 4. NOVO: saldo físico PA por código (estoquePAFisico) ──
         // Documento principal: saldo agregado por produto
@@ -406,6 +416,32 @@ export default function Expedicao() {
       {/* ── Aba Pesagem ── */}
       {aba === 0 && (
         <div className="card">
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>
+              Data da pesagem
+            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <button type="button" className="btn btn-outline" style={{ padding: '10px 14px' }} onClick={() => trocarDataPesagem(somarDiasISO(dataPesagem, -1))}>‹</button>
+              <input
+                type="date"
+                className="input-texto"
+                style={{ flex: 1, textAlign: 'center', fontWeight: 700 }}
+                max={dataHoje}
+                value={dataPesagem}
+                onChange={e => e.target.value && trocarDataPesagem(e.target.value)}
+              />
+              <button type="button" className="btn btn-outline" style={{ padding: '10px 14px' }} disabled={dataPesagem >= dataHoje} onClick={() => trocarDataPesagem(somarDiasISO(dataPesagem, 1))}>›</button>
+              {pesandoRetroativo && (
+                <button type="button" className="btn btn-primary" style={{ padding: '10px 14px', whiteSpace: 'nowrap' }} onClick={() => trocarDataPesagem(dataHoje)}>Hoje</button>
+              )}
+            </div>
+            {pesandoRetroativo && (
+              <div style={{ marginTop: 8, background: 'var(--warning-soft, #fef3c7)', color: '#92400e', borderRadius: 8, padding: '8px 12px', fontSize: '0.78rem', fontWeight: 700 }}>
+                <i className="ph ph-clock-counter-clockwise" style={{ marginRight: 6 }}></i>
+                Registrando uma patinha esquecida de {formatarDataBR(dataPesagem)} — não é a pesagem de hoje.
+              </div>
+            )}
+          </div>
           <div style={{ marginBottom: 14 }}>
             <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: 'var(--marrom)', marginBottom: 6 }}>Responsável</label>
             <input className="input-texto" value={nomeOperador} onChange={e => setNomeOperador(e.target.value)} placeholder="Seu nome" />
