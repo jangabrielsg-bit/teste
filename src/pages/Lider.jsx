@@ -112,6 +112,11 @@ export default function Lider() {
   function alternarConferido(index) { setItens(prev => { const item = prev[index]; if (!item.conferido) { const sem = prev.filter((_, i) => i !== index); return [...sem, { ...item, conferido: true }]; } const nova = [...prev]; nova[index] = { ...nova[index], conferido: false }; return nova; }); }
   function ajustarMeta(index, delta) { setItens(prev => { const nova = [...prev]; nova[index] = { ...nova[index], metaLotes: Math.max(1, nova[index].metaLotes + delta) }; return nova; }); }
   function arredondarMeta(index) { setItens(prev => { const nova = [...prev]; nova[index] = { ...nova[index], metaLotes: Math.round(nova[index].metaLotes) }; return nova; }); }
+  // Ordens de última hora ainda não vêm do Winthor — permite digitar a OP na mão.
+  function atualizarOpsManual(index, texto) {
+    const ops = texto.split(/[,\s]+/).map(t => t.trim()).filter(Boolean);
+    setItens(prev => { const nova = [...prev]; nova[index] = { ...nova[index], ops, opsTexto: texto }; return nova; });
+  }
 
   async function confirmarEProgramar() {
     if (itens.length === 0) { alert('Adicione pelo menos uma receita.'); return; }
@@ -137,7 +142,15 @@ export default function Lider() {
           <div className={'order-num' + (item.conferido ? ' order-num-ok' : '')}>{item.conferido ? '✓' : pos + 1}</div>
           <div style={{ flex: 1 }}>
             <div className="nome">{item.produto}</div>
-            {item.ops?.length > 0 && <div className="ops-linha">OP{item.ops.length > 1 ? 's' : ''} Winthor: {item.ops.join(', ')}</div>}
+            <div style={{ margin: '4px 0 8px' }}>
+              <input
+                className="input-texto"
+                style={{ padding: '6px 10px', fontSize: '0.8rem', maxWidth: 220 }}
+                value={item.opsTexto ?? (item.ops || []).join(', ')}
+                onChange={e => atualizarOpsManual(idx, e.target.value)}
+                placeholder="Nº da OP (opcional)"
+              />
+            </div>
             <div className="meta-stepper">
               <button onClick={() => ajustarMeta(idx, -1)}>−1</button>
               <div className="valor">{item.metaLotes} receita{item.metaLotes === 1 ? '' : 's'}</div>
