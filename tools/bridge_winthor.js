@@ -174,12 +174,12 @@ async function fazerLogin() {
 }
 
 // ── ORDENS DE PRODUÇÃO ────────────────────────────────────────────
-// ✅ CORRIGIDO: posRend não tinha índice de segurança (Math.max(N, ...))
-// como as outras colunas — se o regex não batesse com o cabeçalho real
-// do portal, ficava em -1 e o rendimento saía sempre 0, silenciosamente,
-// pra toda ordem. Agora loga um aviso com os cabeçalhos reais da tabela
-// (e a coluna escolhida) toda vez que a bridge roda, pra nunca mais
-// passar despercebido.
+// ℹ️ CONFIRMADO EM PRODUÇÃO: a tabela de Ordens do portal não tem (e
+// nunca teve) coluna de rendimento — os cabeçalhos reais são
+// ["PREVISÃO INÍCIO","SETOR","CÓDIGO","PRODUTO","Nº ORDEM","RECEITAS",
+// "ESTADO","AÇÕES"]. Por isso o rendimento teórico não vem mais daqui —
+// vem de consultarMediaMovi2 (ver obterMediaMovi), aplicado em
+// sincronizar() logo depois de montar as ordens.
 async function obterOPs(jar) {
   const page = await req(URLS.ordens,'GET',null,null,jar);
   if (/type="password"/i.test(page.body)) throw new Error('Sessão expirou ao acessar OPs.');
@@ -192,21 +192,12 @@ async function obterOPs(jar) {
   const posProduto  = Math.max(3, idx(/produto/));
   const posNumOrdem = Math.max(4, idx(/ordem|op\b/));
   const posReceitas = Math.max(5, idx(/receita/));
-  const posRend     = idx(/rendimento|rend\b|rend\.|peso.*prev|kg.*prev|qtd.*kg|qtde.*kg|prev.*kg/);
-
-  if (posRend < 0) {
-    console.warn('⚠️  Coluna de RENDIMENTO não encontrada na tabela de Ordens — RENDIMENTO_TOTAL vai ficar 0 para todas as OPs desta sincronização.');
-    console.warn('    Cabeçalhos encontrados na tabela:', JSON.stringify(headers));
-  } else {
-    console.log(`   Coluna de rendimento: "${headers[posRend]}" (índice ${posRend})`);
-  }
 
   return rows
     .filter(c => c.length>=4 && c[posData])
     .map(c => ({
       DATA_PROD: c[posData], NUM_OP: c[posNumOrdem], CODIGO: c[posCodigo],
       PRODUTO: c[posProduto], RECEITAS: c[posReceitas]||'1',
-      RENDIMENTO_TOTAL: posRend>=0 ? num(c[posRend]) * (num(c[posReceitas])||1) : 0,
       CATEGORIA: c[posCat]||'Sem setor',
     }));
 }
@@ -345,15 +336,28 @@ async function sincronizar() {
     const filtradas = ordens.filter(o=>setorOk(o.CATEGORIA));
     console.log(`   ${filtradas.length}/${ordens.length} OPs no setor [${SETORES_RAW.join(', ')}]`);
 
+    // 2. Média de saída / rendimento — buscado ANTES de montar as
+    // sugestões, porque é daqui que vem o rendimento teórico por receita
+    // (a tabela de Ordens não tem essa coluna — ver obterOPs).
+    await setStatus('Calculando média de saída e rendimento...', 25);
+    const mediaMovi = await obterMediaMovi(jar);
+    console.log(`   ✅ ${Object.keys(mediaMovi).length} produtos com média`);
+
     const porData={}, produtos=new Map();
     for (const o of filtradas) {
       const dt=paraISO(o.DATA_PROD), cod=o.CODIGO;
       if(!dt||!cod) continue;
       if(!porData[dt]) porData[dt]=new Map();
-      if(!porData[dt].has(cod)) porData[dt].set(cod,{codigo:cod,produto:o.PRODUTO||cod,categoria:o.CATEGORIA||'Sem setor',metaLotes:0,rendimentoTeorico:0,ops:[]});
+      if(!porData[dt].has(cod)) {
+        porData[dt].set(cod,{
+          codigo:cod, produto:o.PRODUTO||cod, categoria:o.CATEGORIA||'Sem setor',
+          metaLotes:0,
+          rendimentoTeorico: mediaMovi[cod]?.rendimento || 0, // kg por receita (não total)
+          ops:[],
+        });
+      }
       const item=porData[dt].get(cod);
-      item.metaLotes        += Math.max(1,num(o.RECEITAS));
-      item.rendimentoTeorico += o.RENDIMENTO_TOTAL||0;
+      item.metaLotes += Math.max(1,num(o.RECEITAS));
       item.ops.push(o.NUM_OP);
       produtos.set(cod,{nome:o.PRODUTO||cod,categoria:o.CATEGORIA||'Sem setor'});
     }
@@ -367,15 +371,10 @@ async function sincronizar() {
     }
     console.log(`   ✅ ${Object.keys(porData).length} datas | ${produtos.size} produtos`);
 
-    // 2. Estoque PA
-    await setStatus('Consultando estoque de produto acabado...', 35);
+    // 3. Estoque PA
+    await setStatus('Consultando estoque de produto acabado...', 45);
     const itensPA = await obterEstoquePA(jar);
     console.log(`   ✅ ${itensPA.length} itens no estoque PA`);
-
-    // 3. Média de saída
-    await setStatus('Calculando média de saída...', 55);
-    const mediaMovi = await obterMediaMovi(jar);
-    console.log(`   ✅ ${Object.keys(mediaMovi).length} produtos com média`);
 
     // 4. Salvar estoque PA
     // ✅ OTIMIZADO: grava tudo em 2 documentos em vez de N docs + N subdocs
