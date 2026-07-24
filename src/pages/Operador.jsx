@@ -96,15 +96,58 @@ function ModalTrocaLote({ info, lotesForcadoAtual, aoConfirmar, aoFechar }) {
   );
 }
 
-// ── Códigos padronizados de parada de linha ────────────────────────
+// ── Códigos padronizados de parada de linha — tabela oficial da fábrica
+// (mesma numeração do quadro fixado no chão de fábrica, pra bater com o
+// que os operadores já conhecem de cor).
 const CODIGOS_PARADA = [
-  { codigo: 'falta_mp', label: 'Falta de matéria-prima' },
-  { codigo: 'quebra_equip', label: 'Quebra / falha de equipamento' },
-  { codigo: 'falta_operador', label: 'Falta de operador' },
-  { codigo: 'limpeza', label: 'Limpeza / higienização' },
-  { codigo: 'troca_produto', label: 'Troca de produto (setup)' },
-  { codigo: 'outros', label: 'Outros' },
+  // Geral / administrativo
+  { codigo: '1',  label: 'DDS - Diálogo de Segurança', categoria: 'Geral' },
+  { codigo: '2',  label: '5S', categoria: 'Geral' },
+  { codigo: '3',  label: 'Aguardando Manutenção', categoria: 'Geral' },
+  { codigo: '4',  label: 'Aguardando Qualidade', categoria: 'Geral' },
+  { codigo: '5',  label: 'Exames Médico', categoria: 'Geral' },
+  { codigo: '6',  label: 'Falta de EPI', categoria: 'Geral' },
+  { codigo: '7',  label: 'Falta de Operador', categoria: 'Geral' },
+  { codigo: '8',  label: 'Falta de Programação PCP', categoria: 'Geral' },
+  { codigo: '9',  label: 'Teste', categoria: 'Geral' },
+  { codigo: '10', label: 'Queda de Energia', categoria: 'Geral' },
+  { codigo: '11', label: 'Refeição', categoria: 'Geral' },
+  { codigo: '12', label: 'Reunião', categoria: 'Geral' },
+  { codigo: '13', label: 'Treinamento', categoria: 'Geral' },
+  { codigo: '14', label: 'Limpeza', categoria: 'Geral' },
+  { codigo: '16', label: 'Absenteísmo', categoria: 'Geral' },
+  { codigo: '40', label: 'Checklist', categoria: 'Geral' },
+  // Manutenção / equipamento
+  { codigo: '15', label: 'Limpeza Máquina', categoria: 'Manutenção / Equipamento' },
+  { codigo: '17', label: 'Temperatura do Túnel', categoria: 'Manutenção / Equipamento' },
+  { codigo: '18', label: 'Túnel Bloqueado', categoria: 'Manutenção / Equipamento' },
+  { codigo: '19', label: 'Temperatura da Água', categoria: 'Manutenção / Equipamento' },
+  { codigo: '20', label: 'Falta de Água', categoria: 'Manutenção / Equipamento' },
+  { codigo: '21', label: 'Compressor Desligado', categoria: 'Manutenção / Equipamento' },
+  { codigo: '22', label: 'Falha Operacional', categoria: 'Manutenção / Equipamento' },
+  { codigo: '24', label: 'Manutenção Corretiva', categoria: 'Manutenção / Equipamento' },
+  { codigo: '25', label: 'Máquina em Preventiva', categoria: 'Manutenção / Equipamento' },
+  { codigo: '26', label: 'Problema Elétrico/Mecânico', categoria: 'Manutenção / Equipamento' },
+  { codigo: '27', label: 'Falha no Painel de Comando', categoria: 'Manutenção / Equipamento' },
+  { codigo: '28', label: 'Setup', categoria: 'Manutenção / Equipamento' },
+  // Insumos / material
+  { codigo: '23', label: 'Falta de Matéria Prima', categoria: 'Insumos / Material' },
+  { codigo: '29', label: 'Falta de Carrinho', categoria: 'Insumos / Material' },
+  { codigo: '30', label: 'Falta de Tela', categoria: 'Insumos / Material' },
+  { codigo: '31', label: 'Falta de Caixa', categoria: 'Insumos / Material' },
+  { codigo: '32', label: 'Falta de Paletes', categoria: 'Insumos / Material' },
+  { codigo: '33', label: 'Pesando Massa/Recheio', categoria: 'Insumos / Material' },
+  { codigo: '34', label: 'Matéria Prima Fora da Especificação', categoria: 'Insumos / Material' },
+  { codigo: '35', label: 'Retirar Insumo no Almoxarifado', categoria: 'Insumos / Material' },
+  { codigo: '36', label: 'Aguardando Solicitação de Insumo', categoria: 'Insumos / Material' },
+  { codigo: '37', label: 'Aguardando Separação de Insumo', categoria: 'Insumos / Material' },
+  { codigo: '38', label: 'Aguardando Entrega de Insumo', categoria: 'Insumos / Material' },
+  { codigo: '39', label: 'Falta de Insumo', categoria: 'Insumos / Material' },
+  // Outros
+  { codigo: '41', label: 'Outros', categoria: 'Outros' },
 ];
+const CATEGORIAS_PARADA = ['Geral', 'Manutenção / Equipamento', 'Insumos / Material', 'Outros'];
+const CODIGO_OUTROS = '41';
 
 // ── Motivos comuns para finalizar produção antes da meta ───────────
 const MOTIVOS_FINALIZACAO = [
@@ -119,53 +162,80 @@ const MOTIVOS_FINALIZACAO = [
 function ModalIniciarParada({ aoConfirmar, aoFechar, salvando }) {
   const [codigoSel, setCodigoSel] = useState(null);
   const [textoOutros, setTextoOutros] = useState('');
+  const [busca, setBusca] = useState('');
 
   function confirmar() {
     if (!codigoSel) return;
-    if (codigoSel.codigo === 'outros' && !textoOutros.trim()) { alert('Descreva o motivo.'); return; }
+    if (codigoSel.codigo === CODIGO_OUTROS && !textoOutros.trim()) { alert('Descreva o motivo.'); return; }
     aoConfirmar(codigoSel, textoOutros.trim());
   }
 
+  const termo = busca.trim().toLowerCase();
+  const filtrados = termo
+    ? CODIGOS_PARADA.filter(c => c.codigo === termo || c.label.toLowerCase().includes(termo))
+    : CODIGOS_PARADA;
+
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'flex-end' }} onClick={aoFechar}>
-      <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22 }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ background: 'white', width: '100%', maxWidth: 480, margin: '0 auto', borderRadius: '20px 20px 0 0', padding: 22, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexShrink: 0 }}>
           <div style={{ fontWeight: 900, fontSize: '1.05rem', color: '#dc2626' }}>⏸ Registrar parada de linha</div>
           <button onClick={aoFechar} style={{ background: 'none', border: 'none', fontSize: '1.3rem', color: '#999', cursor: 'pointer' }}>✕</button>
         </div>
-        <div style={{ display: 'grid', gap: 8 }}>
-          {CODIGOS_PARADA.map(c => (
-            <button
-              key={c.codigo}
-              onClick={() => setCodigoSel(c)}
-              style={{
-                textAlign: 'left', padding: '12px 16px', borderRadius: 12,
-                border: codigoSel?.codigo === c.codigo ? '2px solid #dc2626' : '1px solid var(--border-forte)',
-                background: codigoSel?.codigo === c.codigo ? '#fef2f2' : 'white',
-                fontWeight: 700, color: 'var(--marrom)', cursor: 'pointer',
-              }}
-            >
-              {c.label}
-            </button>
-          ))}
+        <input
+          className="input-texto"
+          placeholder="Buscar por nome ou código (ex: 23 ou farinha)"
+          value={busca}
+          onChange={e => setBusca(e.target.value)}
+          style={{ marginBottom: 12, flexShrink: 0 }}
+        />
+        <div style={{ overflowY: 'auto', flex: 1 }}>
+          {CATEGORIAS_PARADA.map(cat => {
+            const doCategoria = filtrados.filter(c => c.categoria === cat);
+            if (doCategoria.length === 0) return null;
+            return (
+              <div key={cat} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--marrom-claro)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{cat}</div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {doCategoria.map(c => (
+                    <button
+                      key={c.codigo}
+                      onClick={() => setCodigoSel(c)}
+                      style={{
+                        textAlign: 'left', padding: '10px 14px', borderRadius: 12,
+                        border: codigoSel?.codigo === c.codigo ? '2px solid #dc2626' : '1px solid var(--border-forte)',
+                        background: codigoSel?.codigo === c.codigo ? '#fef2f2' : 'white',
+                        fontWeight: 700, color: 'var(--marrom)', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 8,
+                      }}
+                    >
+                      <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#999', background: '#f3f4f6', borderRadius: 6, padding: '2px 6px', minWidth: 22, textAlign: 'center' }}>{c.codigo}</span>
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {filtrados.length === 0 && <div className="status-msg">Nenhum código encontrado.</div>}
         </div>
-        {codigoSel?.codigo === 'outros' && (
+        {codigoSel?.codigo === CODIGO_OUTROS && (
           <input
             className="input-texto"
             placeholder="Descreva o motivo da parada"
             value={textoOutros}
             onChange={e => setTextoOutros(e.target.value)}
-            style={{ marginTop: 12 }}
+            style={{ marginTop: 12, flexShrink: 0 }}
             autoFocus
           />
         )}
         <button
           className="btn btn-block"
-          style={{ marginTop: 18, background: '#dc2626', color: 'white', borderColor: '#dc2626' }}
+          style={{ marginTop: 12, background: '#dc2626', color: 'white', borderColor: '#dc2626', flexShrink: 0 }}
           disabled={!codigoSel || salvando}
           onClick={confirmar}
         >
-          {salvando ? 'Registrando...' : 'Confirmar parada'}
+          {salvando ? 'Registrando...' : codigoSel ? `Confirmar: [${codigoSel.codigo}] ${codigoSel.label}` : 'Confirmar parada'}
         </button>
       </div>
     </div>
@@ -483,7 +553,7 @@ export default function Operador() {
     try {
       const registro = {
         codigo: codigoObj.codigo,
-        label: codigoObj.codigo === 'outros' ? textoOutros : codigoObj.label,
+        label: codigoObj.codigo === CODIGO_OUTROS ? textoOutros : codigoObj.label,
         inicio: agoraServidor().toISOString(),
         fim: null,
         duracaoMin: null,
@@ -679,7 +749,7 @@ export default function Operador() {
         <div className="card" style={{ borderLeftColor: paradaAberta ? '#dc2626' : '#16a34a', marginBottom: 14 }}>
           {paradaAberta ? (
             <>
-              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: '1rem' }}>🔴 Linha parada — {paradaAberta.label}</div>
+              <div style={{ fontWeight: 900, color: '#dc2626', fontSize: '1rem' }}>🔴 Linha parada — [{paradaAberta.codigo}] {paradaAberta.label}</div>
               <div style={{ fontSize: '0.78rem', color: 'var(--marrom-claro)', marginTop: 4 }}>
                 Desde {new Date(paradaAberta.inicio).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} · registrado por {paradaAberta.registradoPor}
               </div>

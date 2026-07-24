@@ -406,7 +406,7 @@ export default function PainelTV({ sair }) {
             {paradaAberta && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 800, color: '#fecaca', animation: 'sinoPulseTv 1.4s ease-in-out infinite' }}>
                 <i className="ph ph-pause-circle" style={{ fontSize: '1.2rem' }}></i>
-                LINHA PARADA — {paradaAberta.label} (há {tempoDecorrido(paradaAberta.inicio)})
+                LINHA PARADA — [{paradaAberta.codigo}] {paradaAberta.label} (há {tempoDecorrido(paradaAberta.inicio)})
               </div>
             )}
             {finalizadosAbaixo.map((it, i) => (
@@ -452,7 +452,7 @@ export default function PainelTV({ sair }) {
               unidade: 'receitas hoje',
               cor: paradaAberta ? '#f87171' : totalProgramado > 0 && totalFeito >= totalProgramado ? '#4ade80' : '#F6BE00',
               detalhe: paradaAberta
-                ? `🔴 LINHA PARADA — ${paradaAberta.label} (há ${tempoDecorrido(paradaAberta.inicio)})`
+                ? `🔴 LINHA PARADA — [${paradaAberta.codigo}] ${paradaAberta.label} (há ${tempoDecorrido(paradaAberta.inicio)})`
                 : finalizadosAbaixo > 0
                   ? `⚠ ${finalizadosAbaixo} receita(s) finalizada(s) abaixo da meta`
                   : totalProgramado > 0 ? `${pctGeral}% da meta do dia` : 'Nada programado para hoje.',
