@@ -84,6 +84,12 @@ export default function Fechamento() {
 
   function abrirTeclado(index, campo, titulo) { setTeclado({ index, campo, titulo, valorInicial: itens[index][campo] }); }
   function abrirSeletorMotivo(index, campo, titulo) { setSeletorMotivo({ index, campo, titulo }); }
+  // Se já existe valor lançado, edita/apaga direto no teclado (mantendo o motivo já escolhido).
+  // Só pede motivo quando o valor está zerado (lançamento novo).
+  function abrirPerda(index, campo, titulo) {
+    if (itens[index][campo] > 0) abrirTeclado(index, campo, titulo);
+    else abrirSeletorMotivo(index, campo, titulo);
+  }
   function escolherMotivoPerda(motivo) {
     const { index, campo, titulo } = seletorMotivo;
     setSeletorMotivo(null);
@@ -97,6 +103,7 @@ export default function Fechamento() {
         ...nova[teclado.index],
         [teclado.campo]: valor,
         ...(teclado.motivo ? { [campoMotivo]: teclado.motivo } : {}),
+        ...(valor === 0 && campoMotivo in nova[teclado.index] ? { [campoMotivo]: '' } : {}),
       };
       return nova;
     });
@@ -144,11 +151,11 @@ export default function Fechamento() {
               <div className="fechamento-resumo">Programadas: <strong>{item.metaLotes}</strong> · Realizadas: <strong>{item.feitos}</strong></div>
               <div className="fechamento-linha">
                 <span>Massa perdida (produção){item.massaPerdidaProdMotivo && <div style={{ fontSize: '0.68rem', color: '#999', fontWeight: 600 }}>{item.massaPerdidaProdMotivo}</div>}</span>
-                <button className="valor-pill" onClick={() => abrirSeletorMotivo(idx, 'massaPerdidaProd', 'Massa perdida — Produção')}>{formatarKg(item.massaPerdidaProd)} kg</button>
+                <button className="valor-pill" onClick={() => abrirPerda(idx, 'massaPerdidaProd', 'Massa perdida — Produção')}>{formatarKg(item.massaPerdidaProd)} kg</button>
               </div>
               <div className="fechamento-linha">
-                <span>Massa perdida (embalagem){item.massaPerdidaEmbMotivo && <div style={{ fontSize: '0.68rem', color: '#999', fontWeight: 600 }}>{item.massaPerdidaEmbMotivo}</div>}</span>
-                <button className="valor-pill" onClick={() => abrirSeletorMotivo(idx, 'massaPerdidaEmb', 'Massa perdida — Embalagem')}>{formatarKg(item.massaPerdidaEmb)} kg</button>
+                <span>Massa perdida (Embaladora){item.massaPerdidaEmbMotivo && <div style={{ fontSize: '0.68rem', color: '#999', fontWeight: 600 }}>{item.massaPerdidaEmbMotivo}</div>}</span>
+                <button className="valor-pill" onClick={() => abrirPerda(idx, 'massaPerdidaEmb', 'Massa perdida — Embalagem')}>{formatarKg(item.massaPerdidaEmb)} kg</button>
               </div>
               <div className="fechamento-linha">
                 <span>Pé de massa utilizado</span>
